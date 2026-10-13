@@ -163,7 +163,10 @@ function Game:grow(a, b)
     -- It grows out from whichever end is already fed.
     if not a.conn then a, b = b, a end
     self.nutrients = self.nutrients - cost
-    local l = { id = self.nextLink, a = a, b = b, len = dist(a, b), cost = cost, hp = D.LINK.hp, state = "grow", grow = 0, bitten = {} }
+    -- Its cap is set now, not at the next recompute: that waits for it to
+    -- arrive, and anything asking about it meanwhile (a hover) needs one.
+    local l = { id = self.nextLink, a = a, b = b, len = dist(a, b), cost = cost, hp = D.LINK.hp, state = "grow", grow = 0, bitten = {},
+        cap = D.LINK.cap }
     self.nextLink = self.nextLink + 1
     self.links[#self.links + 1] = l
     a.links[#a.links + 1] = l

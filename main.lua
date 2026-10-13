@@ -27,7 +27,11 @@ local IDX = T.IDX
 local SHORT = 240 -- game pixels across the short edge of the window
 local TOP, BOTTOM = 12, 32
 
-local canvas, vw, vh, zoom
+-- Two pictures, each at its own whole zoom. The board's zooms in and out
+-- under the fingers; the HUD's (the strip, the toolbar, the words) never
+-- changes with it, so a button is the same size at any zoom.
+local canvas, cw, ch, zoom -- the board
+local ui, vw, vh, uz -- the HUD, and every screen measure the HUD lays out by
 local overlay, overlayImage, opx
 local world, painter, progress = nil, nil, 0
 local game
@@ -36,8 +40,9 @@ local mode = "grow"
 local drag -- the node a link is being pulled from
 local dragAt -- where on the screen it was picked up
 local hover = {}
-local mouse = { x = 0, y = 0 }
--- The safe area, in game pixels: a notch, a rounded corner or a home bar eats
+-- The pointer in HUD pixels (x, y) and window pixels (wx, wy).
+local mouse = { x = 0, y = 0, wx = 0, wy = 0 }
+-- The safe area, in HUD pixels: a notch, a rounded corner or a home bar eats
 -- into the window on a phone. The board runs under them; the HUD keeps out.
 local inset = { l = 0, t = 0, r = 0, b = 0 }
 -- Played with a finger: no hover, no right button, no keyboard. Set by the
@@ -46,8 +51,9 @@ local touch = love.system.getOS() == "Android" or love.system.getOS() == "iOS"
 local press -- a press on open ground: a tap if it is let go where it was, a pan if it moves
 -- Whole zoom steps past the one that fits the board. A phone starts one in:
 -- the board is a hand's width there, and a pocket wants to be a fingertip.
-local zoomStep = touch and 1 or 0
-local ZOOM_STEPS = 3
+local UI_STEP = touch and 1 or 0 -- the HUD's step, which stays put
+local zoomStep = UI_STEP
+local ZOOM_STEPS = 4
 local fingers, pinch = {}, nil -- the touches down, and the two being pinched
 local speed, paused = 1, false
 local heartFlash = 0
@@ -57,20 +63,33 @@ local script -- the --shots run
 
 local function fit()
     local w, h = love.graphics.getDimensions()
-    zoom = max(1, floor(min(w, h) / SHORT)) + zoomStep
-    vw, vh = ceil(w / zoom), ceil(h / zoom)
-    canvas = love.graphics.newCanvas(vw, vh)
+    local base = max(1, floor(min(w, h) / SHORT))
+    uz = base + UI_STEP
+    vw, vh = ceil(w / uz), ceil(h / uz)
+    ui = love.graphics.newCanvas(vw, vh)
+    ui:setFilter("nearest", "nearest")
+    local sx, sy, sw, sh = love.window.getSafeArea()
+    inset.l, inset.t = ceil(sx / uz), ceil(sy / uz)
+    inset.r, inset.b = ceil((w - sx - sw) / uz), ceil((h - sy - sh) / uz)
+
+    zoom = base + zoomStep
+    cw, ch = ceil(w / zoom), ceil(h / zoom)
+    canvas = love.graphics.newCanvas(cw, ch)
     canvas:setFilter("nearest", "nearest")
     -- The overlay is one byte-for-byte picture of everything laid over the board
     -- this frame: a pixel is either covered, fully, or not there. Painter's order
     -- is simply the order things are put.
-    overlay = love.image.newImageData(vw, vh, "rgba8")
+    overlay = love.image.newImageData(cw, ch, "rgba8")
     opx = ffi.cast("uint8_t*", overlay:getFFIPointer())
     overlayImage = love.graphics.newImage(overlay)
     overlayImage:setFilter("nearest", "nearest")
-    local sx, sy, sw, sh = love.window.getSafeArea()
-    inset.l, inset.t = ceil(sx / zoom), ceil(sy / zoom)
-    inset.r, inset.b = ceil((w - sx - sw) / zoom), ceil((h - sy - sh) / zoom)
+end
+
+-- HUD pixels to board pixels: what the strip and toolbar cover of the board.
+local function toBoard(u) return u * uz / zoom end
+-- A board-image pixel to the HUD pixel over it.
+local function toHud(i, j)
+    return floor((i - floor(camx)) * zoom / uz), floor((j - floor(camy)) * zoom / uz)
 end
 
 function love.resize() fit() end
@@ -87,8 +106,8 @@ for k, c in ipairs(T.RGB) do RGB8[k] = { floor(c[1] * 255 + 0.5), floor(c[2] * 2
 
 -- Put key k at screen pixel (x, y).
 local function putS(k, x, y)
-    if k == 0 or x < 0 or y < 0 or x >= vw or y >= vh then return end
-    local p = (y * vw + x) * 4
+    if k == 0 or x < 0 or y < 0 or x >= cw or y >= ch then return end
+    local p = (y * cw + x) * 4
     local c = RGB8[k]
     opx[p], opx[p + 1], opx[p + 2], opx[p + 3] = c[1], c[2], c[3], 255
 end
@@ -175,14 +194,15 @@ end
 --- the board's camera ----------------------------------------------------------------
 
 local function centre()
-    local top, bottom = inset.t + TOP, inset.b + BOTTOM
-    camx = floor((world.w - (vw - inset.l - inset.r)) / 2) - inset.l + panx
-    camy = floor((world.h - (vh - top - bottom)) / 2) - top + pany
+    local l, r = toBoard(inset.l), toBoard(inset.r)
+    local top, bottom = toBoard(inset.t + TOP), toBoard(inset.b + BOTTOM)
+    camx = floor((world.w - (cw - l - r)) / 2 - l) + panx
+    camy = floor((world.h - (ch - top - bottom)) / 2 - top) + pany
 end
 
 -- The board-image pixel under the mouse.
 local function cursor()
-    return mouse.x + floor(camx), mouse.y + floor(camy)
+    return floor(mouse.wx / zoom) + floor(camx), floor(mouse.wy / zoom) + floor(camy)
 end
 
 --- what the mouse is over ------------------------------------------------------------
@@ -340,16 +360,21 @@ end
 -- a node in one drag. A press anywhere else waits to see what it is: let go
 -- where it was and it is a click there; moved first and it pans the board, which
 -- is the only way to pan with one finger.
-local SLOP = 3 -- game pixels a tap may wander and still be a tap
+local SLOP = 3 -- HUD pixels a tap may wander and still be a tap
+
+local function point(x, y)
+    mouse.wx, mouse.wy = x, y
+    mouse.x, mouse.y = floor(x / uz), floor(y / uz)
+end
 
 function love.mousepressed(x, y, b, istouch)
     if painter or pinch then return end
     touch = istouch and true or false
-    mouse.x, mouse.y = floor(x / zoom), floor(y / zoom)
+    point(x, y)
     findHover()
-    if b == 3 then mouse.pan = { x = mouse.x, y = mouse.y, px = panx, py = pany } return end
+    if b == 3 then mouse.pan = { wx = x, wy = y, px = panx, py = pany } return end
     if b == 1 and not (hover.button or hover.wave or hover.node) and not (mode == "grow" and drag) then
-        press = { x = mouse.x, y = mouse.y, px = panx, py = pany }
+        press = { x = mouse.x, y = mouse.y, wx = x, wy = y, px = panx, py = pany }
         return
     end
     local was = drag
@@ -361,13 +386,13 @@ function love.mousereleased(x, y, b, istouch)
     if painter then return end
     if pinch then press = nil return end
     if b == 3 then mouse.pan = nil return end
-    mouse.x, mouse.y = floor(x / zoom), floor(y / zoom)
+    point(x, y)
     if b == 1 and press then
         local p = press
         press = nil
         if p.moved then return end
         -- The click lands where the press was, not wherever a finger rolled to.
-        mouse.x, mouse.y = p.x, p.y
+        point(p.wx, p.wy)
         findHover()
         click(1)
         return
@@ -385,15 +410,16 @@ function love.mousereleased(x, y, b, istouch)
 end
 
 function love.mousemoved(x, y)
-    mouse.x, mouse.y = floor(x / zoom), floor(y / zoom)
+    point(x, y)
     if pinch then return end
     local pan = mouse.pan or press
     if press and not press.moved and (abs(mouse.x - press.x) > SLOP or abs(mouse.y - press.y) > SLOP) then
         press.moved = true
     end
     if pan and (pan == mouse.pan or press.moved) then
-        panx = pan.px - (mouse.x - pan.x)
-        pany = pan.py - (mouse.y - pan.y)
+        -- In board pixels: the ground stays under the finger at any zoom.
+        panx = pan.px - floor((x - pan.wx) / zoom)
+        pany = pan.py - floor((y - pan.wy) / zoom)
     end
 end
 
@@ -415,7 +441,7 @@ local function zoomTo(step, bx, by, sx, sy)
     panx = panx + (bx - sx / zoom) - camx
     pany = pany + (by - sy / zoom) - camy
     centre()
-    mouse.x, mouse.y = floor(sx / zoom), floor(sy / zoom)
+    point(sx, sy)
 end
 
 -- One step in or out about a window pixel (the cursor, or the middle).
@@ -529,7 +555,7 @@ function love.update(dt)
                         for n, b in ipairs(BUTTONS) do
                             if b.mode == name then
                                 local x, y, w, h = buttonRect(n)
-                                return (x + w / 2) * zoom, (y + h / 2) * zoom
+                                return (x + w / 2) * uz, (y + h / 2) * uz
                             end
                         end
                     end,
@@ -549,8 +575,8 @@ function love.update(dt)
     if k("down", "s") then pany = pany + pan end
     -- Zoomed in, the board is bigger than the screen: let every edge of it be
     -- reached, with a little ground to spare.
-    local limx = max(40, (world.w - (vw - inset.l - inset.r)) / 2 + 40)
-    local limy = max(60, (world.h - (vh - inset.t - inset.b - TOP - BOTTOM)) / 2 + 40)
+    local limx = max(40, (world.w - (cw - toBoard(inset.l + inset.r))) / 2 + 40)
+    local limy = max(60, (world.h - (ch - toBoard(inset.t + inset.b + TOP + BOTTOM))) / 2 + 40)
     panx, pany = max(-limx, min(limx, panx)), max(-limy, min(limy, pany))
     centre()
 
@@ -563,7 +589,17 @@ function love.update(dt)
         end
     end
     heartFlash = max(0, heartFlash - dt)
-    if script then script.after(game, canvas) end
+    if script then
+        -- The shots are the whole screen: the board with the HUD laid over it.
+        -- The script never zooms, so the two pictures are the same size.
+        local shot = love.graphics.newCanvas(cw, ch)
+        love.graphics.setCanvas(shot)
+        love.graphics.setColor(1, 1, 1)
+        love.graphics.draw(canvas)
+        love.graphics.draw(ui)
+        love.graphics.setCanvas()
+        script.after(game, shot)
+    end
 end
 
 --- drawing the world -------------------------------------------------------------------
@@ -708,7 +744,7 @@ local function drawBoard()
     love.graphics.clear(unpack(T.RGB[IDX.o]))
     love.graphics.setColor(1, 1, 1)
     love.graphics.draw(world.image, -floor(camx), -floor(camy))
-    ffi.fill(opx, vw * vh * 4, 0)
+    ffi.fill(opx, cw * ch * 4, 0)
 
     -- On the ground first: shadows, mats, threads and rings.
     for _, e in ipairs(game.enemies) do
@@ -1002,7 +1038,8 @@ local function tooltip()
             if l.hand then return "REGROWING", "l" end
             return say("CUT LINK. CLICK TO REGROW: ", "CUT LINK. TAP TO REGROW: ") .. game:repairCost(l), "l"
         end
-        local s = "LINK " .. floor(l.hp) .. "/" .. D.LINK.hp .. "  FLOW " .. l.cap
+        if l.state == "grow" then return "GROWING", "l" end
+        local s = "LINK " .. floor(l.hp) .. "/" .. D.LINK.hp .. "  FLOW " .. (l.cap or D.LINK.cap)
         if l.thick then s = s .. " (RELAY)" end
         if not l.a.conn then s = s .. "  NOT FED" end
         return s, "w"
@@ -1065,7 +1102,7 @@ local function drawHud()
             local e = world.entrances[gate]
             if e then
                 local i, j = world:toImage(e.x - 6, 6, e.z)
-                local sx, sy = floor(i - camx), floor(j - camy)
+                local sx, sy = toHud(i, j)
                 if floor(game.clock * 2) % 2 == 0 then label(n .. " IN", sx - 6, sy - 10, "w", "r") end
             end
         end
@@ -1074,7 +1111,8 @@ local function drawHud()
     -- Words in the world.
     for _, t in ipairs(game.texts) do
         local i, j = world:toImage(t.x, t.y, t.z)
-        local sx, sy = floor(i - camx - Font.width(t.text) / 2), floor(j - camy)
+        local sx, sy = toHud(i, j)
+        sx = sx - floor(Font.width(t.text) / 2)
         text(t.text, sx, sy + 1, "o")
         text(t.text, sx, sy, t.k)
     end
@@ -1174,16 +1212,23 @@ local function drawLoading()
 end
 
 function love.draw()
-    love.graphics.setCanvas(canvas)
+    -- The HUD's picture starts empty each frame (nothing where the board shows
+    -- through) and everything on it is drawn solid, so laying it over the board
+    -- covers a pixel fully or not at all.
+    love.graphics.setCanvas(ui)
+    love.graphics.clear(0, 0, 0, 0)
     if painter then
         drawLoading()
     else
-        drawBoard()
         drawHud()
+        love.graphics.setCanvas(canvas)
+        drawBoard()
     end
     love.graphics.setCanvas()
     love.graphics.setColor(1, 1, 1)
-    if pinch and not pinch.done then
+    if painter then
+        -- Nothing to stretch yet: the loading bar is the whole screen.
+    elseif pinch and not pinch.done then
         -- Mid-pinch: the frame stretched about where the fingers started and
         -- moved to where they are (see love.touchpressed).
         love.graphics.clear(unpack(T.RGB[IDX.o]))
@@ -1192,4 +1237,6 @@ function love.draw()
     else
         love.graphics.draw(canvas, 0, 0, 0, zoom, zoom)
     end
+    love.graphics.setColor(1, 1, 1)
+    love.graphics.draw(ui, 0, 0, 0, uz, uz)
 end
