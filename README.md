@@ -46,7 +46,7 @@ of its own), and the HUD keeps clear of the notch and home bar:
 | drag from a node to a pocket, or tap one then the other | grow a link; letting go on bare ground cancels the thread |
 | tap a tool, then tap where it goes | build, prune, lay a mat, pulse; tap the tool again to put it down |
 | drag on open ground | pan |
-| pinch | zoom (it starts one step in) |
+| pinch | zoom: the board follows the fingers, then settles on the nearest sharp (whole-pixel) zoom when they lift; it starts one step in |
 | tap START / SPEED | start the next wave / game speed |
 | tap the top bar | pause and resume (the game also pauses when it is sent to the background) |
 | tap anywhere after a win or loss | play again |

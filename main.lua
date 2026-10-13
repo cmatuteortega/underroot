@@ -397,14 +397,19 @@ function love.mousemoved(x, y)
     end
 end
 
--- One whole step in or out, keeping the board point under (sx, sy) -- window
--- pixels -- where it is. The zoom stays a whole number: the art is pixels.
-local function zoomBy(d, sx, sy)
-    local step = max(0, min(ZOOM_STEPS, zoomStep + d))
-    if step == zoomStep or painter then return end
-    sx, sy = sx or love.graphics.getWidth() / 2, sy or love.graphics.getHeight() / 2
-    local bx, by = sx / zoom + camx, sy / zoom + camy
-    zoomStep = step
+-- The zoom is whole steps past the one that fits the board: one step out of
+-- it, ZOOM_STEPS in. A whole number, because the art is pixels.
+local function stepRange()
+    local base = max(1, floor(min(love.graphics.getDimensions()) / SHORT))
+    return max(1, base - 1) - base, ZOOM_STEPS
+end
+
+-- Goes to a step and puts the board point (bx, by) under the window pixel
+-- (sx, sy). Called with the same step it only pans: that is how a pinch's
+-- slide is kept when it settles on the zoom it started at.
+local function zoomTo(step, bx, by, sx, sy)
+    local lo, hi = stepRange()
+    zoomStep = max(lo, min(hi, step))
     fit()
     centre()
     panx = panx + (bx - sx / zoom) - camx
@@ -413,20 +418,41 @@ local function zoomBy(d, sx, sy)
     mouse.x, mouse.y = floor(sx / zoom), floor(sy / zoom)
 end
 
+-- One step in or out about a window pixel (the cursor, or the middle).
+local function zoomBy(d, sx, sy)
+    local lo, hi = stepRange()
+    if painter or zoomStep + d < lo or zoomStep + d > hi then return end
+    sx, sy = sx or love.graphics.getWidth() / 2, sy or love.graphics.getHeight() / 2
+    zoomTo(zoomStep + d, sx / zoom + camx, sy / zoom + camy, sx, sy)
+end
+
 function love.wheelmoved(_, y)
     if y ~= 0 then zoomBy(y > 0 and 1 or -1, love.mouse.getPosition()) end
 end
 
--- Two fingers pinch. Whatever the first finger had started -- a pan, a tap, a
--- thread -- is dropped, so a pinch never builds anything.
+-- Pinching. While two fingers are down the finished frame is shown scaled by
+-- however far they have spread and slid along with them, so the board follows
+-- the hand at once; that picture is only a stretched copy for the moment the
+-- fingers are on the glass. Let go and it settles on the nearest whole zoom,
+-- with the board point that was under the fingers back under them, sharp.
+-- Whatever the first finger had started -- a pan, a tap, a thread -- is
+-- dropped, so a pinch never builds anything; and until the last finger lifts
+-- no touch counts as a tap.
+local function spread()
+    local a, b = fingers[pinch.a], fingers[pinch.b]
+    return sqrt((a.x - b.x) ^ 2 + (a.y - b.y) ^ 2), (a.x + b.x) / 2, (a.y + b.y) / 2
+end
+
 function love.touchpressed(id, x, y)
     fingers[id] = { x = x, y = y }
+    if pinch or painter then return end
     local ids = {}
     for k in pairs(fingers) do ids[#ids + 1] = k end
     if #ids == 2 then
-        local a, b = fingers[ids[1]], fingers[ids[2]]
-        pinch = { a = ids[1], b = ids[2], d = sqrt((a.x - b.x) ^ 2 + (a.y - b.y) ^ 2) }
-        if press then panx, pany = press.px, press.py end
+        pinch = { a = ids[1], b = ids[2], s = 1 }
+        local d, mx, my = spread()
+        pinch.d0, pinch.x0, pinch.y0, pinch.x, pinch.y = max(d, 1), mx, my, mx, my
+        if press then panx, pany = press.px, press.py; centre() end
         press, drag = nil, nil
     end
 end
@@ -434,19 +460,23 @@ end
 function love.touchmoved(id, x, y)
     if not fingers[id] then return end
     fingers[id].x, fingers[id].y = x, y
-    if pinch and fingers[pinch.a] and fingers[pinch.b] then
-        local a, b = fingers[pinch.a], fingers[pinch.b]
-        local d = sqrt((a.x - b.x) ^ 2 + (a.y - b.y) ^ 2)
-        -- A step is a big jump at these zooms (x4 to x5 is a quarter), so it
-        -- takes a real spread of the fingers to make one.
-        if d > pinch.d * 1.3 or d < pinch.d / 1.3 then
-            zoomBy(d > pinch.d and 1 or -1, (a.x + b.x) / 2, (a.y + b.y) / 2)
-            pinch.d = d
-        end
+    if pinch and not pinch.done then
+        local d, mx, my = spread()
+        local lo, hi = stepRange()
+        local base = zoom - zoomStep
+        -- Held to what it can settle on, give or take half a step.
+        pinch.s = max((base + lo - 0.45) / zoom, min((base + hi + 0.45) / zoom, d / pinch.d0))
+        pinch.x, pinch.y = mx, my
     end
 end
 
 function love.touchreleased(id)
+    if pinch and not pinch.done and (id == pinch.a or id == pinch.b) then
+        local bx, by = pinch.x0 / zoom + camx, pinch.y0 / zoom + camy
+        local step = floor(zoom * pinch.s + 0.5) - (zoom - zoomStep)
+        zoomTo(step, bx, by, pinch.x, pinch.y)
+        pinch.done = true
+    end
     fingers[id] = nil
     if not next(fingers) then pinch = nil end
 end
@@ -1153,5 +1183,13 @@ function love.draw()
     end
     love.graphics.setCanvas()
     love.graphics.setColor(1, 1, 1)
-    love.graphics.draw(canvas, 0, 0, 0, zoom, zoom)
+    if pinch and not pinch.done then
+        -- Mid-pinch: the frame stretched about where the fingers started and
+        -- moved to where they are (see love.touchpressed).
+        love.graphics.clear(unpack(T.RGB[IDX.o]))
+        local z = zoom * pinch.s
+        love.graphics.draw(canvas, pinch.x - pinch.x0 * pinch.s, pinch.y - pinch.y0 * pinch.s, 0, z, z)
+    else
+        love.graphics.draw(canvas, 0, 0, 0, zoom, zoom)
+    end
 end
