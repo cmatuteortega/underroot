@@ -32,9 +32,22 @@ left to the sprout, and chew through any thread they cross.
 | `F` | game speed ×1 / ×2 / ×3 |
 | `P` / `Esc` | pause (`Esc` cancels a tool first) |
 | right click | cancel, back to growing |
-| middle drag, arrows / WASD | pan |
+| drag on open ground, middle drag, arrows / WASD | pan |
 | `R` | restart after a win or loss (`Shift+R` any time) |
-| `F11` | fullscreen |
+| `F11` / `Alt+Enter` | back to a window (it opens fullscreen) |
+
+On a phone or tablet it plays with one finger, fullscreen, either way up (a
+screen too narrow for the toolbar narrows its buttons and lifts START onto a row
+of its own), and the HUD keeps clear of the notch and home bar:
+
+| touch | what it does |
+| --- | --- |
+| drag from a node to a pocket, or tap one then the other | grow a link; letting go on bare ground cancels the thread |
+| tap a tool, then tap where it goes | build, prune, lay a mat, pulse; tap the tool again to put it down |
+| drag on open ground | pan |
+| tap START / SPEED | start the next wave / game speed |
+| tap the top bar | pause and resume (the game also pauses when it is sent to the background) |
+| tap anywhere after a win or loss | play again |
 
 The bottom line always says either what is under the mouse or the next thing to
 learn: the first link, the first tower, and each new enemy before the wave that

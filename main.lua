@@ -10,7 +10,7 @@
 -- hypha dips out of sight past a crumb with nothing traced but the ant.
 --
 -- This file is the screen: the canvas, the camera, compositing, the HUD and
--- what the mouse means. The rules are in src/game.lua and the numbers in
+-- what the mouse (or a finger) means. The rules are in src/game.lua and the numbers in
 -- src/defs.lua.
 
 local ffi = require "ffi"
@@ -34,8 +34,16 @@ local game
 local camx, camy, panx, pany = 0, 0, 0, 0
 local mode = "grow"
 local drag -- the node a link is being pulled from
+local dragAt -- where on the screen it was picked up
 local hover = {}
 local mouse = { x = 0, y = 0 }
+-- The safe area, in game pixels: a notch, a rounded corner or a home bar eats
+-- into the window on a phone. The board runs under them; the HUD keeps out.
+local inset = { l = 0, t = 0, r = 0, b = 0 }
+-- Played with a finger: no hover, no right button, no keyboard. Set by the
+-- last thing that pressed, so a tablet with a mouse plugged in reads the mouse.
+local touch = love.system.getOS() == "Android" or love.system.getOS() == "iOS"
+local press -- a press on open ground: a tap if it is let go where it was, a pan if it moves
 local speed, paused = 1, false
 local heartFlash = 0
 local script -- the --shots run
@@ -55,9 +63,19 @@ local function fit()
     opx = ffi.cast("uint8_t*", overlay:getFFIPointer())
     overlayImage = love.graphics.newImage(overlay)
     overlayImage:setFilter("nearest", "nearest")
+    local sx, sy, sw, sh = love.window.getSafeArea()
+    inset.l, inset.t = ceil(sx / zoom), ceil(sy / zoom)
+    inset.r, inset.b = ceil((w - sx - sw) / zoom), ceil((h - sy - sh) / zoom)
 end
 
 function love.resize() fit() end
+function love.displayrotated() fit() end
+
+-- Sent to the background (a call, the home button): stop the clock rather
+-- than let a wave run on unwatched.
+function love.focus(f)
+    if not f and not script and game then paused = true end
+end
 
 local RGB8 = {}
 for k, c in ipairs(T.RGB) do RGB8[k] = { floor(c[1] * 255 + 0.5), floor(c[2] * 255 + 0.5), floor(c[3] * 255 + 0.5) } end
@@ -152,8 +170,9 @@ end
 --- the board's camera ----------------------------------------------------------------
 
 local function centre()
-    camx = floor((world.w - vw) / 2) + panx
-    camy = floor((world.h - (vh - TOP - BOTTOM)) / 2) - TOP + pany
+    local top, bottom = inset.t + TOP, inset.b + BOTTOM
+    camx = floor((world.w - (vw - inset.l - inset.r)) / 2) - inset.l + panx
+    camy = floor((world.h - (vh - top - bottom)) / 2) - top + pany
 end
 
 -- The board-image pixel under the mouse.
@@ -171,18 +190,35 @@ for _, t in ipairs(D.TOWERS) do
 end
 BUTTONS[#BUTTONS + 1] = { mode = "prune", key = "X", name = "PRUNE", blurb = "CUT YOUR OWN LINK (HALF BACK) OR CLEAR A TOWER" }
 BUTTONS[#BUTTONS + 1] = { mode = "pulse", key = "Q", name = "SPORE PULSE",
-    blurb = "CLICK A FED NODE: EVERY TOWER ON THE WAY THERE OVERCHARGES" }
+    blurb = "PICK A FED NODE: EVERY TOWER ON THE WAY THERE OVERCHARGES" }
 
-local BW, BH = 30, 27
+-- The toolbar sits in the safe area along the bottom with the wave button at
+-- its end. A screen too narrow for both (a phone held upright) narrows the
+-- buttons first and then lifts the wave button onto a row of its own, at the
+-- right, where a thumb is.
+local BH, WW = 27, 44
+local function bar()
+    local avail = vw - inset.l - inset.r - 4
+    local bw = max(20, min(30, floor((avail + 2) / #BUTTONS) - 2))
+    local tools = #BUTTONS * (bw + 2) - 2
+    local y = vh - inset.b - BH - 3
+    if tools + 8 + WW <= avail then
+        local x0 = inset.l + 2 + floor((avail - tools - 8 - WW) / 2)
+        return x0, y, bw, x0 + tools + 8, y, y
+    end
+    local x0 = inset.l + 2 + floor((avail - tools) / 2)
+    return x0, y, bw, vw - inset.r - 2 - WW, y - BH - 4, y - BH - 4
+end
 local function buttonRect(n)
-    local total = #BUTTONS * (BW + 2) - 2
-    local x0 = floor((vw - total) / 2) - 26
-    return x0 + (n - 1) * (BW + 2), vh - BH - 3, BW, BH
+    local x0, y, bw = bar()
+    return x0 + (n - 1) * (bw + 2), y, bw, BH
 end
 local function waveRect()
-    local x = select(1, buttonRect(#BUTTONS)) + BW + 8
-    return x, vh - BH - 3, 44, BH
+    local _, _, _, wx, wy = bar()
+    return wx, wy, WW, BH
 end
+-- The top of everything the toolbar puts down: the tip line sits above it.
+local function barTop() return select(6, bar()) end
 local function inside(x, y, rx, ry, rw, rh) return x >= rx and y >= ry and x < rx + rw and y < ry + rh end
 
 local function nodeScreen(n)
@@ -197,7 +233,7 @@ local function findHover()
         if inside(mx, my, buttonRect(n)) then hover.button = n return end
     end
     if inside(mx, my, waveRect()) then hover.wave = true return end
-    if my < TOP then return end
+    if my < inset.t + TOP then hover.strip = true return end
     local ci, cj = cursor()
     local best, bd = nil, 9
     for _, n in ipairs(game.nodes) do
@@ -249,14 +285,22 @@ local function click(b)
         return
     end
     if hover.button then
-        mode, drag = BUTTONS[hover.button].mode, nil
+        -- The tool already in hand, picked again, is put down: the one way to
+        -- cancel there is without a right button.
+        local m = BUTTONS[hover.button].mode
+        mode, drag = (m == mode and m ~= "grow") and "grow" or m, nil
         return
     end
     if hover.wave then
         if game.phase == "build" then game:startWave() else speed = speed % 3 + 1 end
         return
     end
-    if game.phase == "won" or game.phase == "lost" then return end
+    if game.phase == "won" or game.phase == "lost" then start() return end
+    if hover.strip then
+        -- No P key on a phone: the top strip is the pause button.
+        if touch then paused = not paused end
+        return
+    end
     if mode == "grow" then
         if hover.node then
             if drag and drag ~= hover.node then
@@ -287,31 +331,62 @@ local function click(b)
     end
 end
 
-function love.mousepressed(x, y, b)
+-- A press on a button or a node acts at once, so a thread can be pulled from
+-- a node in one drag. A press anywhere else waits to see what it is: let go
+-- where it was and it is a click there; moved first and it pans the board, which
+-- is the only way to pan with one finger.
+local SLOP = 3 -- game pixels a tap may wander and still be a tap
+
+function love.mousepressed(x, y, b, istouch)
     if painter then return end
+    touch = istouch and true or false
     mouse.x, mouse.y = floor(x / zoom), floor(y / zoom)
     findHover()
     if b == 3 then mouse.pan = { x = mouse.x, y = mouse.y, px = panx, py = pany } return end
+    if b == 1 and not (hover.button or hover.wave or hover.node) and not (mode == "grow" and drag) then
+        press = { x = mouse.x, y = mouse.y, px = panx, py = pany }
+        return
+    end
+    local was = drag
     click(b)
+    if drag and drag ~= was then dragAt = { x = mouse.x, y = mouse.y } end
 end
 
-function love.mousereleased(x, y, b)
+function love.mousereleased(x, y, b, istouch)
     if painter then return end
     if b == 3 then mouse.pan = nil return end
     mouse.x, mouse.y = floor(x / zoom), floor(y / zoom)
+    if b == 1 and press then
+        local p = press
+        press = nil
+        if p.moved then return end
+        -- The click lands where the press was, not wherever a finger rolled to.
+        mouse.x, mouse.y = p.x, p.y
+        findHover()
+        click(1)
+        return
+    end
     findHover()
     -- Pulled from one node and let go over another: that is a link too.
     if b == 1 and mode == "grow" and drag and hover.node and hover.node ~= drag then
         game:grow(drag, hover.node)
         drag = nil
+    elseif b == 1 and istouch and mode == "grow" and drag and not hover.node and not hover.button then
+        -- A thread pulled out on a phone and dropped on bare ground was not
+        -- meant: with no right button to cancel, letting go cancels.
+        if dragAt and (abs(mouse.x - dragAt.x) > SLOP or abs(mouse.y - dragAt.y) > SLOP) then drag = nil end
     end
 end
 
 function love.mousemoved(x, y)
     mouse.x, mouse.y = floor(x / zoom), floor(y / zoom)
-    if mouse.pan then
-        panx = mouse.pan.px - (mouse.x - mouse.pan.x)
-        pany = mouse.pan.py - (mouse.y - mouse.pan.y)
+    local pan = mouse.pan or press
+    if press and not press.moved and (abs(mouse.x - press.x) > SLOP or abs(mouse.y - press.y) > SLOP) then
+        press.moved = true
+    end
+    if pan and (pan == mouse.pan or press.moved) then
+        panx = pan.px - (mouse.x - pan.x)
+        pany = pan.py - (mouse.y - pan.y)
     end
 end
 
@@ -751,12 +826,15 @@ local function waveSummary(wave)
     return table.concat(parts, "  ")
 end
 
+-- The same help in a finger's words: no keys, no right button, tap not click.
+local function say(m, t) return touch and t or m end
+
 -- What to say at the bottom when nothing is hovered: the next thing to learn.
 local function hint()
     if game.phase ~= "build" then
         local brine = false
         for _, e in ipairs(game.enemies) do if e.kind == "brine" and e.slide then brine = true end end
-        if brine then return "BRINE IN THE NETWORK! PRUNE (X) THE LINK IT IS ON", "r" end
+        if brine then return say("BRINE IN THE NETWORK! PRUNE (X) THE LINK IT IS ON", "BRINE IN THE NETWORK! PRUNE THE LINK IT IS ON"), "r" end
         return nil
     end
     local living = 0
@@ -764,14 +842,14 @@ local function hint()
     local towers = 0
     for _, n in ipairs(game.nodes) do if n.tower then towers = towers + 1 end end
     if living == 0 then return "DRAG FROM THE SPROUT TO A POCKET TO GROW A LINK", "g" end
-    if towers == 0 then return "PICK A FRUITING BODY BELOW, THEN CLICK A LINKED POCKET", "g" end
+    if towers == 0 then return say("PICK A FRUITING BODY BELOW, THEN CLICK A LINKED POCKET", "PICK A FRUITING BODY BELOW, THEN TAP A LINKED POCKET"), "g" end
     local nxt = game:nextWave()
     if nxt then
         for _, g in ipairs(nxt) do
             if not game.seen[g[1]] then return "NEW: " .. D.ENEMIES[g[1]].name .. ". " .. D.ENEMIES[g[1]].blurb, "t" end
         end
     end
-    if game.wave == 0 then return "SPACE TO START THE FIRST WAVE", "g" end
+    if game.wave == 0 then return say("SPACE TO START THE FIRST WAVE", "TAP START FOR THE FIRST WAVE"), "g" end
 end
 
 local function tooltip()
@@ -780,7 +858,7 @@ local function tooltip()
         return b.name .. (b.cost and (" (" .. b.cost .. ")") or "") .. ": " .. b.blurb, "w"
     end
     if hover.wave then
-        return game.phase == "build" and "START THE NEXT WAVE (SPACE)" or "GAME SPEED (F)", "w"
+        return game.phase == "build" and say("START THE NEXT WAVE (SPACE)", "START THE NEXT WAVE") or say("GAME SPEED (F)", "GAME SPEED"), "w"
     end
     if mode == "grow" and drag and hover.node and hover.node ~= drag then
         local ok, cost, why = game:canLink(drag, hover.node)
@@ -826,7 +904,7 @@ local function tooltip()
         if l.state == "cut" then
             if l.salted then return "SALTED LINK. IT WILL NOT REGROW: PRUNE IT", "w" end
             if l.hand then return "REGROWING", "l" end
-            return "CUT LINK. CLICK TO REGROW: " .. game:repairCost(l), "l"
+            return say("CUT LINK. CLICK TO REGROW: ", "CUT LINK. TAP TO REGROW: ") .. game:repairCost(l), "l"
         end
         local s = "LINK " .. floor(l.hp) .. "/" .. D.LINK.hp .. "  FLOW " .. l.cap
         if l.thick then s = s .. " (RELAY)" end
@@ -840,28 +918,29 @@ local function tooltip()
         return why or "", "r"
     end
     if mode == "prune" and hover.mat then return "LIFT MAT", "r" end
-    if mode == "grow" and drag then return "LET GO OVER A GLOWING POCKET. RIGHT CLICK CANCELS", "l" end
+    if mode == "grow" and drag then return say("LET GO OVER A GLOWING POCKET. RIGHT CLICK CANCELS", "TAP A GLOWING POCKET. TAP THE GROUND TO CANCEL"), "l" end
     if mode == "pulse" then
         if game.pulseCd > 0 then return "PULSE REGROWING: " .. math.ceil(game.pulseCd) .. "S", "r" end
-        return "CLICK A FED NODE TO SEND THE PULSE", "l"
+        return say("CLICK A FED NODE TO SEND THE PULSE", "TAP A FED NODE TO SEND THE PULSE"), "l"
     end
 end
 
 local function drawHud()
     -- The top strip.
     color("o")
-    love.graphics.rectangle("fill", 0, 0, vw, TOP - 1)
+    love.graphics.rectangle("fill", 0, 0, vw, inset.t + TOP - 1)
+    local ty = inset.t + 3
     local inc = game.income or 0
     local s = "NUTRIENTS " .. floor(game.nutrients)
-    text(s, 3, 3, "l")
-    local x = 3 + Font.width(s) + 2
+    text(s, inset.l + 3, ty, "l")
+    local x = inset.l + 3 + Font.width(s) + 2
     if game.phase == "wave" then
         local i = (inc >= 0 and "+" or "") .. string.format("%.1f", inc)
-        text(i, x + 2, 3, inc >= 0 and "c" or "r")
+        text(i, x + 2, ty, inc >= 0 and "c" or "r")
         x = x + Font.width(i) + 4
     end
     s = "SPROUT " .. math.ceil(game.heartHp) .. "/" .. D.HEART_HP
-    text(s, x + 8, 3, game.heartHp < D.HEART_HP * 0.4 and "r" or "g")
+    text(s, x + 8, ty, game.heartHp < D.HEART_HP * 0.4 and "r" or "g")
     local w = "WAVE " .. game.wave .. "/" .. #D.WAVES
     local nxt = game:nextWave()
     local right = w
@@ -871,8 +950,16 @@ local function drawHud()
         for _, e in ipairs(game.enemies) do left = left + 1 end
         right = left .. " LEFT   " .. w
     end
-    text(right, vw - Font.width(right) - 3, 3, "w")
-    if paused then text("PAUSED", floor((vw - Font.width("PAUSED")) / 2), 3, "r") end
+    local leftEnd = x + 8 + Font.width(s) + 8
+    local rx = vw - inset.r - Font.width(right) - 3
+    -- A narrow screen keeps the wave count and lets the forecast go: the
+    -- gates still say how many come in at each.
+    if rx < leftEnd and right ~= w then right = w; rx = vw - inset.r - Font.width(w) - 3 end
+    text(right, rx, ty, "w")
+    if paused then
+        if touch then centred("PAUSED. TAP THE TOP BAR TO GO ON", floor(vh / 2) - 40, "r")
+        else text("PAUSED", floor((vw - Font.width("PAUSED")) / 2), ty, "r") end
+    end
 
     -- Gates: where the next wave comes in.
     if nxt and game.phase == "build" then
@@ -926,7 +1013,7 @@ local function drawHud()
             local afford = game.nutrients >= (b.cost or 0)
             blit(pic, cx, b.mode == "mat" and by + 12 or by + 18, not afford and T.DARKER2 or nil)
         end
-        text(b.key, bx + 1, by + 1, "s")
+        if not touch then text(b.key, bx + 1, by + 1, "s") end
         if b.cost then
             local c = tostring(b.cost)
             text(c, bx + bw - Font.width(c) - 1, by + bh - 6, game.nutrients >= b.cost and "l" or "r")
@@ -938,30 +1025,43 @@ local function drawHud()
         text("START", wx + floor((ww - Font.width("START")) / 2), wy + 5, "g")
         local s2 = "WAVE " .. (game.wave + 1)
         text(s2, wx + floor((ww - Font.width(s2)) / 2), wy + 13, "w")
-        text("SPACE", wx + floor((ww - Font.width("SPACE")) / 2), wy + 20, "s")
+        if not touch then text("SPACE", wx + floor((ww - Font.width("SPACE")) / 2), wy + 20, "s") end
     else
         box(wx, wy, ww, wh, "u", hover.wave and "t" or "o")
         local s2 = "SPEED X" .. speed
         text(s2, wx + floor((ww - Font.width(s2)) / 2), wy + 9, "w")
-        text("F", wx + floor((ww - 3) / 2), wy + 18, "s")
+        if not touch then text("F", wx + floor((ww - 3) / 2), wy + 18, "s") end
     end
 
     -- One line of help above the toolbar.
     local tip, k = tooltip()
     if not tip then tip, k = hint() end
     if tip then
-        if Font.width(tip) > vw - 8 then tip = tip:sub(1, floor((vw - 8) / 4)) end
-        centred(tip, vh - BH - 14, k)
+        -- Too long for the screen (a phone held upright): broken at a word onto
+        -- a second line above, rather than cut off.
+        local room = vw - inset.l - inset.r - 8
+        local lines = { tip }
+        if Font.width(tip) > room then
+            local cut
+            for i = #tip, 1, -1 do
+                if tip:sub(i, i) == " " and Font.width(tip:sub(1, i - 1)) <= room then cut = i break end
+            end
+            if cut then lines = { tip:sub(1, cut - 1), tip:sub(cut + 1) } end
+        end
+        for n, l in ipairs(lines) do
+            if Font.width(l) > room then l = l:sub(1, floor(room / 4)) end
+            centred(l, barTop() - 11 - (#lines - n) * 10, k)
+        end
     end
 
     if game.phase == "won" then
         centred("THE SPROUT LIVES", floor(vh / 2) - 24, "g")
         centred("KILLS " .. game.stats.kills .. "   DRUNK " .. floor(game.stats.drunk) .. "   CUTS " .. game.stats.cuts, floor(vh / 2) - 12, "w")
-        centred("R TO PLAY AGAIN", floor(vh / 2), "l")
+        centred(say("R TO PLAY AGAIN", "TAP TO PLAY AGAIN"), floor(vh / 2), "l")
     elseif game.phase == "lost" then
         centred("THE SPROUT HAS WILTED", floor(vh / 2) - 24, "r")
         centred("YOU HELD " .. (game.wave - 1) .. " WAVES OF " .. #D.WAVES, floor(vh / 2) - 12, "w")
-        centred("R TO TRY AGAIN", floor(vh / 2), "l")
+        centred(say("R TO TRY AGAIN", "TAP TO TRY AGAIN"), floor(vh / 2), "l")
     end
 end
 
