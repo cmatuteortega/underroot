@@ -58,6 +58,7 @@ local fingers, pinch = {}, nil -- the touches down, and the two being pinched
 local speed, paused = 1, false
 local heartFlash = 0
 local script -- the --shots run
+local shot -- and the whole screen it photographs
 
 --- the screen ----------------------------------------------------------------------
 
@@ -592,7 +593,7 @@ function love.update(dt)
     if script then
         -- The shots are the whole screen: the board with the HUD laid over it.
         -- The script never zooms, so the two pictures are the same size.
-        local shot = love.graphics.newCanvas(cw, ch)
+        if not shot or shot:getWidth() ~= cw or shot:getHeight() ~= ch then shot = love.graphics.newCanvas(cw, ch) end
         love.graphics.setCanvas(shot)
         love.graphics.setColor(1, 1, 1)
         love.graphics.draw(canvas)
