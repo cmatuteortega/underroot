@@ -17,7 +17,9 @@ D.UPKEEP = 0.04        -- per living link per second, while a wave is on
 
 -- Hyphae.
 D.LINK = {
-    reach = 62,        -- the longest link you can grow, in room units (a tile is 16)
+    reach = 80,        -- the longest link you can grow, in room units (a tile is 16); the
+                       -- loneliest pocket, a leaf by the far edge, is 64 from its nearest
+
     hp = 40,
     cap = 3,           -- nutrients a second a thin link carries
     grow = 1.2,        -- seconds a new link takes to reach the far end

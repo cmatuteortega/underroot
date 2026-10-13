@@ -44,6 +44,11 @@ local inset = { l = 0, t = 0, r = 0, b = 0 }
 -- last thing that pressed, so a tablet with a mouse plugged in reads the mouse.
 local touch = love.system.getOS() == "Android" or love.system.getOS() == "iOS"
 local press -- a press on open ground: a tap if it is let go where it was, a pan if it moves
+-- Whole zoom steps past the one that fits the board. A phone starts one in:
+-- the board is a hand's width there, and a pocket wants to be a fingertip.
+local zoomStep = touch and 1 or 0
+local ZOOM_STEPS = 3
+local fingers, pinch = {}, nil -- the touches down, and the two being pinched
 local speed, paused = 1, false
 local heartFlash = 0
 local script -- the --shots run
@@ -52,7 +57,7 @@ local script -- the --shots run
 
 local function fit()
     local w, h = love.graphics.getDimensions()
-    zoom = max(1, floor(min(w, h) / SHORT))
+    zoom = max(1, floor(min(w, h) / SHORT)) + zoomStep
     vw, vh = ceil(w / zoom), ceil(h / zoom)
     canvas = love.graphics.newCanvas(vw, vh)
     canvas:setFilter("nearest", "nearest")
@@ -338,7 +343,7 @@ end
 local SLOP = 3 -- game pixels a tap may wander and still be a tap
 
 function love.mousepressed(x, y, b, istouch)
-    if painter then return end
+    if painter or pinch then return end
     touch = istouch and true or false
     mouse.x, mouse.y = floor(x / zoom), floor(y / zoom)
     findHover()
@@ -354,6 +359,7 @@ end
 
 function love.mousereleased(x, y, b, istouch)
     if painter then return end
+    if pinch then press = nil return end
     if b == 3 then mouse.pan = nil return end
     mouse.x, mouse.y = floor(x / zoom), floor(y / zoom)
     if b == 1 and press then
@@ -380,6 +386,7 @@ end
 
 function love.mousemoved(x, y)
     mouse.x, mouse.y = floor(x / zoom), floor(y / zoom)
+    if pinch then return end
     local pan = mouse.pan or press
     if press and not press.moved and (abs(mouse.x - press.x) > SLOP or abs(mouse.y - press.y) > SLOP) then
         press.moved = true
@@ -390,6 +397,60 @@ function love.mousemoved(x, y)
     end
 end
 
+-- One whole step in or out, keeping the board point under (sx, sy) -- window
+-- pixels -- where it is. The zoom stays a whole number: the art is pixels.
+local function zoomBy(d, sx, sy)
+    local step = max(0, min(ZOOM_STEPS, zoomStep + d))
+    if step == zoomStep or painter then return end
+    sx, sy = sx or love.graphics.getWidth() / 2, sy or love.graphics.getHeight() / 2
+    local bx, by = sx / zoom + camx, sy / zoom + camy
+    zoomStep = step
+    fit()
+    centre()
+    panx = panx + (bx - sx / zoom) - camx
+    pany = pany + (by - sy / zoom) - camy
+    centre()
+    mouse.x, mouse.y = floor(sx / zoom), floor(sy / zoom)
+end
+
+function love.wheelmoved(_, y)
+    if y ~= 0 then zoomBy(y > 0 and 1 or -1, love.mouse.getPosition()) end
+end
+
+-- Two fingers pinch. Whatever the first finger had started -- a pan, a tap, a
+-- thread -- is dropped, so a pinch never builds anything.
+function love.touchpressed(id, x, y)
+    fingers[id] = { x = x, y = y }
+    local ids = {}
+    for k in pairs(fingers) do ids[#ids + 1] = k end
+    if #ids == 2 then
+        local a, b = fingers[ids[1]], fingers[ids[2]]
+        pinch = { a = ids[1], b = ids[2], d = sqrt((a.x - b.x) ^ 2 + (a.y - b.y) ^ 2) }
+        if press then panx, pany = press.px, press.py end
+        press, drag = nil, nil
+    end
+end
+
+function love.touchmoved(id, x, y)
+    if not fingers[id] then return end
+    fingers[id].x, fingers[id].y = x, y
+    if pinch and fingers[pinch.a] and fingers[pinch.b] then
+        local a, b = fingers[pinch.a], fingers[pinch.b]
+        local d = sqrt((a.x - b.x) ^ 2 + (a.y - b.y) ^ 2)
+        -- A step is a big jump at these zooms (x4 to x5 is a quarter), so it
+        -- takes a real spread of the fingers to make one.
+        if d > pinch.d * 1.3 or d < pinch.d / 1.3 then
+            zoomBy(d > pinch.d and 1 or -1, (a.x + b.x) / 2, (a.y + b.y) / 2)
+            pinch.d = d
+        end
+    end
+end
+
+function love.touchreleased(id)
+    fingers[id] = nil
+    if not next(fingers) then pinch = nil end
+end
+
 function love.keypressed(key)
     if key == "f11" or (key == "return" and love.keyboard.isDown("lalt", "ralt")) then
         love.window.setFullscreen(not love.window.getFullscreen())
@@ -397,6 +458,8 @@ function love.keypressed(key)
         return
     end
     if painter then return end
+    if key == "=" or key == "+" or key == "kp+" then zoomBy(1) end
+    if key == "-" or key == "kp-" then zoomBy(-1) end
     if key == "escape" then
         -- Never quits: one key too many and a run is gone. The window's close does that.
         if drag or mode ~= "grow" then mode, drag = "grow", nil else paused = not paused end
@@ -454,8 +517,11 @@ function love.update(dt)
     if k("right", "d") then panx = panx + pan end
     if k("up", "w") then pany = pany - pan end
     if k("down", "s") then pany = pany + pan end
-    local lim = max(40, (world.w - vw) / 2 + 40)
-    panx, pany = max(-lim, min(lim, panx)), max(-60, min(60, pany))
+    -- Zoomed in, the board is bigger than the screen: let every edge of it be
+    -- reached, with a little ground to spare.
+    local limx = max(40, (world.w - (vw - inset.l - inset.r)) / 2 + 40)
+    local limy = max(60, (world.h - (vh - inset.t - inset.b - TOP - BOTTOM)) / 2 + 40)
+    panx, pany = max(-limx, min(limx, panx)), max(-limy, min(limy, pany))
     centre()
 
     if script then script.update(game, dt) end

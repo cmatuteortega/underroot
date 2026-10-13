@@ -34,6 +34,7 @@ left to the sprout, and chew through any thread they cross.
 | right click | cancel, back to growing |
 | drag on open ground, middle drag, arrows / WASD | pan |
 | `R` | restart after a win or loss (`Shift+R` any time) |
+| mouse wheel, `+` / `-` | zoom in and out (whole steps) |
 | `F11` / `Alt+Enter` | back to a window (it opens fullscreen) |
 
 On a phone or tablet it plays with one finger, fullscreen, either way up (a
@@ -45,6 +46,7 @@ of its own), and the HUD keeps clear of the notch and home bar:
 | drag from a node to a pocket, or tap one then the other | grow a link; letting go on bare ground cancels the thread |
 | tap a tool, then tap where it goes | build, prune, lay a mat, pulse; tap the tool again to put it down |
 | drag on open ground | pan |
+| pinch | zoom (it starts one step in) |
 | tap START / SPEED | start the next wave / game speed |
 | tap the top bar | pause and resume (the game also pauses when it is sent to the background) |
 | tap anywhere after a win or loss | play again |
@@ -58,7 +60,7 @@ brings it.
 **The five parts.** The Heart pays 2.2 nutrients a second while a wave is on.
 Pockets are poor (pebble, −25% power), normal (leaf, crumb) or rich (dead beetle,
 +30% power, and pays 0.35/s when something grows on it while it is fed). Links
-cost `6 + 0.32 × length` (a tile is 16), reach at most 62, have 40 HP and carry
+cost `6 + 0.32 × length` (a tile is 16), reach at most 80, have 40 HP and carry
 3 nutrients/s, and each one costs 0.04/s upkeep during a wave. Nutrients are the
 only resource and the ammo: a tower holds a reserve, fires from it, and refills
 from the bank at up to the narrowest flow cap on its best path to the Heart.
