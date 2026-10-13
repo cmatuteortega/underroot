@@ -1,0 +1,153 @@
+-- Dev only: `love . --shots` plays a scripted game on a fixed 30fps clock --
+-- grows a network, builds on it, plays waves, cuts and prunes -- writes
+-- screenshots to the save directory, prints what happened, and quits. The
+-- "look at it before the game does" step from Survive School's 3dmethod.md,
+-- for a whole board.
+
+local D = require "src.defs"
+
+local S = {}
+
+-- No one is watching the window: an error should say so and stop, not wait.
+function love.errorhandler(msg)
+    print("ERROR", msg, debug.traceback())
+    os.exit(1)
+end
+
+local clock, shots = 0, 0
+local game
+
+local function node(c, r)
+    for _, n in ipairs(game.nodes) do
+        if n.pocket and n.pocket.c == c and n.pocket.r == r then return n end
+    end
+    error("no pocket at " .. c .. "," .. r)
+end
+
+-- Grown at once: the script has no time to wait for each thread to arrive.
+local function link(a, b)
+    local l = assert(game:grow(a, b), "could not link")
+    l.state, l.grow = "alive", 1
+    game:recompute()
+end
+
+local steps
+function S.begin(g, api)
+    game = g
+    local H = g.heart
+    local function at(n) return api.at(n.x, n.y + (n.heart and 10 or 5), n.z) end
+    local function move(x, y) love.mousemoved(x, y) end
+    local function press(x, y) love.mousemoved(x, y); love.mousepressed(x, y, 1) end
+    local function release(x, y) love.mousemoved(x, y); love.mousereleased(x, y, 1) end
+    steps = {
+        -- The first minute, played with the mouse the way a player would.
+        { 0.3, function() press(at(H)); move(at(node(12, 6))) end },
+        { 0.4, function() release(at(node(12, 6))) end },
+        { 0.6, function() press(at(H)); release(at(H)); press(at(node(12, 3))); release(at(node(12, 3))) end },
+        { 0.9, function() press(at(H)); local x, y = at(node(11, 8)); move(x - 30, y + 10) end },
+        { 1.0, "shot" },
+        { 1.1, function() release(at(node(11, 8))) end },
+        { 2.0, function() press(api.button("puffer")); release(api.button("puffer")); press(at(node(12, 6))); release(at(node(12, 6))) end },
+        { 2.2, function() move(at(node(12, 3))) end },
+        { 2.3, "shot" },
+        { 2.5, function()
+            assert(#g.links == 3, "three links by hand, got " .. #g.links)
+            assert(node(12, 6).tower, "a puffer by hand")
+            move(api.button("grow"))
+            love.keypressed("space")
+        end },
+        { 6, "shot" },
+        { 9, function()
+            -- A lot more network, paid for by the script.
+            g.nutrients = g.nutrients + 600
+            link(node(12, 6), node(12, 9))
+            link(node(12, 9), node(11, 8))
+            link(node(11, 8), node(8, 9))
+            link(node(8, 9), node(6, 7))
+            link(node(6, 7), node(7, 5))
+            link(node(7, 5), node(10, 6))
+            link(node(10, 6), node(11, 8)) -- closes a ring of five round the trail
+        end },
+        { 13, function()
+            assert(g:build("needle", node(8, 9)))
+            assert(g:build("mane", node(11, 8)))
+            assert(g:build("relay", node(12, 9)))
+            assert(g:build("puffer", node(7, 5)))
+            assert(g:build("puffer", node(12, 3)))
+            assert(g:layMat(5, 3))
+            assert(g:layMat(4, 8))
+        end },
+        { 14, "shot" },
+        { 16, function() assert(g:pulse(node(7, 5)), "pulse") end },
+        { 17, "shot" },
+        { 18, function()
+            -- A drop of brine straight onto the network, to see it run.
+            g:spawn("brine", 1)
+            local e = g.enemies[#g.enemies]
+            local l = g:linkBetween(node(11, 8), node(8, 9))
+            e.x, e.z = (l.a.x + l.b.x) / 2, (l.a.z + l.b.z) / 2
+            g:attach(e, l)
+        end },
+        { 18.6, "shot" },
+        { 30, "skip" },  -- through to wave 6, the brine
+        { 31, "shot" },
+        { 40, "shot" },
+        { 50, "shot" },
+        { 60, "skip" },
+        { 62, "shot" },
+        { 75, "shot" },
+        { 76, "quit" },
+    }
+end
+
+-- Plays whole waves through, for the "skip" step: waves 2..6 at a stroke.
+local function skipTo(wave)
+    while game.wave < wave and game.phase ~= "lost" do
+        if game.phase == "build" then
+            game.nutrients = game.nutrients + 50
+            game:startWave()
+        end
+        for _ = 1, 30 do game:update(1 / 30) end
+    end
+end
+
+function S.update(g, dt)
+    clock = clock + dt
+    while steps[1] and clock >= steps[1][1] do
+        local s = table.remove(steps, 1)[2]
+        if type(s) == "function" then
+            s()
+        elseif s == "skip" then
+            skipTo(g.wave + 3)
+            if g.phase == "build" then g:startWave() end
+        elseif s == "shot" then
+            S.pending = true
+        elseif s == "quit" then
+            print(("wave %d  phase %s  sprout %.1f  nutrients %d  kills %d  drunk %d  cuts %d  stolen %d")
+                :format(g.wave, g.phase, g.heartHp, g.nutrients, g.stats.kills, g.stats.drunk, g.stats.cuts, g.stats.stolen))
+            print("pictures kept", require("src.models").count())
+            print(("frame: %.2f ms average, %.2f ms worst (update + draw, real time)"):format(S.total / S.frames * 1000, S.worst * 1000))
+            love.event.quit()
+        end
+    end
+end
+
+S.total, S.frames, S.worst = 0, 0, 0
+local last
+function S.after(g, canvas)
+    local now = love.timer.getTime()
+    if last and clock > 1 then
+        local d = now - last
+        S.total, S.frames, S.worst = S.total + d, S.frames + 1, math.max(S.worst, d)
+    end
+    last = now
+    if S.pending then
+        S.pending = false
+        shots = shots + 1
+        canvas:newImageData():encode("png", ("shot%d.png"):format(shots))
+        print(("shot %d at %.1fs: wave %d %s, %d enemies, %d links, %d rings, nutrients %d, sprout %.1f")
+            :format(shots, clock, g.wave, g.phase, #g.enemies, #g.links, #g.rings, g.nutrients, g.heartHp))
+    end
+end
+
+return S
