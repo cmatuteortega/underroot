@@ -10,7 +10,7 @@
 -- to each (the flow cap a tower is fed at). Recomputing beats keeping it in step
 -- with every cut, bite and regrowth, and at a few dozen links it is free.
 --
--- Decisions on the design doc's open questions, for this prototype:
+-- Decisions on the design doc's open questions:
 --   * Real time, with a build phase between waves. You can rewire during a wave
 --     too -- that is the fantasy -- but the pause lowers the barrier.
 --   * Severing is kind: a cut tower runs on its reserve, then goes dormant.
@@ -22,11 +22,16 @@
 -- shortest loops through each living link, looked for again only when the set
 -- of living links changes; the pulse walks the breadth-first tree back from the
 -- node it is sent to.
+--
+-- Upgrades are two numbers on a tower, its branch and its tier; every stat is
+-- read through `stat`, which takes the highest tier's value. Mutations are flags
+-- in `mods`, read where the number they change is used.
 
 local D = require "src.defs"
 local World = require "src.world"
 
 local sqrt, max, min, abs, floor, huge = math.sqrt, math.max, math.min, math.abs, math.floor, math.huge
+local cos, sin, atan2 = math.cos, math.sin, math.atan2
 local random = love.math.random
 
 local Game = {}
@@ -48,23 +53,31 @@ Game.segDist = segDist
 
 local function dist(a, b) return sqrt((a.x - b.x) ^ 2 + (a.z - b.z) ^ 2) end
 
+local function unlist(list, item)
+    for n = #list, 1, -1 do if list[n] == item then table.remove(list, n) end end
+end
+
 --- setting up -------------------------------------------------------------------------
 
 function Game.new(world)
     local self = setmetatable({ world = world }, Game)
     self.nodes, self.links, self.mats = {}, {}, {}
     self.enemies, self.corpses, self.shots, self.fx, self.texts = {}, {}, {}, {}, {}
+    self.clouds, self.inks = {}, {}
     self.nutrients = D.START_NUTRIENTS
+    self.heartMax = D.HEART_HP
     self.heartHp = D.HEART_HP
-    self.wave, self.phase = 0, "build"
+    self.wave, self.cleared, self.phase = 0, 0, "build"
     self.clock, self.waveClock = 0, 0
     self.queue = {}
     self.seen = {}
     self.events = {}
-    self.stats = { kills = 0, drunk = 0, stolen = 0, cuts = 0 }
+    self.stats = { kills = 0, drunk = 0, stolen = 0, cuts = 0, bosses = 0, leaked = {} }
     self.rings, self.ringKey = {}, ""
     self.pulseCd = 0
     self.nextLink = 1
+    self.mods = {}
+    self.picked = {}
 
     local h = world.heart
     self.heart = { id = 1, x = h.x, y = h.y + 1, z = h.z, heart = true, quality = "normal", links = {} }
@@ -79,6 +92,19 @@ end
 function Game:say(text, x, y, z, k)
     self.texts[#self.texts + 1] = { text = text, x = x, y = y, z = z, k = k or "l", life = 1.1 }
 end
+
+--- numbers a mutation can change --------------------------------------------------------
+
+function Game:linkHp() return D.LINK.hp * (self.mods.thick and 1.5 or 1) end
+function Game:linkReach() return D.LINK.reach * (self.mods.reach and 1.25 or 1) end
+function Game:linkCost(len)
+    local c = D.LINK.cost(len)
+    if self.mods.cheap then c = max(1, floor(c * 0.75 + 0.5)) end
+    return c
+end
+function Game:pulseCooldown() return D.PULSE.cooldown * (self.mods.pulse and 0.6 or 1) end
+function Game:ringDamage() return self.mods.rings and 1.4 or D.RING.damage end
+function Game:ringSlow() return self.mods.rings and 0.55 or D.RING.slow end
 
 --- the network ------------------------------------------------------------------------
 
@@ -99,9 +125,11 @@ function Game:degree(node)
 end
 
 function Game:recompute()
-    for _, n in ipairs(self.nodes) do n.conn, n.hop, n.cap, n.parent, n.via = false, huge, 0, nil, nil end
-    -- Relays first: a link is thick if a fed relay reaches either end of it.
-    for _, l in ipairs(self.links) do l.thick = false end
+    for _, n in ipairs(self.nodes) do
+        n.conn, n.hop, n.cap, n.parent, n.via = false, huge, 0, nil, nil
+        if n.tower then n.tower.battery, n.tower.amp, n.tower.warded = 1, 1, false end
+    end
+    for _, l in ipairs(self.links) do l.capMul = 1 end
     local h = self.heart
     h.conn, h.hop, h.cap = true, 0, huge
     -- Hops, breadth first, over living links.
@@ -119,15 +147,33 @@ function Game:recompute()
             end
         end
     end
+    -- What a fed relay or mane does to what is round it.
     for _, n in ipairs(self.nodes) do
-        if n.tower and n.tower.kind == "relay" and n.conn then
-            local r = D.TOWER.relay.range
+        local t = n.tower
+        if t and n.conn and t.kind == "relay" then
+            local r = self:stat(t, "range")
+            local m = self:stat(t, "capMul")
             for _, l in ipairs(self.links) do
-                if dist(l.a, n) <= r or dist(l.b, n) <= r then l.thick = true end
+                if dist(l.a, n) <= r or dist(l.b, n) <= r then l.capMul = max(l.capMul, m) end
+            end
+            local bat, amp = self:stat(t, "battery") or 1, self:stat(t, "amp") or 1
+            for _, o in ipairs(self.nodes) do
+                if o.tower and o ~= n and dist(o, n) <= r then
+                    o.tower.battery = max(o.tower.battery, bat)
+                    o.tower.amp = max(o.tower.amp, amp)
+                end
+            end
+        elseif t and n.conn and t.kind == "mane" and self:stat(t, "webProof") then
+            local r = self:stat(t, "range")
+            for _, o in ipairs(self.nodes) do
+                if o.tower and dist(o, n) <= r then o.tower.warded = true end
             end
         end
     end
-    for _, l in ipairs(self.links) do l.cap = D.LINK.cap * (l.thick and 2 or 1) end
+    for _, l in ipairs(self.links) do
+        l.thick = l.capMul > 1
+        l.cap = D.LINK.cap * l.capMul
+    end
     self:findRings()
     -- The widest path: the most a node can be fed, limited by the thinnest link
     -- on the best way there. Relaxed until nothing changes; it is a small graph.
@@ -149,9 +195,9 @@ end
 function Game:canLink(a, b)
     if not a or not b or a == b then return false, nil, "" end
     local len = dist(a, b)
-    local cost = D.LINK.cost(len)
+    local cost = self:linkCost(len)
     if self:linkBetween(a, b) then return false, cost, "ALREADY LINKED" end
-    if len > D.LINK.reach then return false, cost, "TOO FAR" end
+    if len > self:linkReach() then return false, cost, "TOO FAR" end
     if not (a.conn or b.conn) then return false, cost, "NOT CONNECTED TO THE SPROUT" end
     if self.nutrients < cost then return false, cost, "NOT ENOUGH NUTRIENTS" end
     return true, cost
@@ -165,17 +211,13 @@ function Game:grow(a, b)
     self.nutrients = self.nutrients - cost
     -- Its cap is set now, not at the next recompute: that waits for it to
     -- arrive, and anything asking about it meanwhile (a hover) needs one.
-    local l = { id = self.nextLink, a = a, b = b, len = dist(a, b), cost = cost, hp = D.LINK.hp, state = "grow", grow = 0, bitten = {},
-        cap = D.LINK.cap }
+    local l = { id = self.nextLink, a = a, b = b, len = dist(a, b), cost = cost, hp = self:linkHp(), state = "grow", grow = 0,
+        bitten = {}, cap = D.LINK.cap, capMul = 1 }
     self.nextLink = self.nextLink + 1
     self.links[#self.links + 1] = l
     a.links[#a.links + 1] = l
     b.links[#b.links + 1] = l
     return l
-end
-
-local function unlist(list, item)
-    for n = #list, 1, -1 do if list[n] == item then table.remove(list, n) end end
 end
 
 function Game:removeLink(l)
@@ -196,7 +238,7 @@ function Game:prune(l)
     self:recompute()
 end
 
-function Game:cut(l, why)
+function Game:cut(l)
     if l.state ~= "alive" and l.state ~= "grow" then return end
     l.state, l.hp, l.regrow, l.hand = "cut", 0, 0, false
     self.stats.cuts = self.stats.cuts + 1
@@ -204,6 +246,34 @@ function Game:cut(l, why)
     local mx, mz = (l.a.x + l.b.x) / 2, (l.a.z + l.b.z) / 2
     self:burst(mx, 1, mz, 8, { "c", "l", "r" }, 18)
     self:recompute()
+end
+
+-- How much of a bite gets through: a shelf fungus nearby takes most of it.
+function Game:shield(l)
+    local best = 1
+    for _, m in ipairs(self.mats) do
+        if m.kind == "shelf" then
+            local d = D.TOWER.shelf
+            if segDist(m.x, m.z, l.a.x, l.a.z, l.b.x, l.b.z) <= d.shield then best = min(best, d.shieldMul) end
+        end
+    end
+    return best
+end
+
+function Game:biteLink(l, amount)
+    l.hp = l.hp - amount * self:shield(l)
+end
+
+-- Rolled over, sheared, flattened: cut outright, unless a shelf shields it.
+function Game:crush(l)
+    if self:shield(l) < 1 then
+        if not l.crushed or self.clock - l.crushed > 0.5 then
+            l.crushed = self.clock
+            l.hp = l.hp - 20
+        end
+        return
+    end
+    self:cut(l)
 end
 
 function Game:repairCost(l) return max(1, floor(l.cost * D.LINK.repair + 0.5)) end
@@ -244,7 +314,7 @@ function Game:findRings()
     for _, l in ipairs(self.links) do
         if alive(l) and l.a.conn and l.b.conn then
             -- The shortest way round from one end to the other without this link.
-            local from, back, queue, head = l.a, { [l.a] = false }, { l.a }, 1
+            local back, queue, head = { [l.a] = false }, { l.a }, 1
             while queue[head] and back[l.b] == nil do
                 local n = queue[head]
                 head = head + 1
@@ -296,7 +366,7 @@ end
 
 function Game:pulse(node)
     if not self:canPulse(node) then return false end
-    self.pulseCd = D.PULSE.cooldown
+    self.pulseCd = self:pulseCooldown()
     local n = node
     while n do
         if n.tower then n.tower.boost = D.PULSE.duration end
@@ -309,21 +379,93 @@ end
 
 --- fruiting bodies ----------------------------------------------------------------------
 
+-- A stat of a tower (or a mat or shelf) at its branch and tier.
+function Game:stat(t, k)
+    local d = D.TOWER[t.kind]
+    if t.branch then
+        local b = d.up[t.branch]
+        for tier = t.tier, 1, -1 do
+            local v = b[tier][k]
+            if v ~= nil then return v end
+        end
+    end
+    return d[k]
+end
+
+function Game:reserveMax(t)
+    local r = self:stat(t, "reserve") or 0
+    return r * (t.battery or 1) * (self.mods.store and 1.5 or 1)
+end
+
+function Game:maxHp(t) return self:stat(t, "hp") or 30 end
+
+-- Has the wave that brings this species been cleared?
+function Game:unlocked(kind)
+    return (D.TOWER[kind].unlock or 0) <= self.cleared
+end
+
 function Game:canBuild(kind, node)
     local d = D.TOWER[kind]
     if not node or node.heart or node.tower then return false end
+    if not self:unlocked(kind) then return false, "UNLOCKS AFTER WAVE " .. d.unlock end
     if (node.salted or 0) > 0 then return false, "SALTED" end
     if self.nutrients < d.cost then return false, "NOT ENOUGH NUTRIENTS" end
     return true
+end
+
+local function newTower(kind, cost)
+    return { kind = kind, tier = 0, reserve = 0, cool = 0.3, squash = 0, flash = 0, spent = cost,
+        grown = 0, battery = 1, amp = 1, ink = 1, webbed = 0, stun = 0, fired = 0 }
 end
 
 function Game:build(kind, node)
     if not self:canBuild(kind, node) then return false end
     local d = D.TOWER[kind]
     self.nutrients = self.nutrients - d.cost
-    node.tower = { kind = kind, node = node, reserve = d.reserve or 0, cool = 0.3, squash = 0, flash = 0, spent = d.cost }
+    local t = newTower(kind, d.cost)
+    t.node, t.reserve, t.hp = node, d.reserve or 0, d.hp or 30
+    node.tower = t
+    self:burst(node.x, node.y + 2, node.z, 8, { "l", "c", "w" }, 14)
     self:recompute()
-    return node.tower
+    return t
+end
+
+-- The upgrades open to a tower: both branches' first tier, or its branch's next.
+function Game:upgrades(t)
+    local d = D.TOWER[t.kind]
+    if not d.up then return {} end
+    if not t.branch then
+        return { { branch = 1, tier = 1, row = d.up[1][1] }, { branch = 2, tier = 1, row = d.up[2][1] } }
+    end
+    if t.tier < 2 then
+        return { { branch = t.branch, tier = t.tier + 1, row = d.up[t.branch][t.tier + 1] } }
+    end
+    return {}
+end
+
+function Game:canUpgrade(t, branch)
+    for _, u in ipairs(self:upgrades(t)) do
+        if u.branch == branch then
+            if self.nutrients < u.row.cost then return false, "NOT ENOUGH NUTRIENTS", u end
+            return true, nil, u
+        end
+    end
+    return false
+end
+
+function Game:upgrade(t, branch)
+    local ok, _, u = self:canUpgrade(t, branch)
+    if not ok then return false end
+    local before = self:maxHp(t)
+    self.nutrients = self.nutrients - u.row.cost
+    t.branch, t.tier, t.spent = u.branch, u.tier, t.spent + u.row.cost
+    t.grown = 0
+    t.hp = (t.hp or before) + (self:maxHp(t) - before)
+    local x, y, z = t.node and t.node.x or t.x, t.node and t.node.y or 0, t.node and t.node.z or t.z
+    self:burst(x, y + 6, z, 16, { "l", "w", "c" }, 22)
+    self:say(u.row.name, x, y + 18, z, "l")
+    self:recompute()
+    return true
 end
 
 function Game:sell(node)
@@ -336,29 +478,64 @@ function Game:sell(node)
     self:recompute()
 end
 
+function Game:destroyTower(node, why)
+    if not node.tower then return end
+    self:burst(node.x, node.y + 6, node.z, 14, { "t", "w", "r" }, 24)
+    self:say(why, node.x, node.y + 14, node.z, "r")
+    node.tower = nil
+    self:recompute()
+end
+
+-- Mats and shelves: laid on a trail tile rather than grown on a pocket.
 function Game:matAt(c, r)
     for _, m in ipairs(self.mats) do if m.c == c and m.r == r then return m end end
 end
 
-function Game:canMat(c, r)
+function Game:canLay(kind, c, r)
+    local d = D.TOWER[kind]
     if not self.world:distAt(c, r) or self.world.cell(c, r) == "H" then return false end
-    if self:matAt(c, r) then return false, "ALREADY A MAT" end
-    if self.nutrients < D.TOWER.mat.cost then return false, "NOT ENOUGH NUTRIENTS" end
+    if not self:unlocked(kind) then return false, "UNLOCKS AFTER WAVE " .. d.unlock end
+    if self:matAt(c, r) then return false, "TILE TAKEN" end
+    if d.touch then
+        local x, z = c * TILE + TILE / 2, r * TILE + TILE / 2
+        local near = false
+        for _, l in ipairs(self.links) do
+            if alive(l) and l.a.conn and segDist(x, z, l.a.x, l.a.z, l.b.x, l.b.z) <= d.touch then near = true break end
+        end
+        if not near then return false, "MUST GROW BESIDE A FED LINK" end
+    end
+    if self.nutrients < d.cost then return false, "NOT ENOUGH NUTRIENTS" end
     return true
 end
 
-function Game:layMat(c, r)
-    if not self:canMat(c, r) then return false end
-    self.nutrients = self.nutrients - D.TOWER.mat.cost
-    local m = { c = c, r = r, x = c * TILE + TILE / 2, z = r * TILE + TILE / 2, life = D.TOWER.mat.life, spent = D.TOWER.mat.cost }
+function Game:lay(kind, c, r)
+    if not self:canLay(kind, c, r) then return false end
+    local d = D.TOWER[kind]
+    self.nutrients = self.nutrients - d.cost
+    local m = newTower(kind, d.cost)
+    m.c, m.r, m.x, m.z = c, r, c * TILE + TILE / 2, r * TILE + TILE / 2
+    m.life, m.hp = d.life, d.hp
     self.mats[#self.mats + 1] = m
+    self:burst(m.x, 2, m.z, 8, { "l", "c", "w" }, 14)
     return m
 end
 
+-- What lifting it pays back: less the more it has worn.
+function Game:liftValue(m)
+    local left = m.kind == "mat" and m.life / self:stat(m, "life") or m.hp / self:maxHp(m)
+    return floor(m.spent * D.SELL * max(0, min(1, left)))
+end
+
 function Game:liftMat(m)
-    local back = floor(m.spent * D.SELL * m.life / D.TOWER.mat.life)
+    local back = self:liftValue(m)
     self.nutrients = self.nutrients + back
+    self:say("+" .. back, m.x, 8, m.z)
     unlist(self.mats, m)
+end
+
+function Game:breakMat(m)
+    unlist(self.mats, m)
+    self:burst(m.x, 3, m.z, 12, m.kind == "shelf" and { "t", "n", "w" } or { "l", "c" }, 22)
 end
 
 --- waves ---------------------------------------------------------------------------------
@@ -380,24 +557,37 @@ function Game:startWave()
     table.sort(self.queue, function(a, b) return a.t < b.t end)
 end
 
+function Game:spawnAt(kind, x, z, c, r)
+    local d = D.ENEMIES[kind]
+    local scale = d.boss and 1 or 1 + D.HP_GROWTH * (self.wave - 1)
+    local hp = d.hp * scale
+    local en = { kind = kind, x = x, z = z, y = 0, c = c, r = r, tc = c, tr = r,
+        hp = hp, maxHp = hp, h = 0, flash = 0, slow = 1, off = (random() - 0.5) * 6,
+        walked = 0, anim = random() * 4, state = "walk", boss = d.boss, stun = 0, mark = 0 }
+    if d.boss then en.off = 0 end
+    if d.fly then en.y = 12 end
+    if d.ball then en.ballHp, en.ballMax = d.ball, d.ball end
+    if d.chargeEvery then en.charge = d.chargeEvery * 0.6 end
+    if d.broodEvery then en.brood = d.broodEvery * 0.5 end
+    if d.webCd then en.webCd = 1 end
+    self.enemies[#self.enemies + 1] = en
+    return en
+end
+
 function Game:spawn(kind, gate)
     local e = self.world.entrances[gate] or self.world.entrances[1]
     local d = D.ENEMIES[kind]
-    local scale = 1 + D.HP_GROWTH * (self.wave - 1)
     self.seen[kind] = true
-    local function one(ox, oz)
-        local hp = d.hp * scale
-        local en = { kind = kind, x = e.x - TILE * 0.6 + ox, z = e.z + oz, y = 0, c = e.c, r = e.r,
-            hp = hp, maxHp = hp, h = 0, flash = 0, slow = 1, off = (random() - 0.5) * 6,
-            walked = 0, anim = random() * 4, state = "walk" }
-        en.tc, en.tr = e.c, e.r
-        self.enemies[#self.enemies + 1] = en
-        return en
-    end
+    local x, z = e.x - TILE * 0.6, e.z
     if kind == "mite" then
-        for _ = 1, d.swarm do one((random() - 0.5) * 10, (random() - 0.5) * 10) end
+        for _ = 1, d.swarm do self:spawnAt(kind, x + (random() - 0.5) * 10, z + (random() - 0.5) * 10, e.c, e.r) end
     else
-        one(0, 0)
+        local en = self:spawnAt(kind, x, z, e.c, e.r)
+        if d.boss then
+            self.events.boss = kind
+            self.bossIntro = { kind = kind, t = 3.5 }
+        end
+        return en
     end
 end
 
@@ -408,7 +598,7 @@ function Game:burst(x, y, z, n, keys, speed)
         local a, u = random() * 2 * math.pi, random()
         self.fx[#self.fx + 1] = {
             x = x, y = y, z = z,
-            vx = math.cos(a) * speed * u, vy = speed * (0.4 + random()), vz = math.sin(a) * speed * u,
+            vx = cos(a) * speed * u, vy = speed * (0.4 + random()), vz = sin(a) * speed * u,
             life = 0.3 + random() * 0.3, k = keys[random(#keys)],
         }
     end
@@ -420,13 +610,38 @@ function Game:armor(e)
     return d.armor
 end
 
-function Game:hurt(e, amount, pierce)
-    if e.dead then return end
+-- `quiet` is damage over time: no flash, so a poisoned ant does not strobe.
+function Game:hurt(e, amount, pierce, quiet)
+    if e.dead then return 0 end
+    if e.mark > 0 then amount = amount * (e.markMul or 1) end
     local a = pierce and 0 or self:armor(e)
-    local dmg = max(amount * 0.15, amount - a)
+    local dmg = quiet and amount or max(amount * 0.15, amount - a)
+    if e.ballHp and e.ballHp > 0 then
+        -- The ball takes it. When it breaks, the beetle is in a hurry.
+        e.ballHp = e.ballHp - dmg
+        e.ballFlash = 0.08
+        if e.ballHp <= 0 then self:breakBall(e) end
+        return dmg
+    end
     e.hp = e.hp - dmg
-    e.flash = 0.08
+    if not quiet then e.flash = 0.08 end
     if e.hp <= 0 then self:kill(e) end
+    return dmg
+end
+
+function Game:ballAt(e)
+    local d = D.ENEMIES[e.kind]
+    return e.x + cos(e.h) * d.ballAhead, e.z + sin(e.h) * d.ballAhead
+end
+
+function Game:breakBall(e)
+    local d = D.ENEMIES[e.kind]
+    local bx, bz = self:ballAt(e)
+    e.ballHp = 0
+    self:burst(bx, 8, bz, 30, { "n", "u", "t" }, 34)
+    self:say("THE BALL BREAKS", bx, 22, bz, "t")
+    self.corpses[#self.corpses + 1] = { kind = "ball", x = bx, z = bz, h = e.h, value = d.ballCorpse, life = 40 }
+    self.events.shake = 0.4
 end
 
 function Game:kill(e)
@@ -439,10 +654,55 @@ function Game:kill(e)
         self:burst(e.x, e.y + 2, e.z, 10, { "w", "s" }, 22)
         return
     end
-    self:burst(e.x, 2, e.z, e.kind == "mite" and 2 or 6, { "r", "n", "t" }, 16)
-    if d.corpse > 0 then
-        self.corpses[#self.corpses + 1] = { kind = e.kind, x = e.x, z = e.z, h = e.h, value = d.corpse, life = 25 }
+    self:burst(e.x, 2 + e.y, e.z, e.kind == "mite" and 2 or (d.boss and 30 or 6), { "r", "n", "t" }, d.boss and 30 or 16)
+    if d.boss then
+        self.stats.bosses = self.stats.bosses + 1
+        self.events.shake = 0.5
+        self:say(d.name .. " FALLS", e.x, 30, e.z, "g")
     end
+    if e.infected and e.infected > 0 then
+        -- Cordyceps: the host fruits where it falls, and the spores look for the next.
+        self:burst(e.x, 6, e.z, 10, { "t", "r", "w" }, 18)
+        if (e.spread or 0) > 0 then
+            local next = self:infectable(e.x, e.z, 34, e.hostMaxHp or 400)
+            if next then
+                self.shots[#self.shots + 1] = { kind = "cordy", x0 = e.x, y0 = 4, z0 = e.z, target = next,
+                    tx = next.x, tz = next.z, t = 0, flight = 0.5,
+                    infect = e.infectFor, spread = e.spread - 1, bite = e.hostBite, maxHp = e.hostMaxHp }
+            end
+        end
+    end
+    if d.corpse > 0 then
+        self.corpses[#self.corpses + 1] = { kind = e.kind, x = e.x, z = e.z, h = e.h, value = d.corpse, life = 25,
+            fruit = e.infected and e.infected > 0 }
+    end
+end
+
+-- The biggest host in reach a cordyceps can take.
+function Game:infectable(x, z, range, maxHp)
+    local best
+    for _, e in ipairs(self.enemies) do
+        local d = D.ENEMIES[e.kind]
+        if not e.dead and not d.boss and not d.fly and e.kind ~= "brine" and not (e.infected and e.infected > 0)
+            and e.hp <= maxHp and (e.x - x) ^ 2 + (e.z - z) ^ 2 <= range * range then
+            if not best or e.hp > best.hp then best = e end
+        end
+    end
+    return best
+end
+
+function Game:infect(e, s)
+    if e.dead then return end
+    e.infected, e.infectFor = s.infect, s.infect
+    e.spread, e.hostBite, e.hostMaxHp = s.spread or 0, s.bite, s.maxHp
+    e.state, e.chewing, e.gnaw = "walk", nil, nil
+    e.rolling = false
+    if e.carry then e.carry.carried, e.carry = nil, nil end
+    -- It turns round on the tile it stands on.
+    local c, r = floor(e.x / TILE), floor(e.z / TILE)
+    if self.world:distAt(c, r) then e.tc, e.tr = c, r end
+    self:burst(e.x, 4, e.z, 8, { "t", "r" }, 14)
+    self:say("INFECTED", e.x, 12, e.z, "t")
 end
 
 --- the frame ---------------------------------------------------------------------------------
@@ -450,7 +710,11 @@ end
 function Game:update(dt)
     self.clock = self.clock + dt
     self.events = {}
-    if self.phase == "won" or self.phase == "lost" then
+    if self.bossIntro then
+        self.bossIntro.t = self.bossIntro.t - dt
+        if self.bossIntro.t <= 0 then self.bossIntro = nil end
+    end
+    if self.phase == "won" or self.phase == "lost" or self.phase == "mutate" then
         self:updateFx(dt)
         return
     end
@@ -473,7 +737,7 @@ function Game:update(dt)
         end
         local living = 0
         for _, l in ipairs(self.links) do if alive(l) then living = living + 1 end end
-        local income = D.INCOME - living * D.UPKEEP
+        local income = D.INCOME - living * D.UPKEEP + (self.mods.sugar and 0.8 or 0)
         -- A rich pocket that something grows on, fed, pays its own way.
         for _, n in ipairs(self.nodes) do
             if n.conn and n.tower then income = income + World.QUALITY[n.quality].income end
@@ -490,6 +754,7 @@ function Game:update(dt)
     for _, e in ipairs(self.enemies) do if not e.dead then self:move(e, dt) end end
     for n = #self.enemies, 1, -1 do if self.enemies[n].dead then table.remove(self.enemies, n) end end
     self:updateShots(dt)
+    self:updateClouds(dt)
     self:updateCorpses(dt)
     self:updateFx(dt)
     self:recompute()
@@ -498,6 +763,8 @@ function Game:update(dt)
         self.heartHp = 0
         self.phase = "lost"
     elseif self.phase == "wave" and not self.queue[1] and not self.enemies[1] then
+        self.cleared = self.wave
+        self.inks, self.clouds = {}, {}
         if self.wave >= #D.WAVES then
             self.phase = "won"
         else
@@ -505,24 +772,64 @@ function Game:update(dt)
             local bonus = D.WAVE_BONUS + 4 * self.wave
             self.nutrients = self.nutrients + bonus
             self:say("WAVE CLEAR +" .. bonus, self.heart.x, 26, self.heart.z, "g")
+            for _, t in ipairs(D.TOWERS) do
+                if t.unlock == self.cleared then self.events.unlock = t.id; self.newSpecies = t.id end
+            end
+            if D.MUTATE_AFTER[self.wave] then self:offerMutations() end
         end
     end
 end
 
+--- mutations --------------------------------------------------------------------------------
+
+function Game:offerMutations()
+    local pool = {}
+    for _, m in ipairs(D.MUTATIONS) do
+        if not self.mods[m.id] then pool[#pool + 1] = m end
+    end
+    self.choices = {}
+    for _ = 1, min(3, #pool) do
+        self.choices[#self.choices + 1] = table.remove(pool, random(#pool))
+    end
+    if self.choices[1] then self.phase = "mutate" end
+end
+
+function Game:mutate(n)
+    local m = self.phase == "mutate" and self.choices[n]
+    if not m then return false end
+    self.mods[m.id] = true
+    self.picked[#self.picked + 1] = m
+    if m.id == "thick" then
+        for _, l in ipairs(self.links) do l.hp = l.hp * 1.5 end
+    elseif m.id == "roots" then
+        self.heartMax = self.heartMax + 5
+        self.heartHp = self.heartMax
+    end
+    self.choices = nil
+    self.phase = "build"
+    self:say(m.name, self.heart.x, 30, self.heart.z, "l")
+    self:burst(self.heart.x, 10, self.heart.z, 20, { "l", "c", "w" }, 26)
+    return true
+end
+
+--- links, towers, mats -----------------------------------------------------------------------
+
 function Game:updateLinks(dt)
     local changed = false
+    local quick = self.mods.quick and 2 or 1
+    local full = self:linkHp()
     for _, l in ipairs(self.links) do
         if l.state == "grow" then
-            l.grow = l.grow + dt * 16 / (D.LINK.grow * max(16, l.len))
+            l.grow = l.grow + quick * dt * 16 / (D.LINK.grow * max(16, l.len))
             if l.grow >= 1 then l.state, l.grow, changed = "alive", 1, true end
         elseif l.state == "alive" then
             if l.hp <= 0 then self:cut(l) end
         elseif l.state == "cut" then
             if l.hand then
-                l.regrow = l.regrow + dt / D.LINK.regrow
+                l.regrow = l.regrow + quick * dt / D.LINK.regrow
             end
             if l.regrow >= 1 then
-                l.state, l.hp, l.hand, changed = "alive", D.LINK.hp * 0.6, false, true
+                l.state, l.hp, l.hand, changed = "alive", full * 0.6, false, true
                 l.bitten = {}
             end
         end
@@ -536,24 +843,27 @@ function Game:updateTowers(dt)
     for _, n in ipairs(self.nodes) do
         local t = n.tower
         if t then
-            local d = D.TOWER[t.kind]
             t.flash = max(0, t.flash - dt)
             t.squash = max(0, t.squash - dt * 4)
-            if d.reserve and d.reserve > 0 and n.conn and self.nutrients > 0 then
-                local want = d.reserve - t.reserve
-                local take = min(want, n.cap * dt, self.nutrients)
+            t.grown = min(1, t.grown + dt * 1.6)
+            t.webbed = max(0, t.webbed - dt)
+            t.stun = max(0, t.stun - dt)
+            t.fired = t.fired + dt
+            local cap = self:reserveMax(t)
+            if cap > 0 and n.conn and self.nutrients > 0 then
+                local take = min(cap - t.reserve, n.cap * dt, self.nutrients)
                 if take > 0 then
                     t.reserve = t.reserve + take
                     self.nutrients = self.nutrients - take
                 end
             end
             t.reach = Q[n.quality].power
-            t.power = t.reach * (n.ringed and D.RING.damage or 1)
+            t.power = t.reach * (n.ringed and self:ringDamage() or 1) * (t.amp or 1)
             if t.boost then
                 t.boost = t.boost - dt
                 if t.boost <= 0 then t.boost = nil end
             end
-            self:fire(n, t, d, dt)
+            self:fire(n, t, D.TOWER[t.kind], dt)
         end
     end
 end
@@ -561,17 +871,28 @@ end
 -- What a tower is short of: nil (fine), "starved" (slow) or "dormant" (silent).
 function Game:hunger(t)
     local d = D.TOWER[t.kind]
-    if t.kind == "relay" then return t.node.conn and nil or "dormant" end
+    if not d.reserve then return t.node.conn and nil or "dormant" end
     local need = d.shot or d.drain * 0.5
     if t.reserve < need then return "dormant" end
-    if not t.node.conn or t.reserve < d.reserve * 0.3 then return "starved" end
+    if not t.node.conn or t.reserve < self:reserveMax(t) * 0.3 then return "starved" end
+end
+
+-- How dangerous a tower looks to a hunting spider.
+function Game:threat(t)
+    local dmg, every = self:stat(t, "damage"), self:stat(t, "every")
+    if dmg and every then return dmg / every * (t.power or 1) end
+    return 0.5
 end
 
 -- The enemies a tower could shoot, nearest the Heart first.
-function Game:targets(n, range)
+function Game:targets(n, range, air, minRange)
     local list = {}
+    local r2, m2 = range * range, (minRange or 0) ^ 2
     for _, e in ipairs(self.enemies) do
-        if not e.dead and dist(e, n) <= range then list[#list + 1] = e end
+        if not e.dead and not (e.infected and e.infected > 0) and (air or not D.ENEMIES[e.kind].fly) then
+            local d2 = (e.x - n.x) ^ 2 + (e.z - n.z) ^ 2
+            if d2 <= r2 and d2 >= m2 then list[#list + 1] = e end
+        end
     end
     table.sort(list, function(a, b) return (a.togo or 0) < (b.togo or 0) end)
     return list
@@ -582,73 +903,180 @@ function Game:fire(n, t, d, dt)
     t.hunger = hunger
     if t.kind == "relay" then return end
     if hunger == "dormant" then return end
+    if t.webbed > 0 or t.stun > 0 then return end
+    local S = function(k) return self:stat(t, k) end
     local power = t.power or 1
     local boost = t.boost and D.PULSE.rate or 1
     if t.boost then power = power * D.PULSE.damage end
-    if t.kind == "mane" then
-        -- Heal what is chewed and regrow what is cut, within reach. It only
-        -- drinks while it has something to do.
-        local busy = false
-        local deg = self:degree(n)
-        for _, l in ipairs(self.links) do
-            local dd = segDist(n.x, n.z, l.a.x, l.a.z, l.b.x, l.b.z)
-            if dd <= d.range then
-                if l.state == "alive" and l.hp < D.LINK.hp then
-                    l.hp = min(D.LINK.hp, l.hp + d.heal * power * boost * dt)
-                    busy = true
-                elseif l.state == "cut" and not l.salted then
-                    l.regrow = l.regrow + d.regrow * (1 + 0.5 * deg) * power * boost * dt
+    if t.kind == "mane" then return self:mane(n, t, S, power, boost, dt) end
+    if t.kind == "inky" then return self:inky(n, t, S, power, boost, dt) end
+
+    local rate = (hunger == "starved" and 0.5 or 1) * boost
+    -- The mortar drinks three times what anything else does: on a thin link it
+    -- cannot be fed fast enough and fires at half pace.
+    if d.thirst and n.cap < d.thirst then rate = rate * 0.5; t.thirsty = true else t.thirsty = false end
+    t.cool = t.cool - dt * rate
+    if t.cool > 0 then return end
+    local range = S("range") * (t.reach or 1)
+    local list
+    if t.kind == "cordyceps" then
+        local e = self:infectable(n.x, n.z, range, S("maxHp"))
+        list = { e }
+    else
+        list = self:targets(n, range, d.air, d.minRange)
+    end
+    if not list[1] then return end
+    t.cool = S("every")
+    t.reserve = t.reserve - d.shot
+    t.squash = 1
+    t.fired = 0
+    local e = list[1]
+    t.aim = atan2(e.z - n.z, e.x - n.x)
+    if t.kind == "puffer" then
+        local puffs = max(1, min(4, self:degree(n))) + (S("extraPuff") or 0)
+        for k = 1, puffs do
+            local o = list[(k - 1) % #list + 1]
+            self.shots[#self.shots + 1] = { kind = "spore", x0 = n.x, y0 = n.y + 9, z0 = n.z,
+                tx = o.x, tz = o.z, t = 0, flight = 0.45 + 0.05 * k, damage = d.damage * power, splash = S("splash"),
+                linger = S("linger"), toxin = (S("toxin") or 0) * power }
+        end
+    elseif t.kind == "needle" then
+        local deadEnd = self:degree(n) == 1
+        local dmg = S("damage") * power * (deadEnd and d.deadEnd or 1)
+        -- Down the line through its target, as far as its reach, for a skewer.
+        local hits = { e }
+        local pierce = S("pierce") or 1
+        if pierce > 1 then
+            local dx, dz = e.x - n.x, e.z - n.z
+            local l = max(1, sqrt(dx * dx + dz * dz))
+            local fx, fz = n.x + dx / l * range, n.z + dz / l * range
+            local line = {}
+            for _, o in ipairs(list) do
+                if o ~= e and segDist(o.x, o.z, n.x, n.z, fx, fz) < 6 then line[#line + 1] = o end
+            end
+            table.sort(line, function(a, b) return dist(a, n) < dist(b, n) end)
+            for k = 1, pierce - 1 do hits[#hits + 1] = line[k] end
+        end
+        local far = hits[#hits]
+        for _, o in ipairs(hits) do
+            local mark = S("mark")
+            if mark then
+                o.mark, o.markMul = S("markFor"), mark
+                local ms = S("markSplash")
+                if ms then
+                    for _, p in ipairs(self.enemies) do
+                        if not p.dead and dist(p, o) <= ms then p.mark, p.markMul = S("markFor"), mark end
+                    end
+                end
+            end
+            self:hurt(o, dmg, true)
+        end
+        self.shots[#self.shots + 1] = { kind = "needle", x0 = n.x, y0 = n.y + 12, z0 = n.z,
+            x1 = far.x, y1 = far.y + 3, z1 = far.z, t = 0, flight = 0.12, big = deadEnd, mark = S("mark") }
+    elseif t.kind == "mortar" then
+        self.shots[#self.shots + 1] = { kind = "shell", x0 = n.x, y0 = n.y + 10, z0 = n.z, tx = e.x, tz = e.z,
+            t = 0, flight = 1.1, damage = S("damage") * power, splash = S("splash"),
+            cluster = S("cluster"), clusterDamage = (S("clusterDamage") or 0) * power, smoke = S("smoke") }
+    elseif t.kind == "cordyceps" then
+        local dur = S("infect") * (n.quality == "rich" and 1.5 or 1) * (t.boost and 1.5 or 1)
+        self.shots[#self.shots + 1] = { kind = "cordy", x0 = n.x, y0 = n.y + 10, z0 = n.z, target = e,
+            tx = e.x, tz = e.z, t = 0, flight = 0.6, infect = dur, spread = S("spread") or 0, bite = S("bite") * power,
+            maxHp = S("maxHp") }
+    end
+end
+
+-- Lion's Mane: heal what is chewed and regrow what is cut, within reach; on
+-- the purge branch, clear webs and heal fruiting bodies too. It only drinks
+-- while it has something to do.
+function Game:mane(n, t, S, power, boost, dt)
+    local busy = false
+    local deg = self:degree(n)
+    local range, full = S("range"), self:linkHp()
+    for _, l in ipairs(self.links) do
+        local dd = segDist(n.x, n.z, l.a.x, l.a.z, l.b.x, l.b.z)
+        if dd <= range then
+            if l.state == "alive" and l.hp < full then
+                l.hp = min(full, l.hp + S("heal") * power * boost * dt)
+                busy = true
+            elseif l.state == "cut" and not l.salted then
+                l.regrow = l.regrow + S("regrow") * (1 + 0.5 * deg) * power * boost * dt
+                busy = true
+            end
+        end
+    end
+    if S("purge") then
+        for _, o in ipairs(self.nodes) do
+            local ot = o.tower
+            if ot and dist(o, n) <= range then
+                if ot.webbed > 0 or ot.stun > 0 then ot.webbed, ot.stun, busy = 0, 0, true end
+                if ot.hp < self:maxHp(ot) then
+                    ot.hp = min(self:maxHp(ot), ot.hp + S("towerHeal") * power * boost * dt)
                     busy = true
                 end
             end
         end
-        if busy then
-            t.reserve = max(0, t.reserve - d.drain * dt)
-            t.busy = (t.busy or 0) + dt
-        end
-        return
     end
-    t.cool = t.cool - dt * (hunger == "starved" and 0.5 or 1) * boost
-    if t.cool > 0 then return end
-    local list = self:targets(n, d.range * (t.reach or 1))
-    if not list[1] then return end
-    t.cool = d.every
-    t.reserve = t.reserve - d.shot
+    t.busy = busy
+    if busy then t.reserve = max(0, t.reserve - D.TOWER.mane.drain * dt) end
+end
+
+-- Inky Cap: bodies in its reach are drunk (see updateCorpses); now and then it
+-- drips a pool of ink under whatever is walking past.
+function Game:inky(n, t, S, power, boost, dt)
+    if self.phase ~= "wave" then return end
+    t.ink = t.ink - dt * boost
+    if t.ink > 0 then return end
+    local list = self:targets(n, S("range") * (t.reach or 1), false)
+    local e = list[1]
+    if not e then return end
+    t.ink = S("inkEvery")
     t.squash = 1
-    if t.kind == "puffer" then
-        local puffs = max(1, min(4, self:degree(n)))
-        for k = 1, puffs do
-            local e = list[(k - 1) % #list + 1]
-            self.shots[#self.shots + 1] = { kind = "spore", x0 = n.x, y0 = n.y + 9, z0 = n.z,
-                tx = e.x, tz = e.z, t = 0, flight = 0.45 + 0.05 * k, damage = d.damage * power, splash = d.splash }
-        end
-    elseif t.kind == "needle" then
-        local e = list[1]
-        local deadEnd = self:degree(n) == 1
-        local dmg = d.damage * power * (deadEnd and d.deadEnd or 1)
-        self:hurt(e, dmg, true)
-        self.shots[#self.shots + 1] = { kind = "needle", x0 = n.x, y0 = n.y + 12, z0 = n.z,
-            x1 = e.x, y1 = e.y + 3, z1 = e.z, t = 0, flight = 0.12, big = deadEnd }
+    t.fired = 0
+    local r = S("inkR") * power
+    self.inks[#self.inks + 1] = { x = e.x, z = e.z, r = r, life = S("inkLife"), max = S("inkLife"), slow = S("inkSlow") }
+    self.shots[#self.shots + 1] = { kind = "ink", x0 = n.x, y0 = n.y + 12, z0 = n.z, tx = e.x, tz = e.z, t = 0, flight = 0.35 }
+end
+
+function Game:inkAt(x, z)
+    local best
+    for _, p in ipairs(self.inks) do
+        if (p.x - x) ^ 2 + (p.z - z) ^ 2 <= p.r * p.r and (not best or p.slow < best.slow) then best = p end
     end
+    return best
 end
 
 function Game:updateMats(dt)
-    local d = D.TOWER.mat
     for k = #self.mats, 1, -1 do
         local m = self.mats[k]
-        -- A mat touching a link feeds on it and does not wither.
-        m.fed = false
-        for _, l in ipairs(self.links) do
-            if alive(l) and segDist(m.x, m.z, l.a.x, l.a.z, l.b.x, l.b.z) <= d.feed then m.fed = true break end
+        m.grown = min(1, m.grown + dt * 1.6)
+        if m.kind == "mat" then
+            -- A mat touching a link feeds on it and does not wither.
+            m.fed = false
+            for _, l in ipairs(self.links) do
+                if alive(l) and segDist(m.x, m.z, l.a.x, l.a.z, l.b.x, l.b.z) <= D.TOWER.mat.feed then m.fed = true break end
+            end
+            if not m.fed then m.life = m.life - dt end
+            if m.life <= 0 then table.remove(self.mats, k) end
+        else
+            local regen = self:stat(m, "regen")
+            if regen and not m.chewed then m.hp = min(self:maxHp(m), m.hp + regen * dt) end
+            m.chewed = false
+            if m.hp <= 0 then self:breakMat(m) end
         end
-        if not m.fed then m.life = m.life - dt end
-        if m.life <= 0 then table.remove(self.mats, k) end
     end
 end
 
+-- The mat under an enemy, if any.
 function Game:onMat(e)
     for _, m in ipairs(self.mats) do
-        if abs(e.x - m.x) < 9 and abs(e.z - m.z) < 9 then return m end
+        if m.kind == "mat" and abs(e.x - m.x) < 9 and abs(e.z - m.z) < 9 then return m end
+    end
+end
+
+-- A shelf across the tile an enemy is walking into.
+function Game:blocker(e)
+    for _, m in ipairs(self.mats) do
+        if m.kind == "shelf" and e.tc == m.c and e.tr == m.r and (e.x - m.x) ^ 2 + (e.z - m.z) ^ 2 < 121 then return m end
     end
 end
 
@@ -656,16 +1084,80 @@ function Game:updateShots(dt)
     for k = #self.shots, 1, -1 do
         local s = self.shots[k]
         s.t = s.t + dt
+        if s.target and not s.target.dead then s.tx, s.tz = s.target.x, s.target.z end
         if s.t >= s.flight then
             if s.kind == "spore" then
                 for _, e in ipairs(self.enemies) do
                     if not e.dead and (e.x - s.tx) ^ 2 + (e.z - s.tz) ^ 2 <= s.splash ^ 2 then self:hurt(e, s.damage) end
                 end
                 self.fx[#self.fx + 1] = { cloud = true, x = s.tx, y = 0, z = s.tz, r = s.splash, life = 0.4, max = 0.4 }
+                if s.linger then
+                    self.clouds[#self.clouds + 1] = { x = s.tx, z = s.tz, r = s.splash, life = s.linger, max = s.linger, dps = s.toxin }
+                end
+            elseif s.kind == "shell" or s.kind == "bomblet" then
+                for _, e in ipairs(self.enemies) do
+                    if not e.dead and not D.ENEMIES[e.kind].fly and (e.x - s.tx) ^ 2 + (e.z - s.tz) ^ 2 <= s.splash ^ 2 then
+                        self:hurt(e, s.damage)
+                        if s.smoke then
+                            e.stun = max(e.stun, s.smoke)
+                            if e.carry then e.carry.carried, e.carry = nil, nil end
+                        end
+                    end
+                end
+                local big = s.kind == "shell"
+                self.fx[#self.fx + 1] = { cloud = true, x = s.tx, y = 0, z = s.tz, r = s.splash, life = big and 0.6 or 0.35,
+                    max = big and 0.6 or 0.35, smoke = s.smoke }
+                if big then
+                    self:burst(s.tx, 3, s.tz, 10, { "t", "n", "w" }, 30)
+                    self.events.boom = true
+                end
+                if s.cluster then
+                    for c = 1, s.cluster do
+                        local a, r = c / s.cluster * 2 * math.pi + random(), s.splash * (0.8 + random() * 0.6)
+                        self.shots[#self.shots + 1] = { kind = "bomblet", x0 = s.tx, y0 = 2, z0 = s.tz,
+                            tx = s.tx + cos(a) * r, tz = s.tz + sin(a) * r, t = 0, flight = 0.35 + random() * 0.15,
+                            damage = s.clusterDamage, splash = 9 }
+                    end
+                end
+            elseif s.kind == "cordy" then
+                local e = s.target
+                if e and not e.dead and not (e.infected and e.infected > 0) then self:infect(e, s) end
             end
             table.remove(self.shots, k)
         end
     end
+end
+
+function Game:updateClouds(dt)
+    for k = #self.clouds, 1, -1 do
+        local c = self.clouds[k]
+        c.life = c.life - dt
+        for _, e in ipairs(self.enemies) do
+            if not e.dead and (e.x - c.x) ^ 2 + (e.z - c.z) ^ 2 <= c.r * c.r then self:hurt(e, c.dps * dt, true, true) end
+        end
+        if c.life <= 0 then table.remove(self.clouds, k) end
+    end
+    for k = #self.inks, 1, -1 do
+        local p = self.inks[k]
+        p.life = p.life - dt
+        if p.life <= 0 then table.remove(self.inks, k) end
+    end
+end
+
+-- The best an Inky Cap does for a body at (x, z): how many times its worth.
+function Game:feast(x, z)
+    local best
+    for _, n in ipairs(self.nodes) do
+        local t = n.tower
+        if t and t.kind == "inky" and n.conn then
+            local r = self:stat(t, "range") * (t.reach or 1)
+            if (n.x - x) ^ 2 + (n.z - z) ^ 2 <= r * r then
+                local f = self:stat(t, "feast")
+                if not best or f > best.f then best = { f = f, n = n } end
+            end
+        end
+    end
+    return best
 end
 
 function Game:updateCorpses(dt)
@@ -676,7 +1168,7 @@ function Game:updateCorpses(dt)
             if a.dead then
                 c.carried = nil
             else
-                c.x, c.z, c.h = a.x - math.cos(a.h) * 6, a.z - math.sin(a.h) * 6, a.h
+                c.x, c.z, c.h = a.x - cos(a.h) * 6, a.z - sin(a.h) * 6, a.h
             end
         elseif c.absorb then
             -- Being drunk: the value goes over a second and a half, and you see it go.
@@ -690,18 +1182,30 @@ function Game:updateCorpses(dt)
             if c.value <= 0.01 then table.remove(self.corpses, k) end
         else
             c.life = c.life - dt
-            -- Anything within reach of a fed link is drunk.
-            for _, l in ipairs(self.links) do
-                if alive(l) and l.a.conn then
-                    local dd, _, qx, qz = segDist(c.x, c.z, l.a.x, l.a.z, l.b.x, l.b.z)
-                    if dd <= D.LINK.absorb then
-                        c.absorb, c.full, c.ax, c.az = true, c.value, qx, qz
-                        self:say("+" .. floor(c.value + 0.5), c.x, 8, c.z, "l")
-                        break
+            -- Anything within reach of a fed link, or of a fed Inky Cap, is drunk.
+            local mult = self.mods.feast and 1.5 or 1
+            local inky = self:feast(c.x, c.z)
+            if inky then
+                c.absorb, c.ax, c.az = true, inky.n.x, inky.n.z
+                mult = mult * inky.f
+            else
+                for _, l in ipairs(self.links) do
+                    if alive(l) and l.a.conn then
+                        local dd, _, qx, qz = segDist(c.x, c.z, l.a.x, l.a.z, l.b.x, l.b.z)
+                        if dd <= D.LINK.absorb then
+                            c.absorb, c.ax, c.az = true, qx, qz
+                            break
+                        end
                     end
                 end
             end
-            if not c.absorb and c.life <= 0 then table.remove(self.corpses, k) end
+            if c.absorb then
+                c.value = c.value * mult
+                c.full = c.value
+                self:say("+" .. floor(c.value + 0.5), c.x, 8, c.z, inky and "w" or "l")
+            elseif c.life <= 0 then
+                table.remove(self.corpses, k)
+            end
         end
     end
 end
@@ -729,7 +1233,7 @@ end
 
 --- how enemies move ----------------------------------------------------------------------
 
--- Living links within `r` of an enemy, nearest first.
+-- The living link nearest an enemy within `r`.
 function Game:linkNear(e, r)
     local best, bd
     for _, l in ipairs(self.links) do
@@ -741,11 +1245,20 @@ function Game:linkNear(e, r)
     return best, bd
 end
 
+-- Every living link within `r` of (x, z).
+function Game:linksNear(x, z, r)
+    local out = {}
+    for _, l in ipairs(self.links) do
+        if alive(l) and segDist(x, z, l.a.x, l.a.z, l.b.x, l.b.z) <= r then out[#out + 1] = l end
+    end
+    return out
+end
+
 local function toward(e, tx, tz, speed, dt)
     local dx, dz = tx - e.x, tz - e.z
     local d = sqrt(dx * dx + dz * dz)
     if d < 0.001 then return true, 0 end
-    e.h = math.atan2(dz, dx)
+    e.h = atan2(dz, dx)
     local s = min(d, speed * dt)
     e.x, e.z = e.x + dx / d * s, e.z + dz / d * s
     return d <= speed * dt + 0.01, d
@@ -770,9 +1283,28 @@ function Game:walk(e, speed, dt)
     end
 end
 
+-- One step back along the trail, away from the Heart: a cordyceps host.
+function Game:walkBack(e, speed, dt)
+    local w = self.world
+    local arrived = toward(e, e.tc * TILE + TILE / 2, e.tr * TILE + TILE / 2, speed, dt)
+    if arrived then
+        local d = w:distAt(e.tc, e.tr) or 0
+        for _, o in ipairs({ { 1, 0 }, { -1, 0 }, { 0, 1 }, { 0, -1 } }) do
+            if w:distAt(e.tc + o[1], e.tr + o[2]) == d + 1 then
+                e.tc, e.tr = e.tc + o[1], e.tr + o[2]
+                break
+            end
+        end
+    end
+    e.togo = 1e6
+end
+
 function Game:reachHeart(e)
     local d = D.ENEMIES[e.kind]
-    self.heartHp = self.heartHp - d.heart
+    local hit = d.heart
+    if e.ballHp and e.ballHp > 0 then hit = hit + d.ballHeart end
+    self.heartHp = self.heartHp - hit
+    self.stats.leaked[e.kind] = (self.stats.leaked[e.kind] or 0) + hit
     self.events.heart = true
     e.dead = true
     if e.carry then
@@ -780,16 +1312,45 @@ function Game:reachHeart(e)
         unlist(self.corpses, e.carry)
         self.stats.stolen = self.stats.stolen + 1
     end
-    self:burst(self.heart.x, 10, self.heart.z, 6, { "g", "m" }, 20)
+    if d.boss then
+        self.events.shake = 0.6
+        self.stats.bossLeft = (self.stats.bossLeft or "") .. (" %s %d%%"):format(e.kind, e.hp / e.maxHp * 100)
+    end
+    self:burst(self.heart.x, 10, self.heart.z, d.boss and 20 or 6, { "g", "m" }, 20)
 end
 
 function Game:move(e, dt)
     local d = D.ENEMIES[e.kind]
     e.flash = max(0, e.flash - dt)
+    e.ballFlash = max(0, (e.ballFlash or 0) - dt)
     e.anim = e.anim + dt
+    e.mark = max(0, e.mark - dt)
+
+    if e.infected and e.infected > 0 then return self:host(e, d, dt) end
+
+    -- Stunned in mortar smoke.
+    if e.stun > 0 then
+        e.stun = e.stun - dt
+        return
+    end
+
+    if d.fly then return self:fly(e, d, dt) end
+
     local mat = self:onMat(e)
-    local slow = mat and D.TOWER.mat.slow or 1
-    if self.rings[1] and self:ringed(e.x, e.z) then slow = slow * D.RING.slow end
+    local ink = self:inkAt(e.x, e.z)
+    e.blind = ink ~= nil
+    local slow = 1
+    if not d.noSlow then
+        if mat then slow = slow * self:stat(mat, "slow") end
+        if ink then slow = slow * ink.slow end
+        if self.rings[1] and self:ringed(e.x, e.z) then slow = slow * self:ringSlow() end
+    end
+    -- A stomach mat dissolves what stands on it.
+    if mat then
+        local dg = self:stat(mat, "digest")
+        if dg then self:hurt(e, dg * dt, true, true) end
+        if e.dead then return end
+    end
 
     if e.kind == "brine" and e.slide then
         return self:slide(e, d, dt)
@@ -798,17 +1359,45 @@ function Game:move(e, dt)
     -- Stopped to chew a link it walked into.
     if e.state == "chew" then
         local l = e.chewing
-        if l.state ~= "alive" then
+        if l.state ~= "alive" or e.blind then
             e.state = "walk"
         else
-            l.hp = l.hp - d.chew * dt
+            self:biteLink(l, d.chew * dt)
             e.chewT = e.chewT - dt
             if e.chewT <= 0 then e.state = "walk" end
             return
         end
     end
 
+    -- A shelf across the trail: chew through it, and be bitten back.
+    local shelf = self:blocker(e)
+    if shelf then
+        if e.rolling then
+            e.rolling, e.walked, e.stuck = false, 0, 0.6
+            shelf.hp = shelf.hp - 30
+            self:burst(e.x, 3, e.z, 6, { "t", "n" }, 14)
+        end
+        e.state = "gnawShelf"
+        shelf.hp = shelf.hp - (d.bite or 5) * dt
+        shelf.chewed = true
+        local th = self:stat(shelf, "thorns")
+        if th then self:hurt(e, th * dt, true, true) end
+        e.anim = e.anim + dt
+        return
+    elseif e.state == "gnawShelf" then
+        e.state = "walk"
+    end
+
     if e.kind == "mite" then return self:mite(e, d, slow, dt) end
+    if e.kind == "slug" then return self:slug(e, d, slow, dt) end
+    if e.kind == "spider" then
+        if self:spider(e, d, slow, dt) then return end
+    end
+    if e.kind == "queen" then self:queen(e, d, dt) end
+    if e.kind == "stag" then
+        if self:stag(e, d, slow, dt) then return end
+    end
+    if e.kind == "dung" then self:dung(e, d, dt) end
 
     if e.kind == "pillbug" then
         if mat and e.rolling then
@@ -826,7 +1415,7 @@ function Game:move(e, dt)
             if e.walked >= d.rollFor then e.rolling, e.walked = false, 0 end
             -- Rolling crushes any link it crosses, outright.
             local l = self:linkNear(e, 4)
-            if l then self:cut(l) end
+            if l then self:crush(l) end
             if self:walk(e, d.rollSpeed * slow, dt) then self:reachHeart(e) end
             return
         elseif e.walked >= d.walkFor and not mat then
@@ -837,7 +1426,7 @@ function Game:move(e, dt)
     if e.kind == "brine" then
         local l = self:linkNear(e, 4)
         if l then return self:attach(e, l) end
-    elseif d.chew and d.chewFor then
+    elseif d.chew and d.chewFor and not e.blind then
         local l = self:linkNear(e, 3.5)
         if l and not l.bitten[e] then
             l.bitten[e] = true
@@ -849,21 +1438,49 @@ function Game:move(e, dt)
     -- Ants pick up whatever is lying in their way.
     if e.kind == "ant" and not e.carry then
         for _, c in ipairs(self.corpses) do
-            if not c.carried and not c.absorb and (c.x - e.x) ^ 2 + (c.z - e.z) ^ 2 < 36 then
+            if not c.carried and not c.absorb and c.kind ~= "ball" and (c.x - e.x) ^ 2 + (c.z - e.z) ^ 2 < 36 then
                 c.carried, e.carry = e, c
                 break
             end
         end
     end
 
-    if self:walk(e, d.speed * slow, dt) then self:reachHeart(e) end
+    local speed = d.speed
+    if e.raged then speed = speed * d.rage end
+    if self:walk(e, speed * slow, dt) then self:reachHeart(e) end
 end
 
--- Mites leave the trail for the nearest link they can smell, gnaw it through,
--- and go back to the trail.
+-- A cordyceps host: back the way it came, biting its own, until it fruits.
+function Game:host(e, d, dt)
+    e.infected = e.infected - dt
+    if e.infected <= 0 then
+        e.infected = 0.01 -- still counts as a host for the death it is about to die
+        e.hp = 0
+        self:kill(e)
+        return
+    end
+    for _, o in ipairs(self.enemies) do
+        if o ~= e and not o.dead and not (o.infected and o.infected > 0) and not D.ENEMIES[o.kind].fly
+            and (o.x - e.x) ^ 2 + (o.z - e.z) ^ 2 < 64 then
+            self:hurt(o, e.hostBite * dt, true, true)
+            if random() < dt * 6 then self:burst(o.x, 3, o.z, 1, { "r", "t" }, 10) end
+        end
+    end
+    self:walkBack(e, d.speed * 0.8, dt)
+end
+
+-- A gnat: straight at the sprout over everything.
+function Game:fly(e, d, dt)
+    local h = self.heart
+    local arrived, dd = toward(e, h.x, h.z, d.speed, dt)
+    e.togo = dd
+    e.y = 12 + sin(e.anim * 5) * 2
+    if arrived or dd < 4 then self:reachHeart(e) end
+end
+
 function Game:mite(e, d, slow, dt)
     if e.gnaw and e.gnaw.state ~= "alive" then e.gnaw = nil end
-    if not e.gnaw and not e.full then
+    if not e.gnaw and not e.full and not e.blind then
         local l = self:linkNear(e, d.sniff)
         if l then
             local _, t = segDist(e.x, e.z, l.a.x, l.a.z, l.b.x, l.b.z)
@@ -874,7 +1491,7 @@ function Game:mite(e, d, slow, dt)
         local l = e.gnaw
         local tx, tz = l.a.x + (l.b.x - l.a.x) * e.gt, l.a.z + (l.b.z - l.a.z) * e.gt
         if toward(e, tx, tz, d.speed * slow, dt) then
-            l.hp = l.hp - d.chew * dt
+            self:biteLink(l, d.chew * dt)
             e.gnawed = (e.gnawed or 0) + dt
             if e.gnawed > 6 then e.full, e.gnaw = true, nil end -- had enough; back to the march
         end
@@ -882,6 +1499,114 @@ function Game:mite(e, d, slow, dt)
     end
     -- Back to the trail tile it left, then on.
     if self:walk(e, d.speed * slow, dt) then self:reachHeart(e) end
+end
+
+-- A slug stops to eat any fruiting body it passes.
+function Game:slug(e, d, slow, dt)
+    local food
+    for _, n in ipairs(self.nodes) do
+        if n.tower and (n.x - e.x) ^ 2 + (n.z - e.z) ^ 2 <= d.eatR * d.eatR then food = n break end
+    end
+    if food then
+        e.state = "eat"
+        e.h = atan2(food.z - e.z, food.x - e.x)
+        food.tower.hp = food.tower.hp - d.eat * dt
+        food.tower.flash = 0.05
+        if food.tower.hp <= 0 then self:destroyTower(food, "EATEN") end
+        return
+    end
+    e.state = "walk"
+    if self:walk(e, d.speed * slow, dt) then self:reachHeart(e) end
+end
+
+-- A wolf spider leaves the trail for the deadliest tower it can see, webs it
+-- shut, and comes back. Answers true while it is off the trail.
+function Game:spider(e, d, slow, dt)
+    e.webCd = e.webCd - dt
+    if e.state == "walk" and e.webCd <= 0 and not e.blind then
+        local best, bs
+        for _, n in ipairs(self.nodes) do
+            local t = n.tower
+            if t and t.webbed <= 0 and not t.warded and (n.x - e.x) ^ 2 + (n.z - e.z) ^ 2 <= d.webR * d.webR then
+                local s = self:threat(t)
+                if not bs or s > bs then best, bs = n, s end
+            end
+        end
+        if best then e.state, e.prey = "hunt", best end
+    end
+    if e.state == "hunt" then
+        local n = e.prey
+        if not n.tower then e.state = "back" return true end
+        local arrived, dd = toward(e, n.x, n.z, d.speed * slow, dt)
+        e.y = self.world:groundAt(e.x, e.z)
+        if arrived or dd < 5 then
+            if not n.tower.warded then n.tower.webbed = d.web end
+            self:burst(n.x, n.y + 8, n.z, 6, { "w", "s" }, 10)
+            e.webCd, e.state = d.webCd, "back"
+        end
+        return true
+    elseif e.state == "back" then
+        local arrived = toward(e, e.tc * TILE + TILE / 2, e.tr * TILE + TILE / 2, d.speed * slow, dt)
+        e.y = self.world:groundAt(e.x, e.z)
+        if arrived then e.state, e.y = "walk", 0 end
+        return true
+    end
+end
+
+-- The Queen lays workers as she goes and gnaws every thread in reach.
+function Game:queen(e, d, dt)
+    e.brood = e.brood - dt
+    if e.brood <= 0 then
+        e.brood = d.broodEvery
+        for k = 1, d.brood do
+            local a = k / d.brood * 2 * math.pi
+            local o = self:spawnAt("ant", e.x + cos(a) * 6, e.z + sin(a) * 6, e.tc, e.tr)
+            o.hp, o.maxHp = D.ENEMIES.ant.hp, D.ENEMIES.ant.hp
+        end
+        self:burst(e.x, 4, e.z, 8, { "w", "t" }, 12)
+    end
+    for _, l in ipairs(self:linksNear(e.x, e.z, d.gnawR)) do self:biteLink(l, d.gnaw * dt) end
+end
+
+-- The Stag Beetle charges every few seconds: whatever its jaws pass is
+-- sheared through, and towers it thunders past are stunned. Answers true
+-- while charging (it has moved).
+function Game:stag(e, d, slow, dt)
+    e.charge = e.charge - dt
+    if e.charging then
+        e.charging = e.charging - dt
+        if e.charging <= 0 then e.charging, e.charge = nil, d.chargeEvery end
+        local jx, jz = e.x + cos(e.h) * 10, e.z + sin(e.h) * 10
+        for _, l in ipairs(self:linksNear(jx, jz, d.shear)) do self:crush(l) end
+        for _, n in ipairs(self.nodes) do
+            if n.tower and not n.tower.warded and (n.x - e.x) ^ 2 + (n.z - e.z) ^ 2 <= d.stunR * d.stunR then
+                if n.tower.stun <= 0 then self:burst(n.x, n.y + 8, n.z, 4, { "w", "t" }, 10) end
+                n.tower.stun = d.stun
+            end
+        end
+        self.events.shake = 0.12
+        if self:walk(e, d.chargeSpeed * slow, dt) then self:reachHeart(e) end
+        return true
+    elseif e.charge <= 0 then
+        e.charging = d.chargeFor
+        self:say("CHARGE!", e.x, 26, e.z, "r")
+        self:burst(e.x, 2, e.z, 10, { "t", "n" }, 20)
+    end
+end
+
+-- The Dung Beetle's ball flattens every link and mat it rolls over.
+function Game:dung(e, d, dt)
+    if not e.ballHp or e.ballHp <= 0 then
+        e.raged = true
+        return
+    end
+    local bx, bz = self:ballAt(e)
+    for _, l in ipairs(self:linksNear(bx, bz, d.ballR)) do self:crush(l) end
+    for k = #self.mats, 1, -1 do
+        local m = self.mats[k]
+        if (m.x - bx) ^ 2 + (m.z - bz) ^ 2 <= (d.ballR + 6) ^ 2 then self:breakMat(m) end
+    end
+    e.ballRoll = (e.ballRoll or 0) + dt
 end
 
 -- Brine touches a link and runs down it, away from the Heart.
@@ -912,7 +1637,7 @@ function Game:slide(e, d, dt)
     local f, t = e.from, e.to
     e.x, e.z = f.x + (t.x - f.x) * e.st, f.z + (t.z - f.z) * e.st
     e.y = (f.y + (t.y - f.y) * e.st) + 1
-    e.h = math.atan2(t.z - f.z, t.x - f.x)
+    e.h = atan2(t.z - f.z, t.x - f.x)
     e.togo = 0
     if e.st >= 1 then
         -- The link it came down is sterile, and so is whatever grew at the end.

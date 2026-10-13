@@ -2,8 +2,13 @@
 
 13 oct 2026 · @matute
 
-The design document this prototype is built from, kept here as written. `README.md`
-says which parts of it the MVP covers and how the open questions were answered.
+The design document this prototype is built from. `README.md` says which parts of
+it the game covers and how the open questions were answered.
+
+Revised for MVP2: the bosses are no longer the human world intruding (a boot, a
+sprinkler, a lawnmower) but bigger bugs, built with the same 3D method as
+everything else at three times the size. The sections below are updated to match;
+everything else is as first written.
 
 ## Pitch
 
@@ -20,7 +25,7 @@ a topology problem: where to branch, where to loop, and which link to sacrifice.
 - **What's different:** the connection graph is the strategy layer. Most tower
   defenses ask where to place a tower; this one asks how to wire it.
 - **Scale:** everything is tiny. An ant is a cow, a bottle cap is a fortress, a
-  human boot is a boss.
+  stag beetle is a boss.
 
 ## Core mechanics
 
@@ -99,17 +104,18 @@ purpose. Introduce them gently, since pruning feels bad the first time.
 
 ## Bosses and elites
 
-Bosses are the human world intruding on the tiny one. Each one breaks a different
-assumption about how the network behaves.
+Bosses are the big bugs: the same world as everything else, three times the size,
+each with jointed legs, plates and jaws you can read at a glance. Each one breaks a
+different assumption about how the network behaves.
 
 | Boss | Mechanic | What it tests |
 | --- | --- | --- |
-| The Boot | A shadow telegraphs a stomp. The stomp crushes everything in a wide area, links included | Whether you have a second route to the Heart |
-| Queen Ant | Spawns waves of workers and follows her own scent trail | Area damage and corpse management at scale |
-| The Sprinkler | Floods the low lanes on a timer. Water washes spores away and floods low pockets | Building on high ground and timing around the flood |
-| The Spray Bottle | Sweeps a cone of herbicide that hits the sprout directly | Using Shelf Fungus and leaves as cover for the sprout itself |
-| Mother Mold | A giant rival colony that grows its own network toward yours | Racing it, and cutting the points where the two networks touch |
-| The Lawnmower | Sweeps a blade line across the whole map in a fixed pattern | Pruning ahead of it and rebuilding behind it |
+| Queen Ant | Lays workers as she walks and gnaws every thread within reach without stopping | Area damage and corpse management at scale |
+| Stag Beetle | Charges every few seconds: its jaws shear any link they pass and the thunder of it stuns towers beside the trail | Whether you have a second route to the Heart, and towers set back from the path |
+| Dung Beetle | Walks backwards pushing a ball bigger than itself. The ball soaks every hit and flattens links, mats and shelves it rolls over; broken, it is a feast for the network | Burst damage, and pruning ahead of the ball |
+| Giant Water Bug | Lurks under the flooded lane, surfaces beside a fruiting body and drags it under | Building on high ground and keeping a Lion's Mane in reach |
+| Giant Centipede | A long train of armored segments, each with its own HP; every segment cuts the links it crosses, and it splits where it is broken | Area damage across a whole lane, and rebuilding behind it |
+| Bombardier Beetle | Turns at the end of the trail and sprays a boiling cone that hits the sprout itself | Using Shelf Fungus and leaves as cover for the sprout |
 
 Elite modifiers can be added to any normal enemy to make waves unpredictable:
 
@@ -140,7 +146,7 @@ toward.
 - Matchsticks act as bridges across gaps.
 - Lego bricks form fixed mazes that fix the path.
 - A magnifying glass focuses a sunbeam that burns one spot on a timer.
-- Footstep shadows warn of an incoming stomp.
+- Soil bumps and trembling grass warn of something big underneath.
 
 ## Economy and progression
 
@@ -172,13 +178,13 @@ Seven levels, each teaching one new idea about the network.
 | --- | --- | --- | --- | --- |
 | 1. The Crack | Sidewalk crack | Growing links and towers | Worker Ant, Spore Puffer | None |
 | 2. The Flowerpot | Cracked terracotta pot | Cutting and regrowing | Pillbug, Lion's Mane | Queen Ant |
-| 3. The Shed Floor | Dusty boards, bottle caps, Lego | Chokepoints and blockers | Wolf Spider, Shelf Fungus | The Boot |
+| 3. The Shed Floor | Dusty boards, bottle caps, Lego | Chokepoints and blockers | Wolf Spider, Shelf Fungus | Stag Beetle |
 | 4. The Rotting Log | Damp, rich, dark | Fairy Rings and loops | Slug, Mite Swarm, Inky Cap | None |
-| 5. The Compost Heap | Heat and decay | Economy and decomposition | Green Mold, Cordyceps | Mother Mold |
-| 6. The Pond Edge | Water and reeds | Flooding, high ground | Brine Drop, Mole Cricket | The Sprinkler |
-| 7. The Lawn | Open grass, human tools | Everything at once | Beetle Knight, Centipede | The Lawnmower |
+| 5. The Compost Heap | Heat and decay | Economy and decomposition | Green Mold, Cordyceps | Dung Beetle |
+| 6. The Pond Edge | Water and reeds | Flooding, high ground | Brine Drop, Mole Cricket | Giant Water Bug |
+| 7. The Lawn | Open grass, human tools | Everything at once | Beetle Knight, Centipede | Giant Centipede |
 
-The Spray Bottle is a challenge-mode boss that can appear in any level once the
+The Bombardier Beetle is a challenge-mode boss that can appear in any level once the
 story is done.
 
 ## Tone, art and open questions

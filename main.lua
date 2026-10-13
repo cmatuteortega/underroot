@@ -57,6 +57,8 @@ local ZOOM_STEPS = 4
 local fingers, pinch = {}, nil -- the touches down, and the two being pinched
 local speed, paused = 1, false
 local heartFlash = 0
+local shake = 0 -- seconds of shaking left: a boss charging, a ball breaking
+local selected -- the tower, mat or shelf whose upgrades are showing
 local script -- the --shots run
 local shot -- and the whole screen it photographs
 
@@ -136,18 +138,31 @@ local function stamp(pic, x, y, z, remap)
     end
 end
 
--- The same picture flat on the screen, for the toolbar.
+-- The same picture flat on the screen, for the toolbar and the upgrade cards.
+-- Made into an image once per picture and remap, then drawn whole.
+local blits = setmetatable({}, { __mode = "k" })
 local function blit(pic, x, y, remap)
     remap = remap or T.SAME
-    for pj = 0, pic.h - 1 do
-        for pi = 0, pic.w - 1 do
-            local k = pic.key[pj * pic.w + pi]
-            if k ~= 0 then
-                love.graphics.setColor(T.RGB[remap[k]])
-                love.graphics.rectangle("fill", x - pic.oi + pi, y - pic.oj + pj, 1, 1)
+    local per = blits[pic]
+    if not per then per = {}; blits[pic] = per end
+    local img = per[remap]
+    if not img then
+        local data = love.image.newImageData(pic.w, pic.h)
+        for pj = 0, pic.h - 1 do
+            for pi = 0, pic.w - 1 do
+                local k = pic.key[pj * pic.w + pi]
+                if k ~= 0 then
+                    local c = T.RGB[remap[k]]
+                    data:setPixel(pi, pj, c[1], c[2], c[3], 1)
+                end
             end
         end
+        img = love.graphics.newImage(data)
+        img:setFilter("nearest", "nearest")
+        per[remap] = img
     end
+    love.graphics.setColor(1, 1, 1)
+    love.graphics.draw(img, x - pic.oi, y - pic.oj)
 end
 
 -- A shadow straight down onto whatever faces up under (x, z): each pixel there
@@ -212,7 +227,7 @@ local BUTTONS = {
     { mode = "grow", key = "1", name = "GROW HYPHAE", blurb = "DRAG FROM A FED NODE TO A POCKET. COST GROWS WITH LENGTH" },
 }
 for _, t in ipairs(D.TOWERS) do
-    BUTTONS[#BUTTONS + 1] = { mode = t.id, key = t.key, name = t.name, blurb = t.blurb, cost = t.cost }
+    BUTTONS[#BUTTONS + 1] = { mode = t.id, key = t.key, name = t.name, blurb = t.blurb, cost = t.cost, tower = true }
 end
 BUTTONS[#BUTTONS + 1] = { mode = "prune", key = "X", name = "PRUNE", blurb = "CUT YOUR OWN LINK (HALF BACK) OR CLEAR A TOWER" }
 BUTTONS[#BUTTONS + 1] = { mode = "pulse", key = "Q", name = "SPORE PULSE",
@@ -222,30 +237,75 @@ BUTTONS[#BUTTONS + 1] = { mode = "pulse", key = "Q", name = "SPORE PULSE",
 -- its end. A screen too narrow for both (a phone held upright) narrows the
 -- buttons first and then lifts the wave button onto a row of its own, at the
 -- right, where a thumb is.
+-- Too narrow even for that, the tools go onto two rows.
 local BH, WW = 27, 44
 local function bar()
     local avail = vw - inset.l - inset.r - 4
-    local bw = max(20, min(30, floor((avail + 2) / #BUTTONS) - 2))
-    local tools = #BUTTONS * (bw + 2) - 2
+    local n = #BUTTONS
     local y = vh - inset.b - BH - 3
-    if tools + 8 + WW <= avail then
+    local bw = min(30, floor((avail - 8 - WW + 2) / n) - 2)
+    if bw >= 22 then
+        local tools = n * (bw + 2) - 2
         local x0 = inset.l + 2 + floor((avail - tools - 8 - WW) / 2)
-        return x0, y, bw, x0 + tools + 8, y, y
+        return { rows = { { x0 = x0, y = y, from = 1, to = n } }, bw = bw, wx = x0 + tools + 8, wy = y, top = y }
     end
-    local x0 = inset.l + 2 + floor((avail - tools) / 2)
-    return x0, y, bw, vw - inset.r - 2 - WW, y - BH - 4, y - BH - 4
+    bw = min(30, floor((avail + 2) / n) - 2)
+    if bw >= 22 then
+        local tools = n * (bw + 2) - 2
+        local x0 = inset.l + 2 + floor((avail - tools) / 2)
+        return { rows = { { x0 = x0, y = y, from = 1, to = n } }, bw = bw, wx = vw - inset.r - 2 - WW, wy = y - BH - 4, top = y - BH - 4 }
+    end
+    local per = ceil(n / 2)
+    bw = min(30, floor((avail + 2) / per) - 2)
+    local x0 = inset.l + 2 + floor((avail - (per * (bw + 2) - 2)) / 2)
+    local y1 = y - BH - 3
+    return { rows = { { x0 = x0, y = y1, from = 1, to = per }, { x0 = x0, y = y, from = per + 1, to = n } },
+        bw = bw, wx = vw - inset.r - 2 - WW, wy = y1 - BH - 4, top = y1 - BH - 4 }
 end
 local function buttonRect(n)
-    local x0, y, bw = bar()
-    return x0 + (n - 1) * (bw + 2), y, bw, BH
+    local b = bar()
+    for _, r in ipairs(b.rows) do
+        if n >= r.from and n <= r.to then return r.x0 + (n - r.from) * (b.bw + 2), r.y, b.bw, BH end
+    end
 end
 local function waveRect()
-    local _, _, _, wx, wy = bar()
-    return wx, wy, WW, BH
+    local b = bar()
+    return b.wx, b.wy, WW, BH
 end
 -- The top of everything the toolbar puts down: the tip line sits above it.
-local function barTop() return select(6, bar()) end
+local function barTop() return bar().top end
 local function inside(x, y, rx, ry, rw, rh) return x >= rx and y >= ry and x < rx + rw and y < ry + rh end
+
+-- The upgrade panel over the toolbar: a card for each upgrade open to
+-- whatever is selected (two at the fork, one after, none at the top).
+local CW, CH = 100, 24
+local function panelCards()
+    if not selected then return {} end
+    local ups = game:upgrades(selected)
+    local n = max(1, #ups)
+    local total = n * CW + (n - 1) * 4
+    local x0 = floor((vw - total) / 2)
+    local y = barTop() - 5 - CH
+    local cards = {}
+    for k = 1, n do cards[k] = { x = x0 + (k - 1) * (CW + 4), y = y, w = CW, h = CH, up = ups[k] } end
+    return cards
+end
+
+-- The mutation picker: three cards across the middle, or down it on a narrow screen.
+local MW, MH = 118, 40
+local function mutationCards()
+    local list = game.choices or {}
+    local n = #list
+    local cards = {}
+    if vw - inset.l - inset.r >= n * MW + (n - 1) * 6 + 8 then
+        local x0 = floor((vw - (n * MW + (n - 1) * 6)) / 2)
+        for k = 1, n do cards[k] = { x = x0 + (k - 1) * (MW + 6), y = floor(vh / 2) - 18, w = MW, h = MH, m = list[k] } end
+    else
+        local y0 = floor(vh / 2 - (n * MH + (n - 1) * 4) / 2)
+        for k = 1, n do cards[k] = { x = floor((vw - MW) / 2), y = y0 + (k - 1) * (MH + 4), w = MW, h = MH, m = list[k] } end
+    end
+    return cards
+end
 
 local function nodeScreen(n)
     local i, j = world:toImage(n.x, n.y + (n.heart and 10 or 5), n.z)
@@ -255,6 +315,14 @@ end
 local function findHover()
     hover = {}
     local mx, my = mouse.x, mouse.y
+    if game.phase == "mutate" then
+        for k, c in ipairs(mutationCards()) do
+            if inside(mx, my, c.x, c.y, c.w, c.h) then hover.mutation = k return end
+        end
+    end
+    for k, c in ipairs(panelCards()) do
+        if inside(mx, my, c.x, c.y, c.w, c.h) then hover.card = k return end
+    end
     for n = 1, #BUTTONS do
         if inside(mx, my, buttonRect(n)) then hover.button = n return end
     end
@@ -290,7 +358,7 @@ end
 
 local function start()
     game = Game.new(world)
-    mode, drag, panx, pany = "grow", nil, 0, 0
+    mode, drag, panx, pany, selected = "grow", nil, 0, 0, nil
     paused, speed = false, 1
 end
 
@@ -302,19 +370,46 @@ function love.load(args)
     painter = coroutine.create(function() world:paint() end)
     for _, a in ipairs(args or {}) do
         if a == "--shots" then script = require("src.script") end
+        if a == "--bot" then
+            function love.errorhandler(msg) print("ERROR", msg, debug.traceback()) os.exit(1) end
+            local rest = {}
+            for k = 1, #args do if args[k] ~= "--bot" then rest[#rest + 1] = args[k] end end
+            require("src.bot").run(rest)
+            return
+        end
+        if a == "--sheet" then
+            -- No one is watching: an error should say so and stop.
+            function love.errorhandler(msg) print("ERROR", msg, debug.traceback()) os.exit(1) end
+            require("src.sheet").run()
+            return
+        end
     end
 end
 
 local function click(b)
     if b == 2 then
-        mode, drag = "grow", nil
+        mode, drag, selected = "grow", nil, nil
+        return
+    end
+    if game.phase == "mutate" then
+        -- The picker holds the game until a mutation is chosen.
+        if hover.mutation then game:mutate(hover.mutation) end
+        return
+    end
+    if hover.card then
+        local c = panelCards()[hover.card]
+        if c and c.up then game:upgrade(selected, c.up.branch) end
         return
     end
     if hover.button then
         -- The tool already in hand, picked again, is put down: the one way to
-        -- cancel there is without a right button.
-        local m = BUTTONS[hover.button].mode
+        -- cancel there is without a right button. A species not yet unlocked
+        -- stays in its slot, dark.
+        local bt = BUTTONS[hover.button]
+        if bt.tower and not game:unlocked(bt.mode) then return end
+        local m = bt.mode
         mode, drag = (m == mode and m ~= "grow") and "grow" or m, nil
+        if mode ~= "grow" then selected = nil end
         return
     end
     if hover.wave then
@@ -331,14 +426,17 @@ local function click(b)
         if hover.node then
             if drag and drag ~= hover.node then
                 game:grow(drag, hover.node)
-                drag = nil
+                drag, selected = nil, nil
             else
-                drag = hover.node
+                -- A tower is picked up as the end of a thread and shows its upgrades.
+                drag, selected = hover.node, hover.node.tower
             end
         elseif hover.link and hover.link.state == "cut" then
             game:repair(hover.link)
+        elseif hover.mat then
+            drag, selected = nil, hover.mat
         else
-            drag = nil
+            drag, selected = nil, nil
         end
     elseif mode == "prune" then
         if hover.node and hover.node.tower then
@@ -348,12 +446,18 @@ local function click(b)
         elseif hover.mat then
             game:liftMat(hover.mat)
         end
-    elseif mode == "mat" then
-        if hover.c then game:layMat(hover.c, hover.r) end
+    elseif D.TOWER[mode] and D.TOWER[mode].onTrail then
+        if hover.c then
+            local m = game:lay(mode, hover.c, hover.r)
+            if m then selected = m end
+        end
     elseif mode == "pulse" then
         if hover.node and game:pulse(hover.node) then mode = "grow" end
     else
-        if hover.node then game:build(mode, hover.node) end
+        if hover.node then
+            local t = game:build(mode, hover.node)
+            if t then selected = t end
+        end
     end
 end
 
@@ -374,7 +478,7 @@ function love.mousepressed(x, y, b, istouch)
     point(x, y)
     findHover()
     if b == 3 then mouse.pan = { wx = x, wy = y, px = panx, py = pany } return end
-    if b == 1 and not (hover.button or hover.wave or hover.node) and not (mode == "grow" and drag) then
+    if b == 1 and not (hover.button or hover.wave or hover.node or hover.card or hover.mutation) and not (mode == "grow" and drag) then
         press = { x = mouse.x, y = mouse.y, wx = x, wy = y, px = panx, py = pany }
         return
     end
@@ -517,12 +621,22 @@ function love.keypressed(key)
     if painter then return end
     if key == "=" or key == "+" or key == "kp+" then zoomBy(1) end
     if key == "-" or key == "kp-" then zoomBy(-1) end
+    if game.phase == "mutate" then
+        local n = tonumber(key)
+        if n then game:mutate(n) end
+        return
+    end
     if key == "escape" then
         -- Never quits: one key too many and a run is gone. The window's close does that.
-        if drag or mode ~= "grow" then mode, drag = "grow", nil else paused = not paused end
+        if drag or mode ~= "grow" or selected then mode, drag, selected = "grow", nil, nil else paused = not paused end
     end
     for _, b in ipairs(BUTTONS) do
-        if key == b.key:lower() then mode, drag = b.mode, nil end
+        if key == b.key:lower() and not (b.tower and not game:unlocked(b.mode)) then mode, drag, selected = b.mode, nil, nil end
+    end
+    if (key == "z" or key == "c") and selected then
+        local cards = panelCards()
+        local c = cards[key == "z" and 1 or #cards]
+        if c and c.up then game:upgrade(selected, c.up.branch) end
     end
     if key == "space" then
         if game.phase == "build" then game:startWave() end
@@ -552,6 +666,7 @@ function love.update(dt)
                         local i, j = world:toImage(x, y, z)
                         return (floor(i) - floor(camx) + 0.5) * zoom, (floor(j) - floor(camy) + 0.5) * zoom
                     end,
+                    select = function(t) selected = t end,
                     button = function(name)
                         for n, b in ipairs(BUTTONS) do
                             if b.mode == name then
@@ -587,9 +702,21 @@ function love.update(dt)
         for _ = 1, speed do
             game:update(dt)
             if game.events.heart then heartFlash = 0.15 end
+            if game.events.shake then shake = max(shake, game.events.shake) end
         end
     end
     heartFlash = max(0, heartFlash - dt)
+    shake = max(0, shake - dt)
+    -- What was selected may have been eaten, sterilised, sold or flattened.
+    if selected then
+        local gone
+        if selected.node then gone = selected.node.tower ~= selected
+        else
+            gone = true
+            for _, m in ipairs(game.mats) do if m == selected then gone = false end end
+        end
+        if gone then selected = nil end
+    end
     if script then
         -- The shots are the whole screen: the board with the HUD laid over it.
         -- The script never zooms, so the two pictures are the same size.
@@ -625,7 +752,7 @@ local function drawLink(l, highlight)
     if highlight then core = highlight end
     local surge = l.surge and l.state == "alive"
     if surge then core, under = IDX.l, IDX.c end
-    local hurt = l.state == "alive" and l.hp < D.LINK.hp * 0.5
+    local hurt = l.state == "alive" and l.hp < game:linkHp() * 0.5
     local gap0, gap1 = 2, -1 -- the part of a cut link that is not there
     if l.state == "cut" then
         local open = 0.7 * (1 - min(1, l.regrow))
@@ -716,50 +843,146 @@ local function bar(x, y, z, frac, k)
     for n = 0, 7 do put(n < floor(frac * 8 + 0.5) and k or IDX.u, i + n, j) end
 end
 
-local function towerPicture(t)
-    if t.kind == "puffer" then return M.puffer(t.squash) end
-    return M.tower(t.kind, game.clock)
+-- A fruiting body's picture this frame: its look, breathing on its own beat,
+-- kicking when it fires, coming up out of the ground when new.
+local function towerLook(t, seed)
+    local idle = (game.clock * 0.7 + seed * 0.37) % 1
+    return M.tower(t.kind, t.branch, t.tier, idle, t.squash, t.grown)
 end
 
 local function remapFor(t)
     if t.hunger == "dormant" then return T.DARKER2 end
-    if t.hunger == "starved" then return T.DARKER end
+    if t.hunger == "starved" or (t.webbed or 0) > 0 or (t.stun or 0) > 0 then return T.DARKER end
+end
+
+-- A cordyceps host is laid down in the fungus's colours.
+local INFECT = {}
+do
+    local map = { w = "w", t = "t", s = "t", l = "t", c = "r", m = "t", g = "t", d = "r", k = "n", n = "n", u = "u", r = "r", o = "o" }
+    for k, key in ipairs(T.KEYS) do INFECT[k] = IDX[map[key]] end
 end
 
 local function enemyPicture(e)
-    if e.kind == "ant" then
-        local rate = e.state == "chew" and 14 or 8
+    local k = e.kind
+    if k == "ant" then
+        local rate = (e.state == "chew" or e.state == "gnawShelf") and 14 or 8
         return M.ant(e.h, floor(e.anim * rate) % 2)
-    elseif e.kind == "pillbug" then
+    elseif k == "pillbug" then
         if e.rolling then return M.pillbug(e.h, true, floor(e.anim * 12) % 4) end
         return M.pillbug(e.h, false)
-    elseif e.kind == "mite" then
+    elseif k == "mite" then
         return M.mite(e.h)
+    elseif k == "gnat" then
+        return M.gnat(e.h, floor(e.anim * 20) % 2)
+    elseif k == "slug" then
+        return M.slug(e.h, floor(e.anim * (e.state == "eat" and 4 or 2)) % 2)
+    elseif k == "spider" then
+        return M.spider(e.h, floor(e.anim * 10) % 2)
+    elseif k == "knight" then
+        return M.knight(e.h, floor(e.anim * 6) % 2)
+    elseif k == "queen" then
+        return M.queen(e.h, floor(e.anim * 5) % 2)
+    elseif k == "stag" then
+        return M.stag(e.h, floor(e.anim * (e.charging and 14 or 6)) % 2, e.charging ~= nil)
+    elseif k == "dung" then
+        -- It walks backwards, pushing: its picture faces away from the way it goes.
+        return M.dung(e.h + math.pi, floor(e.anim * 5) % 2)
     end
     return M.brine(floor(e.anim * 4) % 2)
 end
 
-local SHADOW = { ant = 4, pillbug = 4.5, brine = 3.5 }
+local SHADOW = { ant = 4, pillbug = 4.5, brine = 3.5, gnat = 2.5, slug = 6, spider = 5, knight = 5,
+    queen = 11, stag = 13, dung = 10 }
+
+-- Ink on the ground: the board under it goes dark, in a checker so the soil shows.
+local function stain(x, z, r, life)
+    local i0 = floor(world:toImage(x - r, 0, z + r)) - 1
+    local i1 = ceil(world:toImage(x + r, 0, z - r)) + 1
+    local _, j0 = world:toImage(x - r, 4, z - r)
+    local _, j1 = world:toImage(x + r, -1, z + r)
+    for j = max(0, floor(j0)), min(world.h - 1, ceil(j1)) do
+        for i = max(0, i0), min(world.w - 1, i1) do
+            local n = j * world.w + i
+            local d2 = (world.wx[n] - x) ^ 2 + (world.wz[n] - z) ^ 2
+            if world.up[n] == 1 and d2 <= r * r then
+                local edge = d2 > (r * 0.7) ^ 2
+                if not edge or (i + j) % 2 == 0 then put(edge and IDX.u or IDX.o, i, j) end
+            end
+        end
+    end
+end
+
+-- A web thrown over a tower.
+local function web(x, y, z)
+    local i, j = world:toImage(x, y, z)
+    i, j = floor(i), floor(j)
+    for s = -6, 6 do
+        put(IDX.w, i + s, j + floor(s / 2))
+        put(IDX.w, i + s, j - floor(s / 2))
+        if s % 3 == 0 then put(IDX.s, i + s, j + 3) end
+    end
+    for s = -6, 5 do put(IDX.s, i, j + s) end
+end
+
+-- Little things circling a head: stunned (cream) or boosted (glow).
+local function circling(x, y, z, k, n, r)
+    for s = 0, n - 1 do
+        local a = game.clock * 5 + s * 2 * math.pi / n
+        local i, j = world:toImage(x + math.cos(a) * r, y + math.sin(game.clock * 7 + s) * 2, z + math.sin(a) * r)
+        put(k, i, j)
+    end
+end
+
+-- An arc of a shot at fraction f between (x0, y0, z0) and (tx, 0, tz).
+local function arc(s, height)
+    local f = s.t / s.flight
+    local x, z = s.x0 + (s.tx - s.x0) * f, s.z0 + (s.tz - s.z0) * f
+    return x, s.y0 * (1 - f) + math.sin(math.pi * f) * height, z
+end
+
+local function dot(x, y, z, k, k2)
+    local i, j, d = world:toImage(x, y, z)
+    i, j = floor(i), floor(j)
+    if visible(i, j, d + 2) then
+        if k2 then put(k2, i + 1, j + 1); put(k2, i, j + 1); put(k2, i + 1, j) end
+        put(k, i, j)
+    end
+end
 
 local function drawBoard()
+    -- A boss charging, a ball bursting: the board jumps.
+    local cx0, cy0 = camx, camy
+    if shake > 0 then
+        camx = camx + love.math.random(-2, 2)
+        camy = camy + love.math.random(-1, 1)
+    end
     love.graphics.clear(unpack(T.RGB[IDX.o]))
     love.graphics.setColor(1, 1, 1)
     love.graphics.draw(world.image, -floor(camx), -floor(camy))
     ffi.fill(opx, cw * ch * 4, 0)
 
-    -- On the ground first: shadows, mats, threads and rings.
+    -- On the ground first: ink, shadows, mats, threads and rings.
+    for _, p in ipairs(game.inks) do
+        local r = p.r * min(1, (p.max - p.life) * 6) * min(1, p.life * 2)
+        stain(p.x, p.z, r)
+    end
     for _, e in ipairs(game.enemies) do
         if SHADOW[e.kind] then shadow(e.x, e.z, SHADOW[e.kind]) end
+        if e.ballHp and e.ballHp > 0 then
+            local bx, bz = game:ballAt(e)
+            shadow(bx, bz, 8)
+        end
     end
     for _, m in ipairs(game.mats) do
-        local fading = not m.fed and m.life < 8 and floor(game.clock * 4) % 2 == 0
-        stamp(M.mat(), m.x, 0, m.z, fading and T.DARKER or nil)
-    end
-    if mode == "mat" and hover.c and not hover.button then
-        local ok = game:canMat(hover.c, hover.r)
-        if world:distAt(hover.c, hover.r) then
-            stamp(M.mat(), hover.c * 16 + 8, 0, hover.r * 16 + 8, ok and T.DARKER or T.DARKER2)
+        if m.kind == "mat" then
+            local fading = not m.fed and m.life < 8 and floor(game.clock * 4) % 2 == 0
+            stamp(towerLook(m, m.c + m.r), m.x, 0, m.z, fading and T.DARKER or nil)
         end
+    end
+    local trailMode = D.TOWER[mode] and D.TOWER[mode].onTrail
+    if trailMode and hover.c and not hover.button and mode == "mat" and world:distAt(hover.c, hover.r) then
+        local ok = game:canLay(mode, hover.c, hover.r)
+        stamp(M.tower(mode), hover.c * 16 + 8, 0, hover.r * 16 + 8, ok and T.DARKER or T.DARKER2)
     end
     for _, l in ipairs(game.links) do
         local hl
@@ -788,18 +1011,28 @@ local function drawBoard()
         end
     end
 
-    -- Reach: whatever is hovered, or what is about to be grown.
-    local towerMode = D.TOWER[mode] and mode ~= "mat"
-    if hover.node and hover.node.tower and D.TOWER[hover.node.tower.kind].range then
-        local t = hover.node.tower
-        ring(hover.node.x, hover.node.z, D.TOWER[t.kind].range * (t.reach or 1), IDX.l, true)
+    -- Reach: whatever is hovered or selected, or what is about to be grown.
+    local towerMode = D.TOWER[mode] and not trailMode
+    local shown = hover.node and hover.node.tower or selected
+    if shown and game:stat(shown, "range") and shown.kind ~= "shelf" then
+        local x, z = shown.node and shown.node.x or shown.x, shown.node and shown.node.z or shown.z
+        local r = game:stat(shown, "range")
+        ring(x, z, r * (shown.reach or 1), IDX.l, true)
+        local mr = game:stat(shown, "minRange")
+        if mr then ring(x, z, mr, IDX.r, true) end
+    elseif shown and shown.kind == "shelf" then
+        ring(shown.x, shown.z, D.TOWER.shelf.shield, IDX.t, true)
     elseif towerMode and hover.node and not hover.node.heart then
         local q = World.QUALITY[hover.node.quality].power
-        ring(hover.node.x, hover.node.z, D.TOWER[mode].range * q, IDX.l, true)
+        if D.TOWER[mode].range then ring(hover.node.x, hover.node.z, D.TOWER[mode].range * q, IDX.l, true) end
+    end
+    if selected then
+        local x, z = selected.node and selected.node.x or selected.x, selected.node and selected.node.z or selected.z
+        ring(x, z, 9 + floor(game.clock * 4) % 2, IDX.w)
     end
     if mode == "grow" and (drag or hover.node) then
         local from = drag or hover.node
-        ring(from.x, from.z, D.LINK.reach, from.conn and IDX.c or IDX.r, true)
+        ring(from.x, from.z, game:linkReach(), from.conn and IDX.c or IDX.r, true)
     end
 
     -- The thread being pulled.
@@ -827,7 +1060,7 @@ local function drawBoard()
         local _, _, d = T.project(x, y, z)
         movers[#movers + 1] = { d = d, draw = draw }
     end
-    local wilt = 1 - game.heartHp / D.HEART_HP
+    local wilt = 1 - game.heartHp / game.heartMax
     add(game.heart.x, game.heart.y, game.heart.z, function()
         stamp(M.sprout(wilt), game.heart.x, game.heart.y - 1, game.heart.z, heartFlash > 0 and T.FLASH or nil)
     end)
@@ -835,74 +1068,130 @@ local function drawBoard()
         local t = n.tower
         if t then
             add(n.x, n.y, n.z, function()
-                stamp(towerPicture(t), n.x, n.y, n.z, remapFor(t))
-                if t.boost then
-                    for s = 0, 3 do
-                        local a = game.clock * 5 + s * 1.57
-                        local i, j = world:toImage(n.x + math.cos(a) * 6, n.y + 6 + math.sin(game.clock * 7 + s) * 4, n.z + math.sin(a) * 6)
-                        put(IDX.w, i, j)
-                    end
+                stamp(towerLook(t, n.id), n.x, n.y, n.z, t.flash > 0 and T.FLASH or remapFor(t))
+                if t.boost then circling(n.x, n.y + 7, n.z, IDX.w, 4, 6) end
+                if t.webbed > 0 then web(n.x, n.y + 7, n.z) end
+                if t.stun > 0 then circling(n.x, n.y + 15, n.z, IDX.t, 3, 4) end
+                local cap = game:reserveMax(t)
+                if cap > 0 and (t.reserve < cap - 0.05 or not n.conn) then
+                    bar(n.x, n.y + 17, n.z, t.reserve / cap, n.conn and IDX.l or IDX.r)
                 end
-                local d = D.TOWER[t.kind]
-                if d.reserve and d.reserve > 0 and (t.reserve < d.reserve - 0.05 or not n.conn) then
-                    bar(n.x, n.y + 17, n.z, t.reserve / d.reserve, n.conn and IDX.l or IDX.r)
-                end
+                local hp = game:maxHp(t)
+                if t.hp < hp - 0.5 then bar(n.x, n.y + 21, n.z, t.hp / hp, IDX.r) end
             end)
-        elseif D.TOWER[mode] and mode ~= "mat" and hover.node == n and not n.heart then
+        elseif towerMode and hover.node == n and not n.heart then
             add(n.x, n.y, n.z, function()
                 local ok = game:canBuild(mode, n)
-                stamp(M.tower(mode, game.clock), n.x, n.y, n.z, ok and T.DARKER or T.DARKER2)
+                stamp(M.tower(mode), n.x, n.y, n.z, ok and T.DARKER or T.DARKER2)
             end)
         end
+    end
+    for _, m in ipairs(game.mats) do
+        if m.kind == "shelf" then
+            add(m.x, 0, m.z, function()
+                stamp(towerLook(m, m.c + m.r), m.x, 0, m.z, m.chewed and floor(game.clock * 10) % 2 == 0 and T.DARKER or nil)
+                local hp = game:maxHp(m)
+                if m.hp < hp - 0.5 then bar(m.x, 20, m.z, m.hp / hp, IDX.t) end
+            end)
+        end
+    end
+    if trailMode and mode == "shelf" and hover.c and not hover.button and world:distAt(hover.c, hover.r) then
+        local x, z = hover.c * 16 + 8, hover.r * 16 + 8
+        add(x, 0, z, function()
+            local ok = game:canLay(mode, hover.c, hover.r)
+            stamp(M.tower(mode), x, 0, z, ok and T.DARKER or T.DARKER2)
+        end)
     end
     for _, c in ipairs(game.corpses) do
         add(c.x, 0, c.z, function()
             local remap = T.DARKER
             if c.absorb then remap = floor(game.clock * 10) % 2 == 0 and T.DARKER2 or T.DARKER end
-            stamp(M.corpse(c.kind, c.h or 0), c.x, c.carried and 2.5 or 0, c.z, remap)
+            stamp(M.corpse(c.kind, c.h or 0, c.fruit), c.x, c.carried and 2.5 or 0, c.z, remap)
         end)
     end
     for _, e in ipairs(game.enemies) do
+        local size = D.ENEMIES[e.kind].size or 1
         add(e.x, e.y, e.z, function()
-            stamp(enemyPicture(e), e.x, e.y, e.z, e.flash > 0 and T.FLASH or nil)
-            if e.hp < e.maxHp and e.kind ~= "mite" then
+            local remap = e.flash > 0 and T.FLASH or nil
+            local host = e.infected and e.infected > 0
+            if host and not remap then remap = INFECT end
+            stamp(enemyPicture(e), e.x, e.y, e.z, remap)
+            if host and floor(game.clock * 6) % 2 == 0 then circling(e.x, e.y + 6, e.z, IDX.t, 2, 3) end
+            if e.stun > 0 then circling(e.x, e.y + 8 * size, e.z, IDX.s, 3, 3) end
+            if e.mark > 0 then
+                local i, j = world:toImage(e.x, e.y + 9 * size + 3, e.z)
+                put(IDX.l, i, j - 1); put(IDX.l, i - 1, j); put(IDX.l, i + 1, j); put(IDX.w, i, j)
+            end
+            if e.hp < e.maxHp and e.kind ~= "mite" and not e.boss then
                 bar(e.x, e.y + (e.kind == "brine" and 12 or 10), e.z, e.hp / e.maxHp, IDX.r)
             end
         end)
+        if e.ballHp and e.ballHp > 0 then
+            local bx, bz = game:ballAt(e)
+            add(bx, 0, bz, function()
+                local cracked = e.ballHp < e.ballMax * 0.4
+                stamp(M.ball(e.h, floor((e.ballRoll or 0) * 3) % 4, cracked), bx, 0, bz, e.ballFlash > 0 and T.FLASH or nil)
+            end)
+        end
     end
     for _, s in ipairs(game.shots) do
         if s.kind == "spore" then
-            local f = s.t / s.flight
-            local x, z = s.x0 + (s.tx - s.x0) * f, s.z0 + (s.tz - s.z0) * f
-            local y = s.y0 * (1 - f) + math.sin(math.pi * f) * 16
+            local x, y, z = arc(s, 16)
+            add(x, y, z, function() dot(x, y, z, IDX.w, IDX.t) end)
+        elseif s.kind == "shell" then
+            local x, y, z = arc(s, 46)
             add(x, y, z, function()
                 local i, j, d = world:toImage(x, y, z)
                 i, j = floor(i), floor(j)
-                if visible(i, j, d + 2) then
-                    put(IDX.t, i + 1, j + 1); put(IDX.t, i, j + 1); put(IDX.t, i + 1, j)
-                    put(IDX.w, i, j)
-                end
+                put(IDX.o, i - 1, j - 1); put(IDX.o, i + 2, j); put(IDX.o, i, j + 2); put(IDX.o, i - 1, j + 1); put(IDX.o, i + 1, j - 1)
+                put(IDX.n, i, j); put(IDX.n, i + 1, j); put(IDX.u, i, j + 1); put(IDX.u, i + 1, j + 1); put(IDX.t, i, j - 1)
             end)
+        elseif s.kind == "bomblet" then
+            local x, y, z = arc(s, 10)
+            add(x, y, z, function() dot(x, y, z, IDX.t, IDX.n) end)
+        elseif s.kind == "cordy" then
+            local x, y, z = arc(s, 12)
+            add(x, y, z, function() dot(x, y, z, IDX.t, IDX.r) end)
+        elseif s.kind == "ink" then
+            local x, y, z = arc(s, 8)
+            add(x, y, z, function() dot(x, y, z, IDX.o, IDX.u) end)
         else
             add(s.x1, s.y1, s.z1, function()
-                line3(s.x0, s.y0, s.z0, s.x1, s.y1, s.z1, s.big and IDX.l or IDX.w)
+                line3(s.x0, s.y0, s.z0, s.x1, s.y1, s.z1, (s.big or s.mark) and IDX.l or IDX.w)
             end)
         end
     end
     table.sort(movers, function(a, b) return a.d < b.d end)
     for _, m in ipairs(movers) do m.draw() end
 
+    -- Lingering toxin: a green haze turning over the ground.
+    for _, c in ipairs(game.clouds) do
+        local fade = min(1, c.life / 0.6)
+        for s = 0, 21 do
+            if (s * 7) % 10 < fade * 10 then
+                local a = s / 22 * 2 * math.pi + game.clock * 0.6
+                local rr = c.r * (0.25 + 0.75 * ((s * 7) % 5) / 4)
+                local x, z = c.x + math.cos(a) * rr, c.z + math.sin(a) * rr
+                local i, j, d = world:toImage(x, 1.5 + (s % 3) + math.sin(game.clock * 2 + s) * 0.8, z)
+                if visible(floor(i), floor(j), d + 2) then put(s % 3 == 0 and IDX.d or IDX.m, i, j) end
+            end
+        end
+    end
+
     for _, p in ipairs(game.fx) do
         if p.cloud then
             local f = 1 - p.life / p.max
             local r = p.r * (0.5 + 0.5 * f)
-            for s = 0, 29 do
+            local n = p.r > 14 and 44 or 30
+            for s = 0, n - 1 do
                 if love.math.random() > f * 0.8 then
-                    local a = s / 30 * 2 * math.pi + f
+                    local a = s / n * 2 * math.pi + f
                     local rr = r * (0.4 + 0.6 * ((s * 7) % 5) / 4)
                     local x, z = p.x + math.cos(a) * rr, p.z + math.sin(a) * rr
                     local i, j, d = world:toImage(x, 1 + f * 4 + (s % 3), z)
-                    if visible(floor(i), floor(j), d + 2) then put(s % 3 == 0 and IDX.t or IDX.w, i, j) end
+                    local k = s % 3 == 0 and IDX.t or IDX.w
+                    if p.smoke then k = s % 3 == 0 and IDX.k or IDX.s end
+                    if visible(floor(i), floor(j), d + 2) then put(k, i, j) end
                 end
             end
         elseif p.glow then
@@ -919,6 +1208,7 @@ local function drawBoard()
     overlayImage:replacePixels(overlay)
     love.graphics.setColor(1, 1, 1)
     love.graphics.draw(overlayImage, 0, 0)
+    camx, camy = cx0, cy0
 end
 
 --- lettering and the HUD -----------------------------------------------------------------
@@ -954,13 +1244,22 @@ local function waveSummary(wave)
     end
     local parts = {}
     for _, kind in ipairs(D.ENEMY_ORDER) do
-        if count[kind] then parts[#parts + 1] = count[kind] .. " " .. (kind == "mite" and "MITES" or kind:upper()) end
+        if count[kind] then
+            local name = D.ENEMIES[kind].boss and D.ENEMIES[kind].name or kind:upper()
+            parts[#parts + 1] = (D.ENEMIES[kind].boss and "" or (count[kind] .. " ")) .. name
+        end
     end
     return table.concat(parts, "  ")
 end
 
 -- The same help in a finger's words: no keys, no right button, tap not click.
 local function say(m, t) return touch and t or m end
+
+-- A tower's name at its tier: the upgrade's, once it has one.
+local function towerName(t)
+    if t.branch then return D.TOWER[t.kind].up[t.branch][t.tier].name end
+    return D.TOWER[t.kind].name
+end
 
 -- What to say at the bottom when nothing is hovered: the next thing to learn.
 local function hint()
@@ -979,15 +1278,45 @@ local function hint()
     local nxt = game:nextWave()
     if nxt then
         for _, g in ipairs(nxt) do
+            local e = D.ENEMIES[g[1]]
+            if e.boss then return "BOSS NEXT: " .. e.name .. ". " .. e.blurb, "r" end
+        end
+    end
+    if game.newSpecies then
+        local kind = game.newSpecies
+        local grown = false
+        for _, n in ipairs(game.nodes) do if n.tower and n.tower.kind == kind then grown = true end end
+        for _, m in ipairs(game.mats) do if m.kind == kind then grown = true end end
+        if not grown then return "NEW SPECIES: " .. D.TOWER[kind].name .. ". " .. D.TOWER[kind].blurb, "l" end
+    end
+    if nxt then
+        for _, g in ipairs(nxt) do
             if not game.seen[g[1]] then return "NEW: " .. D.ENEMIES[g[1]].name .. ". " .. D.ENEMIES[g[1]].blurb, "t" end
         end
+    end
+    if selected and game:upgrades(selected)[1] and game.wave <= 2 then
+        return say("UPGRADES: CLICK A CARD ABOVE, OR Z / C", "UPGRADES: TAP A CARD ABOVE"), "l"
     end
     if game.wave == 0 then return say("SPACE TO START THE FIRST WAVE", "TAP START FOR THE FIRST WAVE"), "g" end
 end
 
 local function tooltip()
+    if hover.mutation then
+        local m = game.choices[hover.mutation]
+        return m.name .. ": " .. m.blurb, "l"
+    end
+    if game.phase == "mutate" then return say("THE NETWORK MUTATES. PICK ONE (1 2 3)", "THE NETWORK MUTATES. PICK ONE"), "l" end
+    if hover.card then
+        local c = panelCards()[hover.card]
+        if not c.up then return towerName(selected) .. ": FULLY GROWN", "w" end
+        local ok, why = game:canUpgrade(selected, c.up.branch)
+        return c.up.row.name .. ": " .. c.up.row.blurb .. (ok and "" or ("  (" .. why .. ")")), ok and "l" or "r"
+    end
     if hover.button then
         local b = BUTTONS[hover.button]
+        if b.tower and not game:unlocked(b.mode) then
+            return b.name .. ": UNLOCKS AFTER WAVE " .. D.TOWER[b.mode].unlock, "r"
+        end
         return b.name .. (b.cost and (" (" .. b.cost .. ")") or "") .. ": " .. b.blurb, "w"
     end
     if hover.wave then
@@ -1005,15 +1334,19 @@ local function tooltip()
     end
     if hover.node and hover.node.tower then
         local t = hover.node.tower
-        local d = D.TOWER[t.kind]
-        local s = d.name
+        local s = towerName(t)
         if mode == "prune" then return "CLEAR " .. s .. ": +" .. floor(t.spent * D.SELL), "r" end
-        if t.hunger == "dormant" then s = s .. ": DORMANT, NO NUTRIENTS"
+        if t.webbed > 0 then s = s .. ": WEBBED SHUT"
+        elseif t.stun > 0 then s = s .. ": STUNNED"
+        elseif t.hunger == "dormant" then s = s .. ": DORMANT, NO NUTRIENTS"
         elseif not hover.node.conn then s = s .. ": CUT OFF, ON ITS RESERVE"
+        elseif t.thirsty then s = s .. ": THIRSTY, NEEDS A RELAYED LINK"
         elseif t.hunger == "starved" then s = s .. ": STARVED" end
+        if t.hp < game:maxHp(t) then s = s .. "  HP " .. math.ceil(t.hp) end
         if t.kind == "puffer" then s = s .. "  PUFFS " .. max(1, min(4, game:degree(hover.node))) end
         if t.kind == "needle" and game:degree(hover.node) == 1 then s = s .. "  DEAD END X1.8" end
-        if hover.node.ringed then s = s .. "  RING +25%" end
+        if hover.node.ringed then s = s .. "  RING" end
+        if (t.amp or 1) > 1 then s = s .. "  AMPED" end
         return s .. "  " .. hover.node.quality:upper() .. " POCKET", "w"
     end
     if hover.node then
@@ -1022,7 +1355,7 @@ local function tooltip()
         local s = n.pocket.kind:upper() .. ": " .. n.quality:upper() .. " POCKET"
         if (n.salted or 0) > 0 then s = s .. ", SALTED" end
         if n.quality == "rich" then s = s .. ". +30% POWER, PAYS SUGAR" elseif n.quality == "poor" then s = s .. ". -25% POWER" end
-        if D.TOWER[mode] and mode ~= "mat" then
+        if D.TOWER[mode] and not D.TOWER[mode].onTrail then
             local ok, why = game:canBuild(mode, n)
             if ok then return "GROW " .. D.TOWER[mode].name .. " HERE: " .. D.TOWER[mode].cost, "l" end
             if why then return why, "r" end
@@ -1040,18 +1373,26 @@ local function tooltip()
             return say("CUT LINK. CLICK TO REGROW: ", "CUT LINK. TAP TO REGROW: ") .. game:repairCost(l), "l"
         end
         if l.state == "grow" then return "GROWING", "l" end
-        local s = "LINK " .. floor(l.hp) .. "/" .. D.LINK.hp .. "  FLOW " .. (l.cap or D.LINK.cap)
+        local s = "LINK " .. floor(l.hp) .. "/" .. floor(game:linkHp()) .. "  FLOW " .. (l.cap or D.LINK.cap)
         if l.thick then s = s .. " (RELAY)" end
         if not l.a.conn then s = s .. "  NOT FED" end
         return s, "w"
     end
-    if mode == "mat" and hover.c then
-        local ok, why = game:canMat(hover.c, hover.r)
-        if ok then return "LAY SLIME MAT: " .. D.TOWER.mat.cost, "l" end
-        if not world:distAt(hover.c, hover.r) then return "SLIME MATS GO ON THE TRAIL", "r" end
+    if D.TOWER[mode] and D.TOWER[mode].onTrail and hover.c then
+        local d = D.TOWER[mode]
+        local ok, why = game:canLay(mode, hover.c, hover.r)
+        if ok then return "GROW " .. d.name .. ": " .. d.cost, "l" end
+        if not world:distAt(hover.c, hover.r) then return d.name .. " GOES ON THE TRAIL", "r" end
         return why or "", "r"
     end
-    if mode == "prune" and hover.mat then return "LIFT MAT", "r" end
+    if mode == "prune" and hover.mat then return "LIFT " .. D.TOWER[hover.mat.kind].name .. ": +" .. game:liftValue(hover.mat), "r" end
+    if hover.mat and mode == "grow" then
+        local m = hover.mat
+        local s = towerName(m)
+        if m.kind == "mat" then s = s .. (m.fed and ": FED BY A LINK" or ": WITHERING " .. math.ceil(m.life) .. "S")
+        else s = s .. "  HP " .. math.ceil(m.hp) .. "/" .. game:maxHp(m) end
+        return s, "w"
+    end
     if mode == "grow" and drag then return say("LET GO OVER A GLOWING POCKET. RIGHT CLICK CANCELS", "TAP A GLOWING POCKET. TAP THE GROUND TO CANCEL"), "l" end
     if mode == "pulse" then
         if game.pulseCd > 0 then return "PULSE REGROWING: " .. math.ceil(game.pulseCd) .. "S", "r" end
@@ -1073,8 +1414,8 @@ local function drawHud()
         text(i, x + 2, ty, inc >= 0 and "c" or "r")
         x = x + Font.width(i) + 4
     end
-    s = "SPROUT " .. math.ceil(game.heartHp) .. "/" .. D.HEART_HP
-    text(s, x + 8, ty, game.heartHp < D.HEART_HP * 0.4 and "r" or "g")
+    s = "SPROUT " .. math.ceil(game.heartHp) .. "/" .. game.heartMax
+    text(s, x + 8, ty, game.heartHp < game.heartMax * 0.4 and "r" or "g")
     local w = "WAVE " .. game.wave .. "/" .. #D.WAVES
     local nxt = game:nextWave()
     local right = w
@@ -1144,12 +1485,16 @@ local function drawHud()
                 text(c, bx + bw - Font.width(c) - 1, by + bh - 6, "r")
             end
         else
-            local pic = M.tower(b.mode, game.clock)
+            local open = game:unlocked(b.mode)
+            local pic = M.tower(b.mode, nil, 0, on and (game.clock * 0.7) % 1 or 0)
             local afford = game.nutrients >= (b.cost or 0)
-            blit(pic, cx, b.mode == "mat" and by + 12 or by + 18, not afford and T.DARKER2 or nil)
+            blit(pic, cx, b.mode == "mat" and by + 14 or by + 21, (not afford or not open) and T.DARKER2 or nil)
         end
         if not touch then text(b.key, bx + 1, by + 1, "s") end
-        if b.cost then
+        if b.tower and not game:unlocked(b.mode) then
+            local c = "W" .. D.TOWER[b.mode].unlock
+            text(c, bx + bw - Font.width(c) - 1, by + bh - 6, "k")
+        elseif b.cost then
             local c = tostring(b.cost)
             text(c, bx + bw - Font.width(c) - 1, by + bh - 6, game.nutrients >= b.cost and "l" or "r")
         end
@@ -1166,6 +1511,62 @@ local function drawHud()
         local s2 = "SPEED X" .. speed
         text(s2, wx + floor((ww - Font.width(s2)) / 2), wy + 9, "w")
         if not touch then text("F", wx + floor((ww - 3) / 2), wy + 18, "s") end
+    end
+
+    -- The upgrade panel: what the selected thing can become.
+    local cards = panelCards()
+    for k, c in ipairs(cards) do
+        local u = c.up
+        local can = u and game:canUpgrade(selected, u.branch)
+        box(c.x, c.y, c.w, c.h, hover.card == k and "n" or "u", u and (can and "l" or "k") or "t")
+        if u then
+            local pic = M.tower(selected.kind, u.branch, u.tier, (game.clock * 0.7) % 1)
+            blit(pic, c.x + 11, c.y + c.h - (selected.kind == "mat" and 8 or 3), can and nil or T.DARKER)
+            text(u.row.name, c.x + 23, c.y + 3, "w")
+            local tag = (u.tier == 1 and "I" or "II") .. "  " .. u.row.cost
+            text(tag, c.x + 23, c.y + 11, can and "l" or "r")
+            if not touch then
+                local key = (#cards == 1 or k == 1) and "Z" or "C"
+                if #cards == 1 then key = "Z/C" end
+                text(key, c.x + c.w - Font.width(key) - 2, c.y + 11, "s")
+            end
+            -- Two pips: how far up its branch it has grown.
+            for p = 1, 2 do
+                color(p <= (selected.tier or 0) and "l" or "k")
+                love.graphics.rectangle("fill", c.x + 23 + (p - 1) * 4, c.y + 18, 3, 2)
+            end
+        else
+            local pic = M.tower(selected.kind, selected.branch, selected.tier, (game.clock * 0.7) % 1)
+            blit(pic, c.x + 11, c.y + c.h - (selected.kind == "mat" and 8 or 3))
+            text(towerName(selected), c.x + 23, c.y + 3, "w")
+            text("FULLY GROWN", c.x + 23, c.y + 11, "t")
+        end
+    end
+    local tipBase = cards[1] and cards[1].y - 4 or barTop()
+
+    -- A boss on the board: its name and its health across the top.
+    local boss
+    for _, e in ipairs(game.enemies) do if e.boss then boss = e break end end
+    if boss then
+        local d = D.ENEMIES[boss.kind]
+        local w = min(170, vw - inset.l - inset.r - 20)
+        local bx, by = floor((vw - w) / 2), inset.t + TOP + 3
+        box(bx, by, w, 4, "u", "o")
+        color("r")
+        love.graphics.rectangle("fill", bx, by, floor(w * max(0, boss.hp / boss.maxHp)), 4)
+        if boss.ballHp and boss.ballHp > 0 then
+            box(bx, by + 6, w, 2, "u", "o")
+            color("t")
+            love.graphics.rectangle("fill", bx, by + 6, floor(w * boss.ballHp / boss.ballMax), 2)
+        end
+        text(d.name, floor((vw - Font.width(d.name)) / 2), by + (boss.ballHp and boss.ballHp > 0 and 11 or 7), "w")
+    end
+    if game.bossIntro then
+        local d = D.ENEMIES[game.bossIntro.kind]
+        if floor(game.bossIntro.t * 4) % 4 ~= 0 or game.bossIntro.t < 2.5 then
+            centred(d.name, inset.t + TOP + 22, "r", "o")
+        end
+        centred(d.blurb, inset.t + TOP + 33, "w", "o")
     end
 
     -- One line of help above the toolbar.
@@ -1185,13 +1586,35 @@ local function drawHud()
         end
         for n, l in ipairs(lines) do
             if Font.width(l) > room then l = l:sub(1, floor(room / 4)) end
-            centred(l, barTop() - 11 - (#lines - n) * 10, k)
+            centred(l, tipBase - 11 - (#lines - n) * 10, k)
+        end
+    end
+
+    if game.phase == "mutate" then
+        local cs = mutationCards()
+        centred("THE NETWORK MUTATES", cs[1].y - 14, "l", "o")
+        for k, c in ipairs(cs) do
+            box(c.x, c.y, c.w, c.h, hover.mutation == k and "n" or "u", hover.mutation == k and "l" or "c")
+            text(c.m.name, c.x + 4, c.y + 4, "l")
+            if not touch then text(tostring(k), c.x + c.w - 6, c.y + 4, "s") end
+            -- The blurb, broken into lines that fit the card.
+            local line, y = "", c.y + 14
+            for word in c.m.blurb:gmatch("%S+") do
+                local try = line == "" and word or line .. " " .. word
+                if Font.width(try) > c.w - 8 then
+                    text(line, c.x + 4, y, "w")
+                    line, y = word, y + 7
+                else
+                    line = try
+                end
+            end
+            text(line, c.x + 4, y, "w")
         end
     end
 
     if game.phase == "won" then
         centred("THE SPROUT LIVES", floor(vh / 2) - 24, "g")
-        centred("KILLS " .. game.stats.kills .. "   DRUNK " .. floor(game.stats.drunk) .. "   CUTS " .. game.stats.cuts, floor(vh / 2) - 12, "w")
+        centred("KILLS " .. game.stats.kills .. "   BOSSES " .. game.stats.bosses .. "   DRUNK " .. floor(game.stats.drunk) .. "   CUTS " .. game.stats.cuts, floor(vh / 2) - 12, "w")
         centred(say("R TO PLAY AGAIN", "TAP TO PLAY AGAIN"), floor(vh / 2), "l")
     elseif game.phase == "lost" then
         centred("THE SPROUT HAS WILTED", floor(vh / 2) - 24, "r")

@@ -7,6 +7,7 @@
 local D = require "src.defs"
 
 local S = {}
+io.stdout:setvbuf("line")
 
 -- No one is watching the window: an error should say so and stop, not wait.
 function love.errorhandler(msg)
@@ -74,8 +75,13 @@ function S.begin(g, api)
             assert(g:build("relay", node(12, 9)))
             assert(g:build("puffer", node(7, 5)))
             assert(g:build("puffer", node(12, 3)))
-            assert(g:layMat(5, 3))
-            assert(g:layMat(4, 8))
+            assert(g:lay("mat", 5, 3))
+            assert(g:lay("mat", 4, 8))
+            -- Upgrades, both ways up the fork.
+            assert(g:upgrade(node(12, 6).tower, 2))
+            assert(g:upgrade(node(12, 6).tower, 2))
+            assert(g:upgrade(node(8, 9).tower, 1))
+            assert(g:upgrade(node(12, 9).tower, 1))
         end },
         { 14, "shot" },
         { 16, function() assert(g:pulse(node(7, 5)), "pulse") end },
@@ -96,13 +102,60 @@ function S.begin(g, api)
         { 60, "skip" },
         { 62, "shot" },
         { 75, "shot" },
-        { 76, "quit" },
+        { 76, function()
+            -- Every species grown and upgraded, for a look at all of them at once.
+            g.nutrients = g.nutrients + 2000
+            g.cleared = 99
+            local looks = { { "inky", 7, 5, 2, 2 }, { "mortar", 6, 7, 1, 2 }, { "cordyceps", 3, 4, 2, 1 },
+                { "puffer", 12, 3, 1, 2 }, { "mane", 11, 8, 2, 2 }, { "needle", 1, 3, 2, 2 } }
+            for _, l in ipairs(looks) do
+                local n = node(l[2], l[3])
+                if n.tower then g:sell(n) end
+                -- Linked to the nearest fed node, so it is fed and lit.
+                if not n.conn then
+                    local best, bd
+                    for _, o in ipairs(g.nodes) do
+                        local d = (o.x - n.x) ^ 2 + (o.z - n.z) ^ 2
+                        if o ~= n and o.conn and (not bd or d < bd) and g:canLink(o, n) then best, bd = o, d end
+                    end
+                    if best then link(best, n) end
+                end
+                local t = assert(g:build(l[1], n))
+                for _ = 1, l[5] do g:upgrade(t, l[4]) end
+            end
+            if not g:matAt(9, 4) then assert(g:lay("shelf", 9, 5) or g:lay("shelf", 9, 4) or true) end
+        end },
+        { 77, function()
+            -- A fresh puffer, picked: its upgrade fork shows.
+            local n = node(10, 6)
+            if not n.tower then assert(g:build("puffer", n)) end
+            api.select(n.tower)
+        end },
+        { 78, "shot" },
+        { 79, function()
+            -- The bosses, brought on to be looked at.
+            -- set down mid-trail where they can be seen.
+            local function boss(kind, gate, c, r)
+                local e = g:spawn(kind, gate)
+                e.x, e.z, e.tc, e.tr = c * 16 + 8, r * 16 + 8, c, r
+            end
+            boss("queen", 1, 6, 3)
+            boss("stag", 2, 4, 8)
+            boss("dung", 2, 8, 8)
+        end },
+        { 80, "shot" },
+        { 84, "shot" },
+        { 89, function() g:offerMutations() end },
+        { 89.5, "shot" },
+        { 90, function() assert(g:mutate(2)) end },
+        { 90.5, "quit" },
     }
 end
 
 -- Plays whole waves through, for the "skip" step: waves 2..6 at a stroke.
 local function skipTo(wave)
     while game.wave < wave and game.phase ~= "lost" do
+        if game.phase == "mutate" then game:mutate(1) end
         if game.phase == "build" then
             game.nutrients = game.nutrients + 50
             game:startWave()
@@ -119,6 +172,7 @@ function S.update(g, dt)
             s()
         elseif s == "skip" then
             skipTo(g.wave + 3)
+            if g.phase == "mutate" then g:mutate(1) end
             if g.phase == "build" then g:startWave() end
         elseif s == "shot" then
             S.pending = true
