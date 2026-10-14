@@ -14,6 +14,7 @@
 
 local ffi = require "ffi"
 local T = require "src.tracer"
+local Tiled = require "src.tiled"
 
 local sqrt, max, min, abs, floor, ceil = math.sqrt, math.max, math.min, math.abs, math.floor, math.ceil
 local UNIT = T.UNIT
@@ -89,6 +90,9 @@ local MAPS = {
     },
 }
 World.MAPS = MAPS
+
+-- The boards built from the painted tileset (src/tiled.lua) rather than traced.
+local TILED = { pond = true }
 
 local POCKET = {
     p = { kind = "pebble", quality = "poor" },
@@ -282,6 +286,7 @@ function World.new(id)
     local self = setmetatable({}, World)
     local MAP = assert(MAPS[id or "crack"], "no map " .. tostring(id))
     self.id = id or "crack"
+    self.tiled = TILED[self.id] or false
     self.solids, self.pockets = {}, {}
     self.rows, self.cols = #MAP, #MAP[1]
     for r, row in ipairs(MAP) do assert(#row == self.cols, "map row " .. r .. " is the wrong length") end
@@ -297,8 +302,15 @@ function World.new(id)
     cellAt = self.cellAt
 
     local nextPart = 10
+    -- On a tiled board the ground is blocks at different heights: what stands
+    -- on a cell is lifted to its top.
+    local lift = 0
     local function add(kind, mat, s)
         s.kind, s.mat, s.part = kind, mat, nextPart
+        if lift ~= 0 then
+            if s.at then s.at = A.mul(A.move(0, lift, 0), s.at) end
+            if s.y0 then s.y0, s.y1 = s.y0 + lift, s.y1 + lift end
+        end
         nextPart = nextPart + 1
         if kind == "ell" then
             local v = A.inv(s.at)
@@ -323,9 +335,9 @@ function World.new(id)
 
     -- The block of soil the whole board is cut from.
     local W, D = self.cols * TILE, self.rows * TILE
-    add("box", MAT.soil, { x0 = 0, x1 = W, y0 = -12, y1 = 0, z0 = 0, z1 = D })
+    if not self.tiled then add("box", MAT.soil, { x0 = 0, x1 = W, y0 = -12, y1 = 0, z0 = 0, z1 = D }) end
     -- Slabs: runs of '#' along a row are one box, so a long edge is one solid.
-    for r = 0, self.rows - 1 do
+    for r = 0, self.tiled and -1 or self.rows - 1 do
         local c = 0
         while c < self.cols do
             if cell(c, r) == "#" then
@@ -352,6 +364,7 @@ function World.new(id)
             local cx, cz = c * TILE + TILE / 2, r * TILE + TILE / 2
             local seed = (c * 7 + r * 13) % 8
             local pk = POCKET[ch]
+            lift = self.tiled and Tiled.ground(self, ch, c, r) or 0
             if pk then
                 local top
                 local turn = A.rotY(seed * 0.785)
@@ -385,13 +398,15 @@ function World.new(id)
                     add("ell", MAT.pebble, { at = ell(cx, 0, cz, 5, 2.4, 4.2, turn) })
                     top = 2.3
                 end
-                self.pockets[#self.pockets + 1] = { x = cx, z = cz, y = top, c = c, r = r,
+                self.pockets[#self.pockets + 1] = { x = cx, z = cz, y = top + lift, c = c, r = r,
                     kind = pk.kind, quality = pk.quality, low = pk.low, high = pk.high, wet = pk.wet }
             elseif ch == "H" then
                 add("ell", MAT.mound, { at = ell(cx, -0.5, cz, 7, 3, 7) })
-                self.heart = { x = cx, z = cz, y = 2.2, c = c, r = r }
+                self.heart = { x = cx, z = cz, y = 2.2 + lift, c = c, r = r }
             elseif ch == "E" then
                 self.entrances[#self.entrances + 1] = { c = c, r = r, x = cx, z = cz }
+            elseif self.tiled then
+                -- The tiles bring their own grass, reeds and gravel.
             elseif ch == "r" then
                 -- Reeds, and a cattail or two among them.
                 for k = 1, 3 do
@@ -421,13 +436,14 @@ function World.new(id)
         end
     end
 
+    lift = 0
     self:route()
 
     -- How much of the screen the board covers, with a margin round it.
     local i0, j0, i1, j1 = math.huge, math.huge, -math.huge, -math.huge
     for _, x in ipairs({ 0, W }) do
         for _, z in ipairs({ 0, D }) do
-            for _, y in ipairs({ -12, 30 }) do
+            for _, y in ipairs(self.tiled and { -3 * Tiled.L - 2, 4 * Tiled.L + 20 } or { -12, 30 }) do
                 local i, j = T.project(x, y, z)
                 i0, i1, j0, j1 = min(i0, i), max(i1, i), min(j0, j), max(j1, j)
             end
@@ -508,17 +524,18 @@ function World:bin()
     return bins, bw
 end
 
--- Paints the board. A coroutine body: it yields its progress (0..1) every few
--- rows so the load screen can say how far along it is.
-function World:paint()
+-- Traces every solid into a buffer the board's size, keeping where in the room
+-- each pixel is (wx, wy, wz) and whether it faces up. `yield` is told each
+-- row done.
+function World:trace(yield)
     cellAt = self.cellAt -- the materials' prints ask the board being painted
     local w, h = self.w, self.h
     local b = T.buffer(w, h)
     b.open = true
-    self.wx = ffi.new("float[?]", w * h)
-    self.wy = ffi.new("float[?]", w * h)
-    self.wz = ffi.new("float[?]", w * h)
-    self.up = ffi.new("uint8_t[?]", w * h)
+    b.wx = ffi.new("float[?]", w * h)
+    b.wy = ffi.new("float[?]", w * h)
+    b.wz = ffi.new("float[?]", w * h)
+    b.up = ffi.new("uint8_t[?]", w * h)
     local bins, bw = self:bin()
 
     for pj = 0, h - 1 do
@@ -548,17 +565,30 @@ function World:paint()
                 b.dep[n] = BACK - bt
                 b.dif[n] = T.diffuse(nx, ny, nz)
                 b.nx[n], b.ny[n], b.nz[n] = nx, ny, nz
-                self.wx[n], self.wy[n], self.wz[n] = x, y, z
-                self.up[n] = ny > 0.7 and 1 or 0
+                b.wx[n], b.wy[n], b.wz[n] = x, y, z
+                b.up[n] = ny > 0.7 and 1 or 0
             else
                 b.dep[n] = -1e9
-                self.wy[n] = -1e9
+                b.wy[n] = -1e9
             end
         end
-        if pj % 6 == 0 then coroutine.yield(pj / h) end
+        if pj % 6 == 0 then yield(pj) end
     end
     T.finish(b, 1.2)
+    return b
+end
+
+-- What is traced over a tiled board: everything there is, for it has no ground.
+function World:traceProps(yield) return self:trace(yield) end
+
+-- Paints the board. A coroutine body: it yields its progress (0..1) every few
+-- rows so the load screen can say how far along it is.
+function World:paint()
+    if self.tiled then return Tiled.paint(self) end
+    local w, h = self.w, self.h
+    local b = self:trace(function(pj) coroutine.yield(pj / h) end)
     self.key, self.dep = b.key, b.dep
+    self.wx, self.wy, self.wz, self.up = b.wx, b.wy, b.wz, b.up
 
     -- Off the board is the dark under the patio.
     local data = love.image.newImageData(w, h)
@@ -582,6 +612,10 @@ end
 function World:variant(kind)
     self.variants = self.variants or {}
     if self.variants[kind] then return self.variants[kind] end
+    if self.tiled then
+        self.variants[kind] = Tiled.variant(self, kind)
+        return self.variants[kind]
+    end
     cellAt = self.cellAt
     local w, h = self.w, self.h
     local data = love.image.newImageData(w, h)
@@ -628,6 +662,7 @@ end
 -- The height of the ground at (x, z): the patio or the soil in the crack.
 function World:groundAt(x, z)
     local ch = self.cellAt(x, z)
+    if self.tiled then return Tiled.ground(self, ch, floor(x / TILE), floor(z / TILE)) end
     if ch == "#" then return SLAB end
     return 0
 end

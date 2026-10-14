@@ -1588,7 +1588,7 @@ function Game:move(e, dt)
     if e.state == "back" then
         local arrived = toward(e, e.tc * TILE + TILE / 2, e.tr * TILE + TILE / 2, d.speed * slow, dt)
         e.y = self.world:groundAt(e.x, e.z)
-        if arrived then e.state, e.y = "walk", 0 end
+        if arrived then e.state, e.y = "walk", self.world:groundAt(e.x, e.z) end
         return
     end
     if e.leader then return self:follow(e, d, slow, dt) end
@@ -2050,7 +2050,7 @@ function Game:spider(e, d, slow, dt)
     elseif e.state == "back" then
         local arrived = toward(e, e.tc * TILE + TILE / 2, e.tr * TILE + TILE / 2, d.speed * slow, dt)
         e.y = self.world:groundAt(e.x, e.z)
-        if arrived then e.state, e.y = "walk", 0 end
+        if arrived then e.state, e.y = "walk", self.world:groundAt(e.x, e.z) end
         return true
     end
 end

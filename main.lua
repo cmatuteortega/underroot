@@ -141,6 +141,18 @@ end
 -- Put key k at board-image pixel (i, j).
 local function put(k, i, j) putS(k, floor(i - floor(camx)), floor(j - floor(camy))) end
 
+-- Put the board's own pixel back at board-image pixel (i, j), a step darker if
+-- `dark`. A tiled board is colours, not keys: darker is a shade, not a ramp step.
+local function putGround(i, j, dark)
+    local n = j * world.w + i
+    if not world.rgb then return put(dark and T.DARKER[world.key[n]] or world.key[n], i, j) end
+    local x, y = floor(i - floor(camx)), floor(j - floor(camy))
+    if x < 0 or y < 0 or x >= cw or y >= ch then return end
+    local p, f = (y * cw + x) * 4, dark and 0.6 or 1
+    local rgb = world.rgb
+    opx[p], opx[p + 1], opx[p + 2], opx[p + 3] = rgb[n * 3] * f, rgb[n * 3 + 1] * f, rgb[n * 3 + 2] * f, 255
+end
+
 -- Is room depth d nearer than the board at image pixel (i, j)?
 local function visible(i, j, d)
     if i < 0 or j < 0 or i >= world.w or j >= world.h then return true end
@@ -192,15 +204,16 @@ end
 -- A shadow straight down onto whatever faces up under (x, z): each pixel there
 -- goes one step darker.
 local function shadow(x, z, r)
-    local i0 = floor(world:toImage(x - r, 0, z + r)) - 1
-    local i1 = ceil(world:toImage(x + r, 0, z - r)) + 1
-    local _, j0 = world:toImage(x - r, 4, z - r)
-    local _, j1 = world:toImage(x + r, -1, z + r)
+    local g = world:groundAt(x, z)
+    local i0 = floor(world:toImage(x - r, g, z + r)) - 1
+    local i1 = ceil(world:toImage(x + r, g, z - r)) + 1
+    local _, j0 = world:toImage(x - r, g + 4, z - r)
+    local _, j1 = world:toImage(x + r, g - 1, z + r)
     for j = max(0, floor(j0)), min(world.h - 1, ceil(j1)) do
         for i = max(0, i0), min(world.w - 1, i1) do
             local n = j * world.w + i
             if world.up[n] == 1 and (world.wx[n] - x) ^ 2 + (world.wz[n] - z) ^ 2 <= r * r then
-                put(T.DARKER[world.key[n]], i, j)
+                putGround(i, j, true)
             end
         end
     end
@@ -1050,15 +1063,16 @@ end
 
 -- A pool of a lamp's light at night: the ground in it is its daytime self again.
 local function lightPool(x, z, r)
-    local i0 = floor(world:toImage(x - r, 0, z + r)) - 1
-    local i1 = ceil(world:toImage(x + r, 0, z - r)) + 1
-    local _, j0 = world:toImage(x - r, 6, z - r)
-    local _, j1 = world:toImage(x + r, -1, z + r)
+    local g = world:groundAt(x, z)
+    local i0 = floor(world:toImage(x - r, g, z + r)) - 1
+    local i1 = ceil(world:toImage(x + r, g, z - r)) + 1
+    local _, j0 = world:toImage(x - r, g + 6, z - r)
+    local _, j1 = world:toImage(x + r, g - 1, z + r)
     for j = max(0, floor(j0)), min(world.h - 1, ceil(j1)) do
         for i = max(0, i0), min(world.w - 1, i1) do
             local n = j * world.w + i
             local d2 = (world.wx[n] - x) ^ 2 + (world.wz[n] - z) ^ 2
-            if world.up[n] == 1 and d2 <= r * r and (d2 < (r * 0.6) ^ 2 or (i + j) % 2 == 0) then put(world.key[n], i, j) end
+            if world.up[n] == 1 and d2 <= r * r and (d2 < (r * 0.6) ^ 2 or (i + j) % 2 == 0) then putGround(i, j) end
         end
     end
 end
@@ -1091,10 +1105,11 @@ end
 
 -- Ink on the ground: the board under it goes dark, in a checker so the soil shows.
 local function stain(x, z, r, life)
-    local i0 = floor(world:toImage(x - r, 0, z + r)) - 1
-    local i1 = ceil(world:toImage(x + r, 0, z - r)) + 1
-    local _, j0 = world:toImage(x - r, 4, z - r)
-    local _, j1 = world:toImage(x + r, -1, z + r)
+    local g = world:groundAt(x, z)
+    local i0 = floor(world:toImage(x - r, g, z + r)) - 1
+    local i1 = ceil(world:toImage(x + r, g, z - r)) + 1
+    local _, j0 = world:toImage(x - r, g + 4, z - r)
+    local _, j1 = world:toImage(x + r, g - 1, z + r)
     for j = max(0, floor(j0)), min(world.h - 1, ceil(j1)) do
         for i = max(0, i0), min(world.w - 1, i1) do
             local n = j * world.w + i

@@ -30,9 +30,10 @@ local T = {}
 local ELEV = math.rad(30)
 local CE, SE = cos(ELEV), sin(ELEV)
 local C45 = sqrt(0.5)
--- Model units to a pixel. A tile of ground is 16 units: thirteen pixels along
--- an edge, a worker ant about nine pixels nose to sting.
-local UNIT = 0.85
+-- Model units to a pixel. A tile of ground is 16 units: a 32 x 16 diamond on
+-- the screen, the size of the painted tileset's tiles (src/tiled.lua), with its
+-- corners on whole pixels; a worker ant about a dozen pixels nose to sting.
+local UNIT = math.sqrt(0.5)
 T.UNIT = UNIT
 
 -- The camera's three axes in the room: screen right, screen up, towards you.
