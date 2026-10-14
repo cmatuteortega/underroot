@@ -451,7 +451,6 @@ function World.new(id)
     end
     self.i0, self.j0 = floor(i0) - 4, floor(j0) - 4
     self.w, self.h = ceil(i1) - self.i0 + 4, ceil(j1) - self.j0 + 4
-    if self.tiled then Tiled.widen(self) end
     return self
 end
 

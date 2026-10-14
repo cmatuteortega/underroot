@@ -22,7 +22,7 @@
 local ffi = require "ffi"
 local T = require "src.tracer"
 
-local floor, ceil, min, max, abs, sqrt = math.floor, math.ceil, math.min, math.max, math.abs, math.sqrt
+local floor, min, max, abs, sqrt = math.floor, math.min, math.max, math.abs, math.sqrt
 local DX, DY, DZ = T.DX, T.DY, T.DZ
 local IDX = T.IDX
 
@@ -35,10 +35,7 @@ local COLS = 11
 local CE = math.cos(math.rad(30))
 local L = 8 * T.UNIT / CE
 Tiled.L = L
-local BASE = -2 -- the lowest a column ever needs to go
--- The board's picture runs this far past the map on every side, in pixels:
--- open ground, so the level reads as a patch of a wider world, not a diorama.
-local MARGIN_I, MARGIN_J = 320, 220
+local BASE = -2 -- the lowest block of every column: the diorama's floor
 local BACK = 2000
 
 -- Which tiles. Indices count along the sheet's rows from 0.
@@ -48,10 +45,8 @@ local SET = {
     trail = { 21, 21, 17, 18, 3 },
     grass = { 40 },
     water = { 110, 111, 112, 113, 114, 115, 116, 117, 118, 119 },
-    -- Things that stand up, kept to the ground behind the play; and low ones,
-    -- flowers and tufts, for anywhere.
-    tall = { 45, 45, 48, 49, 50, 51, 52, 53, 54, 55, 57, 60, 64, 65 },
-    low = { 41, 42, 43, 43, 44, 46, 47 },
+    rimProp = { 45, 44, 52, 57, 53, 54, 64, 65, 49, 51, 45, 56 },
+    fieldProp = { 43, 46, 58, 56 },
 }
 
 -- A cheap hash, the same as the world's grain.
@@ -62,40 +57,19 @@ end
 local function pick(list, c, r, k) return list[floor(grain(c, r, k) * #list) + 1] end
 
 -- The map's characters as heights, in blocks: the top block of the column.
--- The map's own border (reeds, on the pond) is just more of the field.
-local OPEN = { r = true, [","] = true }
+local RIM = { r = true }
 local TRAIL = { ["="] = true, E = true }
 local WATER = { o = true, ["~"] = true, P = true }
 
--- What is at (c, r), on the map or off it. Off it is open ground (","), except
--- that the trail runs on out of every entrance to the edge of the picture.
-function Tiled.char(world, c, r)
-    local ch = world.cell(c, r)
-    if ch then return ch end
-    for _, e in ipairs(world.entrances) do
-        if (e.c == 0 and r == e.r and c < 0) or (e.c == world.cols - 1 and r == e.r and c >= world.cols)
-            or (e.r == 0 and c == e.c and r < 0) or (e.r == world.rows - 1 and c == e.c and r >= world.rows) then
-            return "="
-        end
-    end
-    return ","
-end
-
--- How far behind the play (c, r) is: off the map's two far sides, up the
--- screen, where a hill or a rock hides nothing that matters. 0 elsewhere.
-local function behind(world, c, r)
-    if c >= world.cols or r >= world.rows then return 0 end
-    return max(0, -c, -r)
-end
-
--- Off the map, behind it, the ground rises in steps the further back it is.
+-- The rim stands up at the back and comes down to the field's height along the
+-- two near edges, so it never hides what walks in front of it.
 function Tiled.level(world, ch, c, r)
-    ch = ch or Tiled.char(world, c, r)
-    if TRAIL[ch] or WATER[ch] then return -1 end
-    if ch == "," then
-        local b = behind(world, c, r) + (grain(floor(c / 2), floor(r / 2), 81) - 0.5) * 3
-        return b >= 7 and 2 or b >= 3 and 1 or 0
+    if RIM[ch] then
+        if r == world.rows - 1 or c == world.cols - 1 then return 0 end
+        if (r == 0 or c == 0) and grain(c, r, 81) > 0.6 then return 2 end
+        return 1
     end
+    if TRAIL[ch] or WATER[ch] then return -1 end
     return 0
 end
 
@@ -131,13 +105,6 @@ local function keyOf(r, g, b)
     return k
 end
 
--- Widens the board's picture past the map, so open ground fills the screen
--- round it.
-function Tiled.widen(world)
-    world.i0, world.j0 = world.i0 - MARGIN_I, world.j0 - MARGIN_J
-    world.w, world.h = world.w + 2 * MARGIN_I, world.h + 2 * MARGIN_J
-end
-
 -- The upright plane things stand on: through a cell's middle, facing you.
 local UNX, UNZ
 do
@@ -161,11 +128,10 @@ function Tiled.paint(world)
     -- `drop` pixels lower for a tile whose face sits down inside its block --
     -- as a block of cell (c, r), or (`prop`) as a thing standing in it.
     -- `calm`: a water tile's top, whose bright rim is only kept along a shore,
-    -- so open water reads as one sheet rather than a grid of tiles. `seam`
-    -- answers whether the neighbour (c, r) continues this top without a joint
-    -- (water beside water, grass beside grass at the same height); the joint
-    -- is painted over there.
-    local function stamp(t, c, r, top, drop, prop, calm, seam)
+    -- so open water reads as one sheet rather than a grid of tiles.
+    -- `ford`: a trail tile seen through the water's top, half and half, for a
+    -- flooded stretch of trail: shallow water with the trodden path under it.
+    local function stamp(t, c, r, top, drop, prop, calm, ford)
         local cx, cz = c * TILE + TILE / 2, r * TILE + TILE / 2
         local si, sj = world:toImage(cx, top, cz)
         local bi, bj = floor(si + 0.5) - PX / 2, floor(sj + 0.5) - PX / 2
@@ -202,21 +168,23 @@ function Tiled.paint(world)
                         local x, y, z = ox + DX * tt, oy + DY * tt, oz + DZ * tt
                         local p = j * w + i
                         rgb[p * 3], rgb[p * 3 + 1], rgb[p * 3 + 2] = spx[s], spx[s + 1], spx[s + 2]
-                        if seam and isUp and abs(du) / 16 + abs(dv) / 8 > (calm and 0.7 or 0.8) then
+                        if calm and isUp and abs(du) / 16 + abs(dv) / 8 > 0.7 then
                             -- Which neighbour this edge of the diamond faces.
                             local nc, nr = c, r
                             if du < 0 and dv < 0 then nc = c - 1
                             elseif du > 0 and dv < 0 then nr = r - 1
                             elseif du > 0 then nc = c + 1
                             else nr = r + 1 end
-                            if seam(nc, nr) then
-                                if calm then
-                                    rgb[p * 3], rgb[p * 3 + 1], rgb[p * 3 + 2] = still[1], still[2], still[3]
-                                else
-                                    -- Grass: the tile's own texture from a little further in.
-                                    local q = ((ty + v - (dv < 0 and -3 or 3)) * sw + tx + u - (du < 0 and -6 or 6)) * 4
-                                    rgb[p * 3], rgb[p * 3 + 1], rgb[p * 3 + 2] = spx[q], spx[q + 1], spx[q + 2]
-                                end
+                            if WATER[world.cell(nc, nr)] then
+                                rgb[p * 3], rgb[p * 3 + 1], rgb[p * 3 + 2] = still[1], still[2], still[3]
+                            end
+                        end
+                        if ford and isUp then
+                            local q = (((floor(ford / COLS) * PX) + v - drop) * sw + (ford % COLS) * PX + u) * 4
+                            if spx[q + 3] > 127 then
+                                rgb[p * 3] = (rgb[p * 3] + spx[q]) / 2
+                                rgb[p * 3 + 1] = (rgb[p * 3 + 1] + spx[q + 1]) / 2
+                                rgb[p * 3 + 2] = (rgb[p * 3 + 2] + spx[q + 2]) / 2
                             end
                         end
                         dep[p] = BACK - tt
@@ -228,63 +196,35 @@ function Tiled.paint(world)
         end
     end
 
-    -- Every cell whose tile could land in the picture, on the map or off it.
-    -- A cell's top-face centre is (c - r) * 16 across and (c + r) * 8 down from
-    -- the map's corner, so the picture's corners say which cells those are.
-    local oi, oj = world:toImage(0, 0, 0)
-    local function cellsAt(i, j) -- the (c + r) and (c - r) at image pixel (i, j)
-        return (j - oj) / 8, (i - oi) / 16
-    end
-    local s0 = floor(cellsAt(0, 0)) - 4
-    local s1 = ceil(cellsAt(0, h + 3 * PX)) + 2
-    local _, d0 = cellsAt(-PX, 0)
-    local _, d1 = cellsAt(w + PX, 0)
-    d0, d1 = floor(d0) - 1, ceil(d1) + 1
-
-    -- Back to front: by the diagonal a cell is on, and up each column. A
-    -- column only starts as low as a side of it can be seen: its near
-    -- neighbours' tops.
-    for s = s0, s1 do
-        for d = d0, d1 do
-            if (s + d) % 2 == 0 then
-                local c, r = (s + d) / 2, (s - d) / 2
-                local ch = Tiled.char(world, c, r)
-                local top = Tiled.level(world, ch, c, r)
-                local from = max(BASE, min(top, Tiled.level(world, nil, c + 1, r), Tiled.level(world, nil, c, r + 1)))
-                for k = from, top do
-                    local t, drop, calm, seam = pick(SET.under, c, r, k + 90), 0, false, nil
-                    if k == top then
-                        if TRAIL[ch] then t = pick(SET.trail, c, r, 83)
-                        elseif WATER[ch] then
-                            t, drop, calm = pick(SET.water, c, r, 84), 4, true
-                            seam = function(nc, nr) return WATER[world.cell(nc, nr)] end
-                        else
-                            t = pick(SET.grass, c, r, 85)
-                            seam = function(nc, nr)
-                                local nch = Tiled.char(world, nc, nr)
-                                return not TRAIL[nch] and not WATER[nch] and Tiled.level(world, nch, nc, nr) == top
-                            end
-                        end
-                    elseif top > 0 and k > 0 then
-                        t = pick(SET.dirt, c, r, k + 86)
-                    end
-                    stamp(t, c, r, k * L, drop, false, calm, seam)
+    -- Back to front: by the diagonal a cell is on, and up each column.
+    local cell = world.cell
+    for s = 0, world.cols + world.rows - 2 do
+        for c = max(0, s - world.rows + 1), min(world.cols - 1, s) do
+            local r = s - c
+            local ch = cell(c, r)
+            local top = Tiled.level(world, ch, c, r)
+            for k = BASE, top do
+                local t, drop, calm, ford = pick(SET.under, c, r, k + 90), 0, false, nil
+                if k == top then
+                    if RIM[ch] then t = pick(SET.dirt, c, r, 82)
+                    elseif TRAIL[ch] then t = pick(SET.trail, c, r, 83)
+                    elseif WATER[ch] then
+                        t, drop, calm = pick(SET.water, c, r, 84), 4, true
+                        if ch == "~" then ford = pick(SET.trail, c, r, 83) end
+                    else t = pick(SET.grass, c, r, 85) end
+                elseif RIM[ch] then
+                    t = pick(SET.dirt, c, r, k + 86)
                 end
-                -- Something growing in the open: tall things only behind the
-                -- play, low ones anywhere, and the field itself kept clear.
-                if OPEN[ch] then
-                    local g = grain(c, r, 87)
-                    if behind(world, c, r) >= 2 and g > 0.72 then
-                        stamp(pick(SET.tall, c, r, 88), c, r, (top + 1) * L, 0, true)
-                    elseif g < 0.07 then
-                        stamp(pick(SET.low, c, r, 91), c, r, (top + 1) * L, 0, true)
-                    end
-                elseif ch == "." and grain(c, r, 89) > 0.93 then
-                    stamp(pick(SET.low, c, r, 92), c, r, (top + 1) * L, 0, true)
-                end
+                stamp(t, c, r, k * L, drop, false, calm, ford)
+            end
+            -- Something growing on the rim, or now and then in the field.
+            if RIM[ch] and grain(c, r, 87) > 0.55 then
+                stamp(pick(SET.rimProp, c, r, 88), c, r, (top + 1) * L, 0, true)
+            elseif ch == "." and grain(c, r, 89) > 0.8 then
+                stamp(pick(SET.fieldProp, c, r, 91), c, r, (top + 1) * L, 0, true)
             end
         end
-        coroutine.yield(0.5 * (s - s0) / (s1 - s0 + 1))
+        coroutine.yield(0.5 * s / (world.cols + world.rows))
     end
 
     -- What is still traced (the pockets, the Heart's mound) goes over the tiles
