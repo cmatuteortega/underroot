@@ -2,8 +2,8 @@
 
 13 oct 2026 · @matute
 
-The design document this prototype is built from. `README.md` says which parts of
-it the game covers and how the open questions were answered.
+The design document this game is built from. `PLAN.md` tracks each of its items
+as done or next; `README.md` says how what is built works.
 
 Revised for MVP2: the bosses are no longer the human world intruding (a boot, a
 sprinkler, a lawnmower) but bigger bugs, built with the same 3D method as
