@@ -1205,13 +1205,13 @@ local function drawBoard()
     for _, m in ipairs(game.mats) do
         if m.kind == "mat" then
             local fading = not m.fed and m.life < 8 and floor(game.clock * 4) % 2 == 0
-            stamp(towerLook(m, m.c + m.r), m.x, 0, m.z, fading and T.DARKER or nil)
+            stamp(towerLook(m, m.c + m.r), m.x, m.y, m.z, fading and T.DARKER or nil)
         end
     end
     local trailMode = D.TOWER[mode] and D.TOWER[mode].onTrail
     if trailMode and hover.c and not hover.button and mode == "mat" and world:distAt(hover.c, hover.r) then
         local ok = game:canLay(mode, hover.c, hover.r)
-        stamp(M.tower(mode), hover.c * 16 + 8, 0, hover.r * 16 + 8, ok and T.DARKER or T.DARKER2)
+        stamp(M.tower(mode), hover.c * 16 + 8, world:groundAt(hover.c * 16 + 8, hover.r * 16 + 8), hover.r * 16 + 8, ok and T.DARKER or T.DARKER2)
     end
     for _, l in ipairs(game.links) do
         local hl
@@ -1321,18 +1321,19 @@ local function drawBoard()
     end
     for _, m in ipairs(game.mats) do
         if m.kind == "shelf" then
-            add(m.x, 0, m.z, function()
-                stamp(towerLook(m, m.c + m.r), m.x, 0, m.z, m.chewed and floor(game.clock * 10) % 2 == 0 and T.DARKER or nil)
+            add(m.x, m.y, m.z, function()
+                stamp(towerLook(m, m.c + m.r), m.x, m.y, m.z, m.chewed and floor(game.clock * 10) % 2 == 0 and T.DARKER or nil)
                 local hp = game:maxHp(m)
-                if m.hp < hp - 0.5 then bar(m.x, 20, m.z, m.hp / hp, IDX.t) end
+                if m.hp < hp - 0.5 then bar(m.x, m.y + 20, m.z, m.hp / hp, IDX.t) end
             end)
         end
     end
     if trailMode and mode == "shelf" and hover.c and not hover.button and world:distAt(hover.c, hover.r) then
         local x, z = hover.c * 16 + 8, hover.r * 16 + 8
-        add(x, 0, z, function()
+        local y = world:groundAt(x, z)
+        add(x, y, z, function()
             local ok = game:canLay(mode, hover.c, hover.r)
-            stamp(M.tower(mode), x, 0, z, ok and T.DARKER or T.DARKER2)
+            stamp(M.tower(mode), x, y, z, ok and T.DARKER or T.DARKER2)
         end)
     end
     for _, c in ipairs(game.corpses) do

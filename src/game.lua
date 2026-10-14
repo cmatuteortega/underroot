@@ -547,6 +547,7 @@ function Game:lay(kind, c, r)
     self.nutrients = self.nutrients - d.cost
     local m = newTower(kind, d.cost)
     m.c, m.r, m.x, m.z = c, r, c * TILE + TILE / 2, r * TILE + TILE / 2
+    m.y = self.world:groundAt(m.x, m.z)
     m.life, m.hp = d.life, d.hp
     self.mats[#self.mats + 1] = m
     self:burst(m.x, 2, m.z, 8, { "l", "c", "w" }, 14)
