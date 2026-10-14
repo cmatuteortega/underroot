@@ -26,6 +26,15 @@ function S.run()
     rows[#rows + 1] = { "stag", M.stag(0.6, 1, true), M.stag(2.4, 0, true), M.corpse("stag", 0.4), M.corpse("queen", 1) }
     headings("dung", function(h) return M.dung(h, 0) end, 4)
     rows[#rows + 1] = { "ball", M.ball(0, 0), M.ball(0, 1), M.ball(0, 2, true), M.corpse("ball", 0), M.corpse("dung", 1) }
+    headings("moth", function(h) return M.moth(h, 0) end, 6)
+    rows[#rows + 1] = { "moth", M.moth(0.4, 1), M.corpse("moth", 0) }
+    headings("w.bug", function(h) return M.waterbug(h, 0) end, 4)
+    rows[#rows + 1] = { "w.bug", M.waterbug(0.6, 1, true), M.waterbug(2.4, 0, true), M.corpse("waterbug", 0.4) }
+    headings("centi", function(h) return M.centipede(h, 0) end, 6)
+    headings("seg", function(h) return M.centseg(h, 0) end, 6)
+    rows[#rows + 1] = { "centi", M.centipede(0.5, 1), M.centseg(0.5, 1), M.corpse("centipede", 0), M.corpse("centseg", 1) }
+    headings("bomb", function(h) return M.bombardier(h, 0) end, 4)
+    rows[#rows + 1] = { "bomb", M.bombardier(0.6, 1, true), M.bombardier(3.8, 0, true), M.corpse("bombardier", 0.4) }
     rows[#rows + 1] = { "dead", M.corpse("ant", 0, true), M.corpse("spider", 1), M.corpse("knight", 2), M.corpse("slug", 0.5),
         M.corpse("gnat", 0), M.corpse("pillbug", 0, true) }
 

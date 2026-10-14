@@ -1,34 +1,44 @@
 # Underfoot
 
 A tower defense where you are the mycelium under a sprout, built from the design
-doc (`DESIGN.md`, 13 oct 2026). This is MVP2: one map and fifteen waves, nine
-fruiting bodies that each fork into two upgrade branches of two tiers, eight
-enemies, three bosses (big bugs: a Queen Ant, a Stag Beetle and a Dung Beetle
-with its ball), and Mutations between waves. All of it sits on the MVP's sever /
-prune / regrow loop, the Fairy Ring and the Spore Pulse. It is drawn
-isometrically with Survive School's 3D method and the frog prototype's world
-painter (sekiroclone).
+doc (`DESIGN.md`, 13 oct 2026). Three levels, each its own map and waves (The
+Crack, The Pond Edge, The Lawn), weather that changes wave by wave, twelve
+fruiting bodies that each fork into two upgrade branches of two tiers, nine
+enemies, six bosses (big bugs: a Queen Ant, a Stag Beetle, a Dung Beetle with its
+ball, a Giant Water Bug, a Giant Centipede and, in challenge mode, a Bombardier
+Beetle), and Mutations between waves. All of it sits on the MVP's sever / prune /
+regrow loop, the Fairy Ring and the Spore Pulse. It is drawn isometrically with
+Survive School's 3D method and the frog prototype's world painter (sekiroclone).
 
 ```sh
 love .                 # LÖVE 11.x
 love . --shots         # dev: a scripted game that clicks like a player, writes
                        # screenshots to the save directory, prints a summary, quits
+love . --shots pond    # dev: the same for another level (pond, lawn), the bot playing;
+                       # add `challenge` for the challenge wave
 love . --sheet         # dev: every look of every model on one sheet (sheet.png)
-love . --bot 10        # dev: plays the campaign headless 10 times, prints how it went
+love . --bot 10        # dev: plays the Crack headless 10 times, prints how it went
+love . --bot 10 lawn   # dev: another level; add `challenge`, or `generic` for the
+                       # map-agnostic player instead of the level's build order
 ```
 
 ## Playing it
 
-You start with the sprout (the Heart) and 110 nutrients. Grow hyphae out from it
-to pockets (a leaf, a crumb, a pebble, a dead beetle), grow fruiting bodies on the
-pockets, and start the wave. Enemies walk the pale trail from the two gates on the
-left to the sprout, and chew through any thread they cross.
+It opens on the level picker. The Crack is open; winning a level opens the next
+(what is won is kept in the save directory), and winning the Lawn opens challenge
+mode, which adds a last wave with the Bombardier Beetle to any level.
+
+You start with the sprout (the Heart) and 110 nutrients (more on the later
+levels). Grow hyphae out from it to pockets (a leaf, a crumb, a pebble, a dead
+beetle, a lily pad, a stone), grow fruiting bodies on the pockets, and start the
+wave. Enemies walk the pale trail from the gates on the left to the sprout, and
+chew through any thread they cross.
 
 | input | what it does |
 | --- | --- |
 | drag from a fed node to a pocket (or click one, then the other) | grow a link; cost grows with length, the far end glows if it is in reach |
 | `1` | grow hyphae (the default tool) |
-| `2`–`9`, `0` then click a linked pocket | Spore Puffer, Enoki Needle, Lion's Mane, Relay, Inky Cap, Puffball Mortar, Cordyceps Bloom; Slime Mat (`4`) and Shelf Fungus (`8`) go on a trail tile |
+| `2`–`9`, `0`, `T`, `G`, `H` then click a linked pocket | Spore Puffer, Enoki Needle, Lion's Mane, Relay, Inky Cap, Puffball Mortar, Cordyceps Bloom, Stinkhorn, Ghost Lamp, Humongous Fungus; Slime Mat (`4`) and Shelf Fungus (`8`) go on a trail tile |
 | click a tower, mat or shelf | select it: its upgrade cards show over the toolbar |
 | `Z` / `C`, or click a card | upgrade the selection down the left / right branch (after the fork, either key goes on up it) |
 | `1` `2` `3`, or click a card | pick a Mutation when the network offers them |
@@ -41,6 +51,9 @@ left to the sprout, and chew through any thread they cross.
 | right click | cancel, back to growing |
 | drag on open ground, middle drag, arrows / WASD | pan |
 | `R` | restart after a win or loss (`Shift+R` any time) |
+| `N` | after a win: on to the next level |
+| `M` | the level picker (`Esc` there goes back to the run) |
+| `1` `2` `3`, `C` in the picker | play a level; challenge mode on or off |
 | mouse wheel, `+` / `-` | zoom in and out (whole steps) |
 | `F11` / `Alt+Enter` | back to a window (it opens fullscreen) |
 
@@ -58,7 +71,8 @@ keeps clear of the notch and home bar:
 | pinch | zoom: the board follows the fingers, then settles on the nearest sharp (whole-pixel) zoom when they lift; it starts one step in, and the toolbar keeps its size at any zoom |
 | tap START / SPEED | start the next wave / game speed |
 | tap the top bar | pause and resume (the game also pauses when it is sent to the background) |
-| tap anywhere after a win or loss | play again |
+| tap a level card, or the challenge switch | play it / challenge on or off |
+| tap anywhere after a win or loss | back to the level picker |
 
 The bottom line always says either what is under the mouse or the next thing to
 learn: the first link, the first tower, and each new enemy before the wave that
@@ -106,7 +120,8 @@ two tiers each. Every tier is a new model, not a recolour: a toxin puffer goes
 green and grows satellites, a lance-tipped enoki clump stands a head taller than
 the rest, a bramble shelf bristles. Each one breathes or sways on its own beat,
 kicks when it fires and comes up out of the ground when it is grown or upgraded.
-The last four species unlock as the waves are cleared.
+On the Crack the last seven species unlock as the waves are cleared; on the later
+levels everything grows from the start but the Humongous Fungus.
 
 | tower | cost | does | network twist | branch A | branch B |
 | --- | --- | --- | --- | --- | --- |
@@ -119,8 +134,12 @@ The last four species unlock as the waves are cleared.
 | Shelf Fungus (wave 4) | 35 | on the trail: blocks it, enemies must chew through | must grow beside a fed link; shields links near it from chewing and crushing | Thick Armor, Ironwood (more wood, heals) | Thorny, Bramble (bites back) |
 | Puffball Mortar (wave 5) | 70 | huge slow blast, minimum range, ground only | drinks three times as much: on a link that isn't relayed it fires at half pace | Cluster Blast, Carpet (bomblets) | Smoke, Blackout (stuns, makes carriers drop bodies) |
 | Cordyceps Bloom (wave 7) | 60 | infects one enemy: it turns, walks back biting its own, then dies and fruits | +50% on a rich pocket | Longer Control, Puppeteer (longer, bigger hosts) | Spreads on Death, Plague |
+| Stinkhorn (wave 3) | 40 | a stench round it: everything in it wades (×0.75) and now and then trips and is stunned | flies (gnats, moths) that smell it from 70 off come and hang about it for 6 s instead of flying on: bait for the puffers and needles | Wider Stench, Carrion Reek (wider, slower, rots them) | Panic (now and then they turn and flee), Terror; it becomes a red basket stinkhorn |
+| Ghost Lamp (wave 6) | 35 | a glowing decoy: walkers and fliers that come into its glow leave the trail for it and chew it until it goes out or they give up (5 s); bosses, brine and mites ignore it | its glow is 30 + 5 per unit of flow reaching it, so a relayed lamp pulls from much further; night adds 40% | Longer Glow, Will-o'-Wisp (tougher, holds them longer, heals) | Flare, Starburst (bursts when it is destroyed, and stuns) |
+| Humongous Fungus (wave 9) | 150 | one per run, and slow to grow (8 s before it does anything): a quake round it every 3.2 s that hits every walker in reach | stronger for every fed node in the network: +2.5 damage and +1.5 reach a node | Spreading, Armillaria (more per node) | Honey Root, Ancient (quakes stick them, mend links in reach, then stun) |
 
-**Enemies.** Worker Ant (fast, chews, steals corpses), Pillbug (armored 3; rolls
+**Enemies.** Night Moth (comes out on night waves; flies to the brightest light,
+a lit Ghost Lamp first, else the nearest fed fruiting body, and eats it), Worker Ant (fast, chews, steals corpses), Pillbug (armored 3; rolls
 every few seconds at armor 10 and crushes links; a mat stops the roll and leaves
 it stuck and soft), Mite Swarm (ten 4-HP mites that each go for a link), Brine
 Drop (above), Fungus Gnat (flies straight at the sprout over everything; only
@@ -142,9 +161,51 @@ shake the board.
   every hit and flattens links, mats and shelves; broken, it leaves a heap worth
   60 and the beetle runs. If the ball reaches the sprout it is 20 damage on its
   own.
+- **Giant Water Bug** (the Pond Edge, wave 12): under the flooded lane it cannot
+  be seen or hurt, only its ripples. Every seven seconds it surfaces, lunges at
+  the nearest fruiting body within 44 and drags at it for 2.6 s. Answer: build on
+  the stones (high ground, out of its reach), keep a fed Lion's Mane in reach
+  (it halves the grip), and hit it while it is out.
+- **Giant Centipede** (the Lawn, wave 15): a head and eleven segments, each its
+  own enemy with its own HP and armor 5, each crushing every link it runs over.
+  Break a segment and the one behind it leads the rest. Its health bar is the
+  whole train's. Answer: area damage across the train, mats to bunch it, shelves
+  to shield the threads that cross, and regrowing behind it.
+- **Bombardier Beetle** (challenge mode, the last wave): walking, it scalds the
+  nearest tower in reach every six seconds. Three tiles from the sprout it stops,
+  turns its back and sprays the sprout itself every 2.5 s until it dies. The first
+  thing in the line of the spray takes it instead: a Shelf Fungus on the trail, a
+  fruiting body between them. Answer: cover, then burst damage.
 
-**Mutations.** After waves 3, 5, 8, 10 and 12 the game holds while you pick one of
-three for the rest of the run: thick hyphae, quick growth, cheaper links, bodies
+**Levels.** Each is its own map and waves, picked from the level picker.
+
+| level | map | waves | new | boss |
+| --- | --- | --- | --- | --- |
+| 1. The Crack | a sidewalk crack across a patio, two gates | 15 | everything up to the Humongous Fungus, a species at a time | Queen Ant, Stag Beetle, Dung Beetle |
+| 2. The Pond Edge | the two trails meet on the west shore and wade one flooded lane across a pond; lily pads on the water, stones on the banks, reeds round it | 12 | flooding, high ground; rain often | Giant Water Bug |
+| 3. The Lawn | open mown grass, a long dirt path, three gates | 15 | everything at once, each wave 20% tougher than the last (10% elsewhere) | Queen Ant, Stag Beetle, Giant Centipede |
+
+The Crack stands in for the design doc's first five levels (it has their three
+bosses). The new pockets: a **lily pad** (normal, lies low: rain washes it) and a
+**stone** (normal, high ground: the Water Bug cannot reach it). A leaf lies low too.
+
+**Weather.** A wave can come with weather; the forecast says so before it starts
+(and the top bar while it lasts). Each is a row in `D.WEATHER`, and each has its
+own picture of the board.
+
+- **Rain**: flow +50%, but towers on low pockets lose 0.3 reserve a second, and
+  lingering clouds and ink wash out twice as fast. Puddles on the trail, rain
+  streaking down.
+- **Drought**: flow −30%, so a thin link starves its towers first and relays
+  matter more; unfed mats dry up twice as fast. The moss goes to straw.
+- **Night**: towers reach 15% further and lamps glow 40% further; moths come out.
+  The board goes a step darker, enemies are hard to see out of a lamp's light,
+  and a lamp lights the ground round it.
+- **Frost**: everything goes at 0.8: towers fire slower, enemies walk slower, and
+  links grow and regrow at 0.6. Rime on the ground, flakes drifting.
+
+**Mutations.** After the waves a level names (3, 5, 8, 10 and 12 on the Crack) the
+game holds while you pick one of three for the rest of the run: thick hyphae, quick growth, cheaper links, bodies
 worth more, more sugar, a quicker pulse, deeper roots (+5 sprout), fatter
 reserves, older rings (+40%), or longer reach.
 
@@ -164,20 +225,27 @@ tune in playtesting, and they are. Upgrade tiers only name what they change:
 
 ### Balance, as far as a bot can tell
 
-`love . --bot 10` plays the whole campaign headless with one fixed, sensible
-build order: it grows the same network, upgrades along the way, repairs cuts and
-prunes brine, and takes the first mutation offered. It wins about 7 runs in 10,
-usually with the sprout badly hurt. The Stag Beetle gets through to the sprout in
-most runs, because the bot never builds a second route or a Sanctuary; the Queen
-and the Dung Beetle are killed about half the time. A player who adapts should do
-better than a script that can't.
+`love . --bot 10 [level]` plays a level headless with one fixed, sensible build
+order written for its map: it grows the same network, upgrades along the way,
+repairs cuts and prunes brine, and takes the first mutation offered. Over ten runs
+it wins the Crack 8 times, the Pond Edge 8 and the Lawn 7, usually with the sprout
+badly hurt. The Stag Beetle still gets through to the sprout in most runs, because
+the bot never builds a second route or a Sanctuary, and the Water Bug often
+reaches the sprout nearly dead. In challenge mode it wins the Crack 4 times in 5,
+the Lawn 3 and the Pond Edge never: the Bombardier is meant to be a wall. A player
+who adapts should do better than a script that can't.
+
+`generic` swaps the build order for a player that works on any map (grow to the
+pocket that watches the most trail, put the next of a fixed rotation on it). It is
+much weaker, losing the Crack at the Stag Beetle every time, so it is for new maps
+before they have a build order, not for tuning.
 
 ### Not in yet
 
-Stinkhorn, Ghost Lamp and Humongous Fungus; Springtail, Mole Cricket, Centipede and
-Green Mold; the other three boss bugs (Giant Water Bug, Giant Centipede,
-Bombardier Beetle); elite modifiers, weather, props, the Spore Bank, sprout seeds,
-the other six levels, and sound. Each of those is a row and a model more, below.
+Springtail, Mole Cricket, Centipede (the small one) and Green Mold; elite
+modifiers, props, the Spore Bank, sprout seeds, the Flowerpot, Shed Floor, Rotting
+Log and Compost Heap as levels of their own, and sound. Each of those is a row and
+a model more, below.
 
 ## How it is drawn
 
@@ -235,15 +303,15 @@ What is new for Underfoot:
 | --- | --- |
 | `main.lua` | canvas fit, camera, compositing, the network's threads, the HUD and toolbar, mouse and keys |
 | `src/game.lua` | the rules: the graph, flow, cuts, pruning, regrowth, rings, the pulse, upgrades, towers firing, enemies and bosses moving, corpses, waves, mutations |
-| `src/defs.lua` | every tuning number: link costs, towers, enemies, waves |
-| `src/world.lua` | the map (ASCII), its solids, the one-time paint, the trail's flow field, picking |
+| `src/defs.lua` | every tuning number: link costs, towers, enemies, weather, the levels and their waves |
+| `src/world.lua` | the maps (ASCII), their solids, the one-time paint and its weather versions, the trail's flow field, picking |
 | `src/models.lua` | the sprout, the fruiting bodies at every tier, the enemies, the bosses and their bodies, as ellipsoids, kept by pose |
 | `src/tracer.lua` | the isometric camera, lamp, ramps, crease and ink passes, affine maps, the ellipsoid painter |
 | `src/palette.lua` | the thirteen colours and the one-step-darker column |
 | `src/font.lua` | Survive School's 3x5 face |
 | `src/script.lua` | dev only: the `--shots` run |
 | `src/sheet.lua` | dev only: the `--sheet` model sheet |
-| `src/bot.lua` | dev only: the `--bot` balance runs |
+| `src/bot.lua` | dev only: the `--bot` balance runs, a build order a level and the generic player |
 
 ## Extending
 
@@ -254,9 +322,16 @@ What is new for Underfoot:
 - **An enemy**: a row in `D.ENEMIES` and `D.ENEMY_ORDER`, a model, a line in
   `enemyPicture` in `main.lua`, and a branch in `Game:move` if it does something to
   the network nothing else does. Put it in a wave in `D.WAVES`.
-- **A map**: `MAP` in `src/world.lua`. `E` gates, `=` trail to `H`, pocket letters
-  `p L C B`, `#` raised patio. The trail must reach the Heart from every gate (it
-  asserts).
+- **A map**: a row in `MAPS` in `src/world.lua`. `E` gates, `=` trail to `H`,
+  `~` flooded trail, `o` water, pocket letters `p L C P S B`, `#` raised patio,
+  `"` grass, `Y` long grass, `r` reeds. The trail must reach the Heart from every
+  gate (it asserts).
+- **A level**: a row in `D.LEVELS` naming its map, its waves (each can carry a
+  `weather`), its starting nutrients and sprout, and when it mutates. It gets a
+  card in the picker by being in the list. Give it a build order in `PLANS`
+  (`src/bot.lua`) to balance it with `--bot`.
+- **A weather**: a row in `D.WEATHER`, read through `Game:sky()` where its numbers
+  are used, and a branch in `World:variant` for its picture of the board.
 - **A pocket kind**: a row in `POCKET` and a branch in `World.new` that adds its
   solids.
 - Before a new model goes in, paint it at every heading into one sheet and look

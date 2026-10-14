@@ -3,6 +3,10 @@
 -- screenshots to the save directory, prints what happened, and quits. The
 -- "look at it before the game does" step from Survive School's 3dmethod.md,
 -- for a whole board.
+--
+-- `love . --shots pond` (or lawn) plays another level instead, with the
+-- bot's generic player growing the network, and photographs the bare board,
+-- each kind of weather and the boss. Add `challenge` for the challenge wave.
 
 local D = require "src.defs"
 
@@ -17,6 +21,7 @@ end
 
 local clock, shots = 0, 0
 local game
+local steps
 
 local function node(c, r)
     for _, n in ipairs(game.nodes) do
@@ -32,8 +37,52 @@ local function link(a, b)
     game:recompute()
 end
 
-local steps
+-- Another level: the bot plays, kept alive, and the script skips ahead to the
+-- waves worth a picture.
+local act
+local function playTo(wave, seconds)
+    local t = 0
+    while (game.wave < wave or t < seconds) and game.phase ~= "won" do
+        if game.wave >= wave then t = t + 1 / 30 end
+        act()
+        game.heartHp = math.max(game.heartHp, 3)
+        game:update(1 / 30)
+    end
+end
+
+local function beginGeneric(g)
+    game = g
+    act = require("src.bot").generic(g)
+    local waves = {}
+    for k, w in ipairs(g.waves) do
+        if w.weather and not waves[w.weather] then waves[w.weather] = k end
+    end
+    steps = { { 0.5, "shot" }, { 0.6, function() g.nutrients = g.nutrients + 300; playTo(1, 6) end }, { 0.7, "shot" } }
+    local t = 1
+    local order = {}
+    for kind, k in pairs(waves) do order[#order + 1] = { kind, k } end
+    table.sort(order, function(a, b) return a[2] < b[2] end)
+    for _, o in ipairs(order) do
+        steps[#steps + 1] = { t, function() g.nutrients = g.nutrients + 250; playTo(o[2], 7) end }
+        steps[#steps + 1] = { t + 0.1, "shot" }
+        t = t + 0.5
+    end
+    -- The boss: the last wave with one in it.
+    local bossWave
+    for k, w in ipairs(g.waves) do
+        for _, row in ipairs(w) do if D.ENEMIES[row[1]].boss then bossWave = k end end
+    end
+    steps[#steps + 1] = { t, function() g.nutrients = g.nutrients + 600; playTo(bossWave, 9) end }
+    steps[#steps + 1] = { t + 0.1, "shot" }
+    steps[#steps + 1] = { t + 0.5, function() playTo(bossWave, 15) end }
+    steps[#steps + 1] = { t + 0.6, "shot" }
+    steps[#steps + 1] = { t + 1.0, function() playTo(bossWave, 22) end }
+    steps[#steps + 1] = { t + 1.1, "shot" }
+    steps[#steps + 1] = { t + 1.5, "quit" }
+end
+
 function S.begin(g, api)
+    if S.level ~= "crack" then return beginGeneric(g) end
     game = g
     local H = g.heart
     local function at(n) return api.at(n.x, n.y + (n.heart and 10 or 5), n.z) end
@@ -107,7 +156,8 @@ function S.begin(g, api)
             g.nutrients = g.nutrients + 2000
             g.cleared = 99
             local looks = { { "inky", 7, 5, 2, 2 }, { "mortar", 6, 7, 1, 2 }, { "cordyceps", 3, 4, 2, 1 },
-                { "puffer", 12, 3, 1, 2 }, { "mane", 11, 8, 2, 2 }, { "needle", 1, 3, 2, 2 } }
+                { "puffer", 12, 3, 1, 2 }, { "mane", 11, 8, 2, 2 }, { "needle", 1, 3, 2, 2 },
+                { "stink", 10, 6, 1, 2 }, { "lamp", 8, 1, 2, 1 }, { "giant", 12, 9, 1, 0 }, { "stink", 3, 2, 2, 2 } }
             for _, l in ipairs(looks) do
                 local n = node(l[2], l[3])
                 if n.tower then g:sell(n) end
@@ -145,6 +195,18 @@ function S.begin(g, api)
         end },
         { 80, "shot" },
         { 84, "shot" },
+        { 85, function()
+            -- Frost on the board, and the Humongous Fungus's quake.
+            g.weather = "frost"
+            local n = node(12, 9)
+            if n.tower then n.tower.grown, n.tower.cool = 1, 0 end
+        end },
+        { 85.9, "shot" },
+        { 86, function() g.weather = "night" end },
+        { 87, "shot" },
+        { 88, function() g.weather = nil; api.menu(true) end },
+        { 88.2, "shot" },
+        { 88.4, function() api.menu(false) end },
         { 89, function() g:offerMutations() end },
         { 89.5, "shot" },
         { 90, function() assert(g:mutate(2)) end },

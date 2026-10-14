@@ -35,6 +35,30 @@ local ui, vw, vh, uz -- the HUD, and every screen measure the HUD lays out by
 local overlay, overlayImage, opx
 local world, painter, progress = nil, nil, 0
 local game
+-- The levels: which one is being played, the boards already painted (one a
+-- level, kept so a second run of it starts at once), and the level picker.
+local level = D.LEVELS[1]
+local worlds = {}
+local menu -- the level picker is up
+local challenge = false -- challenge mode chosen in the picker
+local won = {} -- levels won, saved between runs: { crack = true, ... }
+
+-- What has been won lives in the save directory, one level id a line.
+local function loadProgress()
+    won = {}
+    local data = love.filesystem.getInfo("progress.txt") and love.filesystem.read("progress.txt")
+    if data then for id in data:gmatch("%S+") do won[id] = true end end
+end
+
+local function saveProgress()
+    local ids = {}
+    for _, l in ipairs(D.LEVELS) do if won[l.id] then ids[#ids + 1] = l.id end end
+    love.filesystem.write("progress.txt", table.concat(ids, "\n") .. "\n")
+end
+
+-- A level is open once the one before it is won; challenge mode once the last is.
+local function levelOpen(n) return n == 1 or won[D.LEVELS[n - 1].id] end
+local function challengeOpen() return won[D.LEVELS[#D.LEVELS].id] end
 local camx, camy, panx, pany = 0, 0, 0, 0
 local mode = "grow"
 local drag -- the node a link is being pulled from
@@ -307,6 +331,27 @@ local function mutationCards()
     return cards
 end
 
+-- The level picker: a card a level, across the middle (or down it on a
+-- narrow screen), and the challenge switch under them once it is open.
+local LW, LH = 124, 50
+local function levelCards()
+    local n = #D.LEVELS
+    local cards = {}
+    local y0
+    if vw - inset.l - inset.r >= n * LW + (n - 1) * 6 + 8 then
+        local x0 = floor((vw - (n * LW + (n - 1) * 6)) / 2)
+        y0 = floor(vh / 2) - 30
+        for k = 1, n do cards[k] = { x = x0 + (k - 1) * (LW + 6), y = y0, w = LW, h = LH, n = k } end
+        y0 = y0 + LH + 8
+    else
+        y0 = floor(vh / 2 - (n * LH + (n - 1) * 4) / 2) - 8
+        for k = 1, n do cards[k] = { x = floor((vw - LW) / 2), y = y0 + (k - 1) * (LH + 4), w = LW, h = LH, n = k } end
+        y0 = y0 + n * (LH + 4) + 4
+    end
+    local switch = { x = floor((vw - LW) / 2), y = y0, w = LW, h = 16, challenge = true }
+    return cards, switch
+end
+
 local function nodeScreen(n)
     local i, j = world:toImage(n.x, n.y + (n.heart and 10 or 5), n.z)
     return i, j
@@ -315,6 +360,14 @@ end
 local function findHover()
     hover = {}
     local mx, my = mouse.x, mouse.y
+    if menu then
+        local cards, switch = levelCards()
+        for k, c in ipairs(cards) do
+            if inside(mx, my, c.x, c.y, c.w, c.h) then hover.level = k return end
+        end
+        if challengeOpen() and inside(mx, my, switch.x, switch.y, switch.w, switch.h) then hover.challenge = true end
+        return
+    end
     if game.phase == "mutate" then
         for k, c in ipairs(mutationCards()) do
             if inside(mx, my, c.x, c.y, c.w, c.h) then hover.mutation = k return end
@@ -357,17 +410,37 @@ end
 --- the run ---------------------------------------------------------------------------
 
 local function start()
-    game = Game.new(world)
+    game = Game.new(world, level, { challenge = challenge })
     mode, drag, panx, pany, selected = "grow", nil, 0, 0, nil
     paused, speed = false, 1
+    menu = nil
+end
+
+-- Plays level `n`: its board if it is painted already, else paint it first.
+local function play(n)
+    level = D.LEVELS[n]
+    menu = nil
+    if worlds[level.id] then
+        world = worlds[level.id]
+        start()
+        return
+    end
+    world = World.new(level.map)
+    worlds[level.id] = world
+    progress = 0
+    painter = coroutine.create(function() world:paint() end)
+end
+
+local function openMenu()
+    menu = true
+    mode, drag, selected = "grow", nil, nil
 end
 
 function love.load(args)
     love.graphics.setDefaultFilter("nearest", "nearest")
     love.graphics.setLineStyle("rough")
     fit()
-    world = World.new()
-    painter = coroutine.create(function() world:paint() end)
+    loadProgress()
     for _, a in ipairs(args or {}) do
         if a == "--shots" then script = require("src.script") end
         if a == "--bot" then
@@ -384,9 +457,26 @@ function love.load(args)
             return
         end
     end
+    if script then
+        -- The script plays the level it is told to (--shots pond), or the first.
+        local n = 1
+        for _, a in ipairs(args or {}) do
+            for k, l in ipairs(D.LEVELS) do if a == l.id then n = k end end
+        end
+        script.level = D.LEVELS[n].id
+        for _, a in ipairs(args or {}) do if a == "challenge" then challenge = true end end
+        play(n)
+    else
+        openMenu()
+    end
 end
 
 local function click(b)
+    if menu then
+        if hover.level and levelOpen(hover.level) then play(hover.level)
+        elseif hover.challenge then challenge = not challenge end
+        return
+    end
     if b == 2 then
         mode, drag, selected = "grow", nil, nil
         return
@@ -416,7 +506,7 @@ local function click(b)
         if game.phase == "build" then game:startWave() else speed = speed % 3 + 1 end
         return
     end
-    if game.phase == "won" or game.phase == "lost" then start() return end
+    if game.phase == "won" or game.phase == "lost" then openMenu() return end
     if hover.strip then
         -- No P key on a phone: the top strip is the pause button.
         if touch then paused = not paused end
@@ -619,6 +709,13 @@ function love.keypressed(key)
         return
     end
     if painter then return end
+    if menu then
+        local n = tonumber(key)
+        if n and D.LEVELS[n] and levelOpen(n) then play(n) end
+        if key == "c" and challengeOpen() then challenge = not challenge end
+        if key == "escape" and game then menu = nil end
+        return
+    end
     if key == "=" or key == "+" or key == "kp+" then zoomBy(1) end
     if key == "-" or key == "kp-" then zoomBy(-1) end
     if game.phase == "mutate" then
@@ -644,6 +741,13 @@ function love.keypressed(key)
     if key == "f" then speed = speed % 3 + 1 end
     if key == "p" then paused = not paused end
     if key == "r" and (game.phase == "won" or game.phase == "lost" or love.keyboard.isDown("lshift")) then start() end
+    if key == "m" then openMenu() end
+    -- Won: on to the next level.
+    if key == "n" and game.phase == "won" then
+        for k, l in ipairs(D.LEVELS) do
+            if l == level and D.LEVELS[k + 1] then play(k + 1) return end
+        end
+    end
 end
 
 function love.update(dt)
@@ -667,6 +771,7 @@ function love.update(dt)
                         return (floor(i) - floor(camx) + 0.5) * zoom, (floor(j) - floor(camy) + 0.5) * zoom
                     end,
                     select = function(t) selected = t end,
+                    menu = function(on) if on then openMenu() else menu = nil end end,
                     button = function(name)
                         for n, b in ipairs(BUTTONS) do
                             if b.mode == name then
@@ -677,6 +782,26 @@ function love.update(dt)
                     end,
                 })
             end
+        end
+        return
+    end
+    -- The shots are the whole screen: the board with the HUD laid over it
+    -- (or the picker, which is all HUD). The script never zooms, so the two
+    -- pictures are the same size.
+    local function photograph()
+        if not shot or shot:getWidth() ~= cw or shot:getHeight() ~= ch then shot = love.graphics.newCanvas(cw, ch) end
+        love.graphics.setCanvas(shot)
+        love.graphics.setColor(1, 1, 1)
+        if not menu then love.graphics.draw(canvas) end
+        love.graphics.draw(ui)
+        love.graphics.setCanvas()
+        script.after(game, shot)
+    end
+    if menu then
+        findHover()
+        if script then
+            script.update(game, 1 / 30)
+            photograph()
         end
         return
     end
@@ -707,6 +832,13 @@ function love.update(dt)
     end
     heartFlash = max(0, heartFlash - dt)
     shake = max(0, shake - dt)
+    if game.phase == "won" and not game.recorded then
+        game.recorded = true
+        if not script then
+            won[level.id] = true
+            saveProgress()
+        end
+    end
     -- What was selected may have been eaten, sterilised, sold or flattened.
     if selected then
         local gone
@@ -717,17 +849,7 @@ function love.update(dt)
         end
         if gone then selected = nil end
     end
-    if script then
-        -- The shots are the whole screen: the board with the HUD laid over it.
-        -- The script never zooms, so the two pictures are the same size.
-        if not shot or shot:getWidth() ~= cw or shot:getHeight() ~= ch then shot = love.graphics.newCanvas(cw, ch) end
-        love.graphics.setCanvas(shot)
-        love.graphics.setColor(1, 1, 1)
-        love.graphics.draw(canvas)
-        love.graphics.draw(ui)
-        love.graphics.setCanvas()
-        script.after(game, shot)
-    end
+    if script then photograph() end
 end
 
 --- drawing the world -------------------------------------------------------------------
@@ -850,6 +972,12 @@ local function towerLook(t, seed)
     return M.tower(t.kind, t.branch, t.tier, idle, t.squash, t.grown)
 end
 
+-- A fruiting body flat on a button or a card. The Humongous Fungus is shown
+-- as it is coming up, or it would not fit.
+local function icon(kind, branch, tier, idle)
+    return M.tower(kind, branch, tier, idle, 0, kind == "giant" and 0.34 or nil)
+end
+
 local function remapFor(t)
     if t.hunger == "dormant" then return T.DARKER2 end
     if t.hunger == "starved" or (t.webbed or 0) > 0 or (t.stun or 0) > 0 then return T.DARKER end
@@ -887,12 +1015,79 @@ local function enemyPicture(e)
     elseif k == "dung" then
         -- It walks backwards, pushing: its picture faces away from the way it goes.
         return M.dung(e.h + math.pi, floor(e.anim * 5) % 2)
+    elseif k == "moth" then
+        return M.moth(e.h, floor(e.anim * 12) % 2)
+    elseif k == "waterbug" then
+        return M.waterbug(e.h, floor(e.anim * 5) % 2, e.state == "grab" or e.state == "lunge")
+    elseif k == "centipede" then
+        return M.centipede(e.h, floor(e.anim * 8) % 2)
+    elseif k == "centseg" then
+        return M.centseg(e.h, floor(e.anim * 8 + (e.x + e.z) * 0.1) % 2)
+    elseif k == "bombardier" then
+        return M.bombardier(e.h, floor(e.anim * 6) % 2, e.state == "siege")
     end
     return M.brine(floor(e.anim * 4) % 2)
 end
 
 local SHADOW = { ant = 4, pillbug = 4.5, brine = 3.5, gnat = 2.5, slug = 6, spider = 5, knight = 5,
-    queen = 11, stag = 13, dung = 10 }
+    queen = 11, stag = 13, dung = 10, moth = 3.5, waterbug = 12, centipede = 6, centseg = 5.5, bombardier = 10 }
+
+-- Something under the water: rings spreading on the surface where it is.
+local function ripples(x, z, t)
+    for ring = 0, 1 do
+        local r = 5 + ((t * 6 + ring * 5) % 10)
+        local n = floor(r * 2.4)
+        for s = 0, n - 1 do
+            if (s + ring) % 2 == 0 then
+                local a = s / n * 2 * math.pi
+                local px, pz = x + math.cos(a) * r, z + math.sin(a) * r * 0.9
+                local i, j, d = world:toImage(px, world:groundAt(px, pz) + 0.2, pz)
+                if visible(floor(i), floor(j), d + 1) then put(r < 9 and IDX.w or IDX.s, i, j) end
+            end
+        end
+    end
+end
+
+-- A pool of a lamp's light at night: the ground in it is its daytime self again.
+local function lightPool(x, z, r)
+    local i0 = floor(world:toImage(x - r, 0, z + r)) - 1
+    local i1 = ceil(world:toImage(x + r, 0, z - r)) + 1
+    local _, j0 = world:toImage(x - r, 6, z - r)
+    local _, j1 = world:toImage(x + r, -1, z + r)
+    for j = max(0, floor(j0)), min(world.h - 1, ceil(j1)) do
+        for i = max(0, i0), min(world.w - 1, i1) do
+            local n = j * world.w + i
+            local d2 = (world.wx[n] - x) ^ 2 + (world.wz[n] - z) ^ 2
+            if world.up[n] == 1 and d2 <= r * r and (d2 < (r * 0.6) ^ 2 or (i + j) % 2 == 0) then put(world.key[n], i, j) end
+        end
+    end
+end
+
+-- The weather, drawn over everything on the board in screen pixels: rain in
+-- streaks, frost as drifting flakes, drought as dust in the heat.
+local function drawWeather(kind)
+    local t = game.clock
+    if kind == "rain" then
+        for k = 1, floor(cw * ch / 260) do
+            local x = floor((k * 7919 + floor(t * 50) * 31) % cw)
+            local y = floor((k * 104729 + t * 260) % (ch + 8)) - 4
+            for s = 0, 2 do putS(IDX.s, x, y + s) end
+        end
+    elseif kind == "frost" then
+        for k = 1, floor(cw * ch / 900) do
+            local y = floor((k * 104729 + t * 14) % ch)
+            local x = floor((k * 7919 + math.sin(t * 0.8 + k) * 6) % cw)
+            putS(IDX.w, x, y)
+            if k % 4 == 0 then putS(IDX.w, x + 1, y); putS(IDX.w, x, y + 1) end
+        end
+    elseif kind == "drought" then
+        for k = 1, floor(cw * ch / 1800) do
+            local x = floor((k * 7919 + t * 9) % cw)
+            local y = floor((k * 104729 + math.sin(t + k) * 3) % ch)
+            putS(IDX.t, x, y)
+        end
+    end
+end
 
 -- Ink on the ground: the board under it goes dark, in a checker so the soil shows.
 local function stain(x, z, r, life)
@@ -958,8 +1153,26 @@ local function drawBoard()
     end
     love.graphics.clear(unpack(T.RGB[IDX.o]))
     love.graphics.setColor(1, 1, 1)
-    love.graphics.draw(world.image, -floor(camx), -floor(camy))
+    local sky = game.weather
+    love.graphics.draw(sky and world:variant(sky) or world.image, -floor(camx), -floor(camy))
     ffi.fill(opx, cw * ch * 4, 0)
+    local night = sky == "night"
+    -- At night a lamp lights the ground round it.
+    local lamps = {}
+    for _, n in ipairs(game.nodes) do
+        local t = n.tower
+        if t and t.kind == "lamp" and (t.glow or 0) > 0 then
+            lamps[#lamps + 1] = n
+            if night then lightPool(n.x, n.z, min(34, t.glow * 0.45)) end
+        end
+    end
+    local function lit(x, z)
+        for _, n in ipairs(lamps) do
+            local r = n.tower.glow
+            if (n.x - x) ^ 2 + (n.z - z) ^ 2 <= r * r then return true end
+        end
+        return false
+    end
 
     -- On the ground first: ink, shadows, mats, threads and rings.
     for _, p in ipairs(game.inks) do
@@ -967,7 +1180,8 @@ local function drawBoard()
         stain(p.x, p.z, r)
     end
     for _, e in ipairs(game.enemies) do
-        if SHADOW[e.kind] then shadow(e.x, e.z, SHADOW[e.kind]) end
+        if e.under then ripples(e.x, e.z, game.clock)
+        elseif SHADOW[e.kind] and not e.hidden then shadow(e.x, e.z, SHADOW[e.kind]) end
         if e.ballHp and e.ballHp > 0 then
             local bx, bz = game:ballAt(e)
             shadow(bx, bz, 8)
@@ -1016,8 +1230,10 @@ local function drawBoard()
     local shown = hover.node and hover.node.tower or selected
     if shown and game:stat(shown, "range") and shown.kind ~= "shelf" then
         local x, z = shown.node and shown.node.x or shown.x, shown.node and shown.node.z or shown.z
-        local r = game:stat(shown, "range")
-        ring(x, z, r * (shown.reach or 1), IDX.l, true)
+        local r = shown.node and game:towerRange(shown) or game:stat(shown, "range")
+        if r > 0 then ring(x, z, r, IDX.l, true) end
+        local bait = game:stat(shown, "bait")
+        if bait then ring(x, z, bait, IDX.d, true) end
         local mr = game:stat(shown, "minRange")
         if mr then ring(x, z, mr, IDX.r, true) end
     elseif shown and shown.kind == "shelf" then
@@ -1070,6 +1286,8 @@ local function drawBoard()
             add(n.x, n.y, n.z, function()
                 stamp(towerLook(t, n.id), n.x, n.y, n.z, t.flash > 0 and T.FLASH or remapFor(t))
                 if t.boost then circling(n.x, n.y + 7, n.z, IDX.w, 4, 6) end
+                -- A stinkhorn always has a fly or two about it.
+                if t.kind == "stink" and t.hunger ~= "dormant" and t.branch ~= 2 then circling(n.x, n.y + 17, n.z, IDX.o, 2, 4) end
                 if t.webbed > 0 then web(n.x, n.y + 7, n.z) end
                 if t.stun > 0 then circling(n.x, n.y + 15, n.z, IDX.t, 3, 4) end
                 local cap = game:reserveMax(t)
@@ -1111,10 +1329,12 @@ local function drawBoard()
     end
     for _, e in ipairs(game.enemies) do
         local size = D.ENEMIES[e.kind].size or 1
-        add(e.x, e.y, e.z, function()
+        if not e.under and not e.hidden then add(e.x, e.y, e.z, function()
             local remap = e.flash > 0 and T.FLASH or nil
             local host = e.infected and e.infected > 0
             if host and not remap then remap = INFECT end
+            -- At night what is not in a lamp's light is hard to see.
+            if night and not remap and not lit(e.x, e.z) then remap = T.DARKER end
             stamp(enemyPicture(e), e.x, e.y, e.z, remap)
             if host and floor(game.clock * 6) % 2 == 0 then circling(e.x, e.y + 6, e.z, IDX.t, 2, 3) end
             if e.stun > 0 then circling(e.x, e.y + 8 * size, e.z, IDX.s, 3, 3) end
@@ -1125,7 +1345,7 @@ local function drawBoard()
             if e.hp < e.maxHp and e.kind ~= "mite" and not e.boss then
                 bar(e.x, e.y + (e.kind == "brine" and 12 or 10), e.z, e.hp / e.maxHp, IDX.r)
             end
-        end)
+        end) end
         if e.ballHp and e.ballHp > 0 then
             local bx, bz = game:ballAt(e)
             add(bx, 0, bz, function()
@@ -1191,8 +1411,30 @@ local function drawBoard()
                     local i, j, d = world:toImage(x, 1 + f * 4 + (s % 3), z)
                     local k = s % 3 == 0 and IDX.t or IDX.w
                     if p.smoke then k = s % 3 == 0 and IDX.k or IDX.s end
+                    if p.glowing then k = s % 3 == 0 and IDX.c or IDX.l end
                     if visible(floor(i), floor(j), d + 2) then put(k, i, j) end
                 end
+            end
+        elseif p.wave then
+            -- The Humongous Fungus's quake: a ring running out over the ground.
+            local f = 1 - p.life / p.max
+            local r = p.r * f
+            local n = max(16, floor(r * 1.4))
+            for s = 0, n - 1 do
+                if (s + floor(f * 6)) % 3 ~= 0 then
+                    local a = s / n * 2 * math.pi
+                    local x, z = p.x + math.cos(a) * r, p.z + math.sin(a) * r
+                    local i, j, d = world:toImage(x, world:groundAt(x, z) + 0.5, z)
+                    local k = p.honey and (s % 2 == 0 and IDX.t or IDX.w) or (s % 2 == 0 and IDX.n or IDX.t)
+                    if visible(floor(i), floor(j), d + 1) then put(k, i, j); put(IDX.u, i, j + 1) end
+                end
+            end
+        elseif p.streak then
+            if p.t >= 0 then
+                local f = min(1, p.t / p.max)
+                local x, z = p.x + (p.tx - p.x) * f, p.z + (p.tz - p.z) * f
+                local i, j, d = world:toImage(x, p.y + math.sin(f * math.pi) * 6, z)
+                if visible(floor(i), floor(j), d + 2) then put(IDX[p.k], i, j); put(IDX[p.k], i + 1, j) end
             end
         elseif p.glow then
             local f = p.t / p.max
@@ -1204,6 +1446,8 @@ local function drawBoard()
             if visible(floor(i), floor(j), d + 1) then put(IDX[p.k], i, j) end
         end
     end
+
+    if sky then drawWeather(sky) end
 
     overlayImage:replacePixels(overlay)
     love.graphics.setColor(1, 1, 1)
@@ -1243,6 +1487,7 @@ local function waveSummary(wave)
         count[g[1]] = count[g[1]] + g[2] * (g[1] == "mite" and D.ENEMIES.mite.swarm or 1)
     end
     local parts = {}
+    if wave.weather then parts[1] = D.WEATHER[wave.weather].name .. ":" end
     for _, kind in ipairs(D.ENEMY_ORDER) do
         if count[kind] then
             local name = D.ENEMIES[kind].boss and D.ENEMIES[kind].name or kind:upper()
@@ -1293,6 +1538,10 @@ local function hint()
         for _, g in ipairs(nxt) do
             if not game.seen[g[1]] then return "NEW: " .. D.ENEMIES[g[1]].name .. ". " .. D.ENEMIES[g[1]].blurb, "t" end
         end
+        if nxt.weather then
+            local wx = D.WEATHER[nxt.weather]
+            return wx.name .. " NEXT WAVE: " .. wx.blurb, "s"
+        end
     end
     if selected and game:upgrades(selected)[1] and game.wave <= 2 then
         return say("UPGRADES: CLICK A CARD ABOVE, OR Z / C", "UPGRADES: TAP A CARD ABOVE"), "l"
@@ -1315,7 +1564,7 @@ local function tooltip()
     if hover.button then
         local b = BUTTONS[hover.button]
         if b.tower and not game:unlocked(b.mode) then
-            return b.name .. ": UNLOCKS AFTER WAVE " .. D.TOWER[b.mode].unlock, "r"
+            return b.name .. ": UNLOCKS AFTER WAVE " .. game:unlockAt(b.mode), "r"
         end
         return b.name .. (b.cost and (" (" .. b.cost .. ")") or "") .. ": " .. b.blurb, "w"
     end
@@ -1345,6 +1594,11 @@ local function tooltip()
         if t.hp < game:maxHp(t) then s = s .. "  HP " .. math.ceil(t.hp) end
         if t.kind == "puffer" then s = s .. "  PUFFS " .. max(1, min(4, game:degree(hover.node))) end
         if t.kind == "needle" and game:degree(hover.node) == 1 then s = s .. "  DEAD END X1.8" end
+        if t.kind == "lamp" then s = s .. "  GLOW " .. floor(t.glow or 0) end
+        if t.kind == "giant" then
+            if t.grown < 1 then s = s .. "  GROWING " .. floor(t.grown * 100) .. "%"
+            else s = s .. "  " .. game.fed .. " NODES: HITS " .. floor(game:stat(t, "damage") + game:stat(t, "perNode") * game.fed) end
+        end
         if hover.node.ringed then s = s .. "  RING" end
         if (t.amp or 1) > 1 then s = s .. "  AMPED" end
         return s .. "  " .. hover.node.quality:upper() .. " POCKET", "w"
@@ -1355,6 +1609,7 @@ local function tooltip()
         local s = n.pocket.kind:upper() .. ": " .. n.quality:upper() .. " POCKET"
         if (n.salted or 0) > 0 then s = s .. ", SALTED" end
         if n.quality == "rich" then s = s .. ". +30% POWER, PAYS SUGAR" elseif n.quality == "poor" then s = s .. ". -25% POWER" end
+        if n.pocket.high then s = s .. ". HIGH GROUND" elseif n.pocket.low then s = s .. ". LOW: RAIN WASHES IT" end
         if D.TOWER[mode] and not D.TOWER[mode].onTrail then
             local ok, why = game:canBuild(mode, n)
             if ok then return "GROW " .. D.TOWER[mode].name .. " HERE: " .. D.TOWER[mode].cost, "l" end
@@ -1416,7 +1671,7 @@ local function drawHud()
     end
     s = "SPROUT " .. math.ceil(game.heartHp) .. "/" .. game.heartMax
     text(s, x + 8, ty, game.heartHp < game.heartMax * 0.4 and "r" or "g")
-    local w = "WAVE " .. game.wave .. "/" .. #D.WAVES
+    local w = "WAVE " .. game.wave .. "/" .. #game.waves
     local nxt = game:nextWave()
     local right = w
     if nxt and game.phase == "build" then right = "NEXT: " .. waveSummary(nxt) .. "   " .. w end
@@ -1424,6 +1679,7 @@ local function drawHud()
         local left = #game.queue
         for _, e in ipairs(game.enemies) do left = left + 1 end
         right = left .. " LEFT   " .. w
+        if game.weather then right = D.WEATHER[game.weather].name .. "   " .. right end
     end
     local leftEnd = x + 8 + Font.width(s) + 8
     local rx = vw - inset.r - Font.width(right) - 3
@@ -1486,13 +1742,13 @@ local function drawHud()
             end
         else
             local open = game:unlocked(b.mode)
-            local pic = M.tower(b.mode, nil, 0, on and (game.clock * 0.7) % 1 or 0)
+            local pic = icon(b.mode, nil, 0, on and (game.clock * 0.7) % 1 or 0)
             local afford = game.nutrients >= (b.cost or 0)
             blit(pic, cx, b.mode == "mat" and by + 14 or by + 21, (not afford or not open) and T.DARKER2 or nil)
         end
         if not touch then text(b.key, bx + 1, by + 1, "s") end
         if b.tower and not game:unlocked(b.mode) then
-            local c = "W" .. D.TOWER[b.mode].unlock
+            local c = "W" .. game:unlockAt(b.mode)
             text(c, bx + bw - Font.width(c) - 1, by + bh - 6, "k")
         elseif b.cost then
             local c = tostring(b.cost)
@@ -1520,7 +1776,7 @@ local function drawHud()
         local can = u and game:canUpgrade(selected, u.branch)
         box(c.x, c.y, c.w, c.h, hover.card == k and "n" or "u", u and (can and "l" or "k") or "t")
         if u then
-            local pic = M.tower(selected.kind, u.branch, u.tier, (game.clock * 0.7) % 1)
+            local pic = icon(selected.kind, u.branch, u.tier, (game.clock * 0.7) % 1)
             blit(pic, c.x + 11, c.y + c.h - (selected.kind == "mat" and 8 or 3), can and nil or T.DARKER)
             text(u.row.name, c.x + 23, c.y + 3, "w")
             local tag = (u.tier == 1 and "I" or "II") .. "  " .. u.row.cost
@@ -1536,7 +1792,7 @@ local function drawHud()
                 love.graphics.rectangle("fill", c.x + 23 + (p - 1) * 4, c.y + 18, 3, 2)
             end
         else
-            local pic = M.tower(selected.kind, selected.branch, selected.tier, (game.clock * 0.7) % 1)
+            local pic = icon(selected.kind, selected.branch, selected.tier, (game.clock * 0.7) % 1)
             blit(pic, c.x + 11, c.y + c.h - (selected.kind == "mat" and 8 or 3))
             text(towerName(selected), c.x + 23, c.y + 3, "w")
             text("FULLY GROWN", c.x + 23, c.y + 11, "t")
@@ -1551,15 +1807,22 @@ local function drawHud()
         local d = D.ENEMIES[boss.kind]
         local w = min(170, vw - inset.l - inset.r - 20)
         local bx, by = floor((vw - w) / 2), inset.t + TOP + 3
+        -- A train's health is all of its segments'.
+        local hp, top = boss.hp, boss.maxHp
+        if boss.train then
+            hp, top = 0, boss.train.max
+            for _, e in ipairs(game.enemies) do if e.train == boss.train and not e.dead then hp = hp + e.hp end end
+        end
         box(bx, by, w, 4, "u", "o")
         color("r")
-        love.graphics.rectangle("fill", bx, by, floor(w * max(0, boss.hp / boss.maxHp)), 4)
+        love.graphics.rectangle("fill", bx, by, floor(w * max(0, hp / top)), 4)
         if boss.ballHp and boss.ballHp > 0 then
             box(bx, by + 6, w, 2, "u", "o")
             color("t")
             love.graphics.rectangle("fill", bx, by + 6, floor(w * boss.ballHp / boss.ballMax), 2)
         end
-        text(d.name, floor((vw - Font.width(d.name)) / 2), by + (boss.ballHp and boss.ballHp > 0 and 11 or 7), "w")
+        local name = d.name .. (boss.under and " (UNDER WATER)" or "")
+        text(name, floor((vw - Font.width(name)) / 2), by + (boss.ballHp and boss.ballHp > 0 and 11 or 7), "w")
     end
     if game.bossIntro then
         local d = D.ENEMIES[game.bossIntro.kind]
@@ -1613,19 +1876,71 @@ local function drawHud()
     end
 
     if game.phase == "won" then
-        centred("THE SPROUT LIVES", floor(vh / 2) - 24, "g")
+        local last = level == D.LEVELS[#D.LEVELS]
+        centred(level.name .. (game.challenge and " (CHALLENGE)" or "") .. ": THE SPROUT LIVES", floor(vh / 2) - 24, "g")
         centred("KILLS " .. game.stats.kills .. "   BOSSES " .. game.stats.bosses .. "   DRUNK " .. floor(game.stats.drunk) .. "   CUTS " .. game.stats.cuts, floor(vh / 2) - 12, "w")
-        centred(say("R TO PLAY AGAIN", "TAP TO PLAY AGAIN"), floor(vh / 2), "l")
+        centred(say((last and "" or "N: NEXT LEVEL   ") .. "R: AGAIN   M: LEVELS", "TAP FOR THE LEVELS"), floor(vh / 2), "l")
+        if last and not game.challenge then centred("CHALLENGE MODE IS OPEN", floor(vh / 2) + 12, "r") end
     elseif game.phase == "lost" then
         centred("THE SPROUT HAS WILTED", floor(vh / 2) - 24, "r")
-        centred("YOU HELD " .. (game.wave - 1) .. " WAVES OF " .. #D.WAVES, floor(vh / 2) - 12, "w")
-        centred(say("R TO TRY AGAIN", "TAP TO TRY AGAIN"), floor(vh / 2), "l")
+        centred("YOU HELD " .. (game.wave - 1) .. " WAVES OF " .. #game.waves, floor(vh / 2) - 12, "w")
+        centred(say("R: TRY AGAIN   M: LEVELS", "TAP FOR THE LEVELS"), floor(vh / 2), "l")
     end
+end
+
+-- Words broken into lines `w` wide, from (x, y) down, seven pixels a line.
+local function wrap(s, x, y, w, k)
+    local line = ""
+    for word in s:gmatch("%S+") do
+        local try = line == "" and word or line .. " " .. word
+        if Font.width(try) > w then
+            text(line, x, y, k)
+            line, y = word, y + 7
+        else
+            line = try
+        end
+    end
+    text(line, x, y, k)
+    return y + 7
+end
+
+local function drawMenu()
+    color("o")
+    love.graphics.rectangle("fill", 0, 0, vw, vh)
+    local cards, switch = levelCards()
+    centred("UNDERFOOT", cards[1].y - 30, "g", "o")
+    centred("WHERE DOES THE SPROUT COME UP?", cards[1].y - 18, "t", "o")
+    for k, c in ipairs(cards) do
+        local l = D.LEVELS[k]
+        local open, on = levelOpen(k), hover.level == k
+        box(c.x, c.y, c.w, c.h, on and open and "n" or "u", won[l.id] and "g" or (open and (on and "l" or "c") or "k"))
+        text(k .. "  " .. l.name, c.x + 4, c.y + 4, open and "w" or "k")
+        if not open then
+            text("WIN " .. D.LEVELS[k - 1].name, c.x + 4, c.y + 14, "r")
+            text("TO OPEN IT", c.x + 4, c.y + 21, "r")
+        else
+            local y = wrap(l.idea, c.x + 4, c.y + 14, c.w - 8, "t")
+            wrap("BOSS: " .. l.boss, c.x + 4, y + 1, c.w - 8, "r")
+            local tag = won[l.id] and "WON" or (#l.waves .. " WAVES")
+            text(tag, c.x + c.w - Font.width(tag) - 4, c.y + c.h - 8, won[l.id] and "g" or "s")
+        end
+    end
+    if challengeOpen() then
+        local c = switch
+        box(c.x, c.y, c.w, c.h, hover.challenge and "n" or "u", challenge and "r" or "k")
+        local s = "CHALLENGE: " .. (challenge and "ON" or "OFF")
+        text(s, c.x + floor((c.w - Font.width(s)) / 2), c.y + 5, challenge and "r" or "w")
+        if hover.challenge or challenge then
+            centred("A LAST WAVE ON ANY LEVEL: THE BOMBARDIER BEETLE", c.y + c.h + 6, "r", "o")
+        end
+    end
+    local hintY = vh - inset.b - 12
+    centred(say("1 2 3 OR CLICK A LEVEL", "TAP A LEVEL") .. (challengeOpen() and say("   C: CHALLENGE", "") or ""), hintY, "s", "o")
 end
 
 local function drawLoading()
     love.graphics.clear(unpack(T.RGB[IDX.o]))
-    local s = "GROWING THE PATIO"
+    local s = "GROWING " .. level.name
     local w = 80
     local x, y = floor((vw - w) / 2), floor(vh / 2)
     text(s, floor((vw - Font.width(s)) / 2), y - 10, "t")
@@ -1643,6 +1958,8 @@ function love.draw()
     love.graphics.clear(0, 0, 0, 0)
     if painter then
         drawLoading()
+    elseif menu then
+        drawMenu()
     else
         drawHud()
         love.graphics.setCanvas(canvas)
@@ -1650,8 +1967,8 @@ function love.draw()
     end
     love.graphics.setCanvas()
     love.graphics.setColor(1, 1, 1)
-    if painter then
-        -- Nothing to stretch yet: the loading bar is the whole screen.
+    if painter or menu then
+        -- Nothing to stretch: the loading bar or the picker is the whole screen.
     elseif pinch and not pinch.done then
         -- Mid-pinch: the frame stretched about where the fingers started and
         -- moved to where they are (see love.touchpressed).

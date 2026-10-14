@@ -140,6 +140,11 @@ local R = {
     spider = ramp("t", "n", "u", "o"),
     slug = ramp("w", "t", "n", "u"),
     dung = ramp("t", "n", "u", "o"),
+    gleba = ramp("m", "d", "u", "o"),
+    honey = ramp("w", "t", "n", "u"),
+    centi = ramp("t", "r", "n", "u"),
+    wingtan = ramp("w", "t", "n", "u"),
+    bombard = ramp("w", "t", "r", "u"),
 }
 M.R = R
 
@@ -503,14 +508,151 @@ local function cordyceps(b, tier, idle, fire)
     return parts
 end
 
+-- Stinkhorn: a spongy white stalk out of an egg, its tip a slimy olive cap
+-- the flies come to. Wider Stench raises more of them, dripping; Panic turns
+-- it into a basket stinkhorn -- a red lattice ball -- and at Terror the
+-- lattice splits into arms.
+local function stinkhorn(b, tier, idle, fire)
+    local sway = 0.06 * breath(idle)
+    local q = fire / 2
+    local parts = {}
+    local function egg(x, z, s, id)
+        parts[#parts + 1] = { id = id, ramp = R.flesh, at = ell(x, 1.3 * s, z, 3.8 * s, 2 * s, 3.8 * s),
+            print = function(ux, uy, uz) if uy > 0.55 and abs(sin(atan2(uz, ux) * 5)) < 0.2 then return IDX.t end end }
+    end
+    if b == 2 then
+        -- The basket: a ball of red lattice, its holes dark.
+        local r = (tier == 1 and 5 or 5.6) * (1 + 0.04 * breath(idle) - 0.08 * q)
+        egg(0, 0, 1.15, 1)
+        parts[#parts + 1] = { id = 2, ramp = R.cord, at = ell(0, 2 + r * 0.9, 0, r, r * 0.9, r),
+            print = function(ux, uy, uz)
+                local a = (atan2(uz, ux) / TAU * 9 + uy * 0.8) % 1
+                local e = (uy * 2.4 + 3) % 1
+                if a > 0.2 and a < 0.8 and e > 0.22 and e < 0.78 then return IDX.o end
+            end }
+        if tier == 2 then
+            for k = 0, 4 do
+                local a = k / 5 * TAU + 0.3
+                local x, z = cos(a) * r * 0.8, sin(a) * r * 0.8
+                local curl = 0.8 * sin(idle / 4 * TAU + k)
+                parts[#parts + 1] = seg(x * 0.9, 2 + r * 0.6, z * 0.9, x * 1.8, 2.6, z * 1.8, 1.5, R.cord, 10 + k)
+                parts[#parts + 1] = seg(x * 1.8, 2.6, z * 1.8, x * 2.1, 6 + curl, z * 2.1, 1.1, R.cord, 10 + k)
+            end
+        end
+        return parts
+    end
+    local stalks = { { 0, 0, 13 } }
+    if b == 1 then
+        stalks = tier == 1 and { { 0, 0, 14 }, { 4.2, 1.8, 10 } } or { { 0, 0, 15 }, { 4.4, 2, 11 }, { -3.8, 2.6, 9.5 } }
+    end
+    for k, st in ipairs(stalks) do
+        local x, z, h = st[1], st[2], st[3] * (1 - 0.08 * q)
+        egg(x, z, 1 - (k - 1) * 0.15, k * 4)
+        local lean = A.mul(A.move(x, 0, z), A.rotZ(sway * (k % 2 == 0 and -1 or 1)), A.move(-x, 0, -z))
+        local stalk = seg(x, 1.5, z, x, h, z, 2.1, R.flesh, k * 4 + 1)
+        stalk.print = function(ux, uy, uz) if abs(sin(ux * 17) * sin(atan2(uz, uy) * 6)) > 0.75 then return IDX.t end end
+        stalk.at = A.mul(lean, stalk.at)
+        parts[#parts + 1] = stalk
+        parts[#parts + 1] = { id = k * 4 + 2, ramp = R.gleba, at = A.mul(lean, ell(x, h + 2, z, 2.7, 3.8, 2.7)),
+            print = function(ux, uy, uz)
+                if uy > 0.9 then return IDX.w end -- the pale tip
+                if abs(sin(atan2(uz, ux) * 6)) < 0.18 or abs(sin(uy * 9)) < 0.15 then return IDX.o end
+            end }
+        if b == 1 and tier == 2 then
+            -- Slime running off the cap.
+            local fall = ((idle + k) % 4) / 4
+            parts[#parts + 1] = { id = k * 4 + 3, ramp = R.gleba, at = A.mul(lean, ell(x + 2.4, h - 1 - fall * 6, z + 0.8, 0.6, 1, 0.6)) }
+        end
+    end
+    return parts
+end
+
+-- Ghost Lamp: the ghost fungus, fans of glowing caps on a stub. The glow
+-- breathes (`idle`). Longer Glow fans out more caps; Flare swells glowing
+-- sacs among them, about to burst.
+local function lamp(b, tier, idle, fire)
+    local caps = { { 0.4, 0.2, 0, 1 }, { 2.4, -1.6, 2.2, 0.8 }, { -2.2, 1.4, 4.2, 0.85 } }
+    if b == 1 then
+        caps[#caps + 1] = { 1.6, 2.6, 1.2, 0.75 }
+        if tier == 2 then caps[#caps + 1] = { -2.4, -2, 5.4, 0.9 }; caps[#caps + 1] = { 0.2, -3, 3.1, 0.7 } end
+    end
+    local pulse = idle % 2 == 0
+    local parts = { { id = 1, ramp = R.crumb, at = ell(0, 1.2, 0, 3.4, 1.6, 3.4) } }
+    for k, c in ipairs(caps) do
+        local x, z, a, s = c[1] * 1.2, c[2] * 1.2, c[3], c[4] * (b == 1 and 1.45 or 1.3)
+        local h = 4.6 + k % 3 * 2
+        parts[#parts + 1] = seg(x * 0.4, 1, z * 0.4, x, h, z, 0.7, R.flesh, 2)
+        -- A fan, tilted out from the middle, gills glowing underneath.
+        parts[#parts + 1] = { id = 4 + k, ramp = R.glowcap,
+            at = A.mul(A.move(x, h + 0.6, z), A.rotY(-a), A.rotZ(0.35), A.scale(4 * s, 1.2 * s, 3.4 * s)),
+            print = function(ux, uy, uz, lev)
+                if uy < -0.1 then return abs(sin(atan2(uz, ux) * 9)) < 0.3 and IDX.c or IDX.l end
+                if uy > 0.4 and (pulse or fire > 0) and ux * ux + uz * uz < 0.25 then return IDX.w end
+            end }
+    end
+    if b == 2 then
+        local n = tier == 1 and 2 or 4
+        for k = 1, n do
+            local a = k * 2.3 + 0.5
+            local r = (1.5 + 0.2 * (idle % 2)) * (tier == 2 and 1.2 or 1)
+            parts[#parts + 1] = { id = 20 + k, ramp = R.glowcap, at = ell(cos(a) * 3, 2 + r + (k % 2) * 3, sin(a) * 3, r, r, r),
+                print = function(ux, uy) if uy > 0.4 then return IDX.w end end }
+        end
+    end
+    return parts
+end
+
+-- The Humongous Fungus: honey mushrooms, a crowd of scaly caps on ringed
+-- stems over a tangle of black bootlace cords running out into the soil.
+-- Spreading raises more of them; Honey drips amber off every cap.
+local HONEY = { { 0, 0, 15, 5 }, { 4.6, 2, 11, 4 }, { -4.2, 2.6, 12, 4.2 }, { 2.4, -4.4, 10, 3.6 },
+    { -3, -4, 9, 3.4 }, { 6.4, -2.4, 7.5, 3 }, { -6.6, -1, 8, 3.2 }, { 1.2, 5.6, 8.5, 3.2 },
+    { -1.6, 7, 6.5, 2.8 }, { 7, 4.4, 6, 2.6 }, { -7.4, 4.2, 6.4, 2.6 }, { 4, -7.2, 6.2, 2.6 }, { -5.6, -6.6, 5.5, 2.4 } }
+local function giant(b, tier, idle, fire)
+    local n = 7
+    if b == 1 then n = tier == 1 and 10 or 13 end
+    if b == 2 then n = tier == 1 and 8 or 9 end
+    local q = fire / 2
+    local parts = { { id = 1, ramp = R.dung, at = ell(0, 0.3, 0, 9.5, 1.3, 9),
+        print = function(ux, uy, uz) if abs(sin(atan2(uz, ux) * 9 + sqrt(ux * ux + uz * uz) * 6)) < 0.25 then return IDX.o end end } }
+    -- Bootlaces: the rhizomorphs it really is, mostly underground.
+    for k = 0, 7 do
+        local a = k / 8 * TAU + 0.2
+        local r = 12 + (k % 3) * 2.5 + (b == 1 and tier * 2 or 0)
+        parts[#parts + 1] = seg(cos(a) * 7, 0.6, sin(a) * 7, cos(a + 0.25) * r, 0.2, sin(a + 0.25) * r, 0.55, R.ink, 2)
+    end
+    for k = 1, n do
+        local c = HONEY[k]
+        local x, z, h, r = c[1] * 1.15, c[2] * 1.15, c[3] * 1.2 * (1 - 0.06 * q), c[4] * (b == 2 and 1.08 or 1)
+        local sw = 0.04 * sin(idle / 4 * TAU + k)
+        local lean = A.mul(A.rotZ(-x * 0.012 + sw), A.rotX(z * 0.012))
+        local stem = seg(x * 0.6, 0.5, z * 0.6, x, h, z, 0.9 + r * 0.12, R.flesh, 3)
+        stem.at = A.mul(lean, stem.at)
+        parts[#parts + 1] = stem
+        parts[#parts + 1] = { id = 4, ramp = R.flesh, at = A.mul(lean, ell(x, h * 0.72, z, 1.5 + r * 0.12, 0.45, 1.5 + r * 0.12)) } -- the ring
+        parts[#parts + 1] = { id = 10 + k, ramp = R.honey, at = A.mul(lean, ell(x, h + r * 0.25, z, r * 1.1, r * 0.32, r * 1.1)),
+            print = function(ux, uy, uz, lev)
+                if uy > 0.85 then return IDX.n end -- the dark boss in the middle
+                if lev >= 2 and spotted(0.96, IDX.u)(ux, uy, uz, lev) then return IDX.u end
+                if uy < -0.2 then return IDX.w end
+            end }
+        if b == 2 then
+            local fall = ((idle + k) % 4) / 4
+            parts[#parts + 1] = { id = 40 + k, ramp = R.amber, at = A.mul(lean, ell(x + r * 0.7, h - fall * h * 0.6, z, 0.6, 0.9, 0.6)) }
+        end
+    end
+    return parts
+end
+
 local TOWER = { puffer = puffer, needle = needle, mane = mane, relay = relay, mat = mat, inky = inky,
-    shelf = shelf, mortar = mortar, cordyceps = cordyceps }
+    shelf = shelf, mortar = mortar, cordyceps = cordyceps, stink = stinkhorn, lamp = lamp, giant = giant }
 
 -- How many steps each animation number has, per species: some keep still.
 local STEPS = {
     puffer = { idle = 4, fire = 3 }, needle = { idle = 4, fire = 3 }, mane = { idle = 4, fire = 2 },
     relay = { idle = 4, fire = 1 }, mat = { idle = 3, fire = 1 }, inky = { idle = 4, fire = 2 },
     shelf = { idle = 1, fire = 1 }, mortar = { idle = 4, fire = 3 }, cordyceps = { idle = 4, fire = 3 },
+    stink = { idle = 4, fire = 3 }, lamp = { idle = 4, fire = 2 }, giant = { idle = 4, fire = 3 },
 }
 
 -- A fruiting body by look. `idle`, `fire` and `grow` are 0..1; each is cut to
@@ -886,6 +1028,166 @@ function M.ball(h, roll, cracked)
     end)
 end
 
+-- A night moth: a furred body on two pairs of broad dusty wings with eye
+-- spots, feathered feelers. Its pivot is its body: it flies. `wing` 0/1.
+local function mothParts(wing)
+    local up = wing == 0 and 0.55 or -0.3
+    local parts = {
+        { id = 1, ramp = R.crumb, at = ell(-0.6, 0, 0, 2.4, 1.1, 1.1),
+            print = function(ux) if abs((ux + 1) % 0.4 - 0.2) < 0.05 then return IDX.n end end },
+        { id = 2, ramp = R.crumb, at = ell(1.7, 0.2, 0, 1.0, 0.95, 0.95) },
+    }
+    for _, side in ipairs({ -1, 1 }) do
+        for w = 0, 1 do
+            local wl, ww = w == 0 and 3.2 or 2.4, w == 0 and 3.2 or 2.4
+            parts[#parts + 1] = { id = 3 + w, ramp = R.wingtan,
+                at = A.mul(A.move(0.6 - w * 1.6, 0.6, side * 0.6), A.rotX(side * up), A.rotY(side * (w == 0 and -0.35 or 0.4)),
+                    A.move(0, 0, side * ww), A.scale(wl, 0.15, ww)),
+                print = function(ux, uy, uz)
+                    local r = (ux - 0.1) ^ 2 + (uz - side * 0.2) ^ 2
+                    if r < 0.05 then return IDX.o end            -- the eye spot
+                    if r < 0.11 then return IDX.w end
+                    if abs(ux * 0.7 + abs(uz) * 0.3 - 0.45) < 0.06 then return IDX.u end
+                end }
+        end
+        parts[#parts + 1] = seg(2.4, 0.6, side * 0.3, 3.6, 2.4, side * 1.4, 0.25, R.crumb, 5)
+    end
+    return parts
+end
+
+function M.moth(h, wing)
+    local hs = step(h, 8)
+    return kept("moth" .. hs .. wing, function() return place(mothParts(wing), heading(hs / 8 * TAU), A.scale(1.8, 1.8, 1.8)) end)
+end
+
+-- The Giant Water Bug: a flat brown shield of a body, a short stabbing beak,
+-- forelegs like folded pincers and oar-flat hind legs. Grabbing, it reaches
+-- the forelegs out.
+local function waterbugParts(leg, grab)
+    local parts = {
+        { id = 1, ramp = R.shell, at = ell(-1.4, 2.3, 0, 6.2, 1.6, 3.6),
+            print = function(ux, uy, uz)
+                if uy > 0 and abs(uz) < 0.04 and ux < 0.4 then return IDX.o end -- where the wings meet
+                if uy > 0.2 and ux < -0.2 and abs(abs(uz) - (0.2 - ux * 0.5)) < 0.04 then return IDX.u end
+            end },
+        { id = 2, ramp = R.shell, at = ell(3.6, 2.4, 0, 2.2, 1.4, 3.0),
+            print = function(ux, uy, uz) if ux > 0.5 and uy > -0.3 and abs(uz) > 0.55 then return IDX.o end end }, -- eyes
+        { id = 3, ramp = R.shell, at = ell(5.6, 2.1, 0, 1.4, 0.9, 1.3) },
+    }
+    parts[#parts + 1] = seg(6.6, 2, 0, 8.2, 1, 0, 0.35, R.jaw, 4) -- the beak
+    for _, side in ipairs({ -1, 1 }) do
+        -- Forelegs: a thick femur, a tibia folded back along it, a claw.
+        local reach = grab and 4 or 0
+        local kx, ky, kz = 7 + reach, 3.6 + (grab and 0.6 or 0), side * 3
+        parts[#parts + 1] = seg(4.4, 2, side * 1.6, kx, ky, kz, 0.85, R.shell, 5)
+        local tx, tz = grab and (kx + 2.6) or (kx - 3.2), side * (grab and 1.8 or 3.6)
+        parts[#parts + 1] = seg(kx, ky, kz, tx, 1.4, tz, 0.55, R.shell, 5)
+        parts[#parts + 1] = seg(tx, 1.4, tz, tx + 0.8, 0.8, tz - side * 0.8, 0.3, R.jaw, 5)
+        -- Middle legs walk; the hind legs are oars.
+        local fwd = (leg + (side > 0 and 1 or 0)) % 2 == 0 and 1.2 or -1.2
+        limb(parts, 0.6, 2, side * 2.6, 0.6 + fwd, side * 7, 1.6, 0.45, R.shell, 6)
+        parts[#parts + 1] = seg(-2.6, 2, side * 2.8, -6 - fwd, 1.8, side * 7.4, 0.5, R.shell, 7, 0.25)
+        parts[#parts + 1] = seg(-6 - fwd, 1.8, side * 7.4, -10 - fwd, 1.2, side * 6, 0.9, R.shell, 7, 0.22)
+    end
+    return parts
+end
+
+function M.waterbug(h, leg, grab)
+    local hs = step(h, 16)
+    return kept("wbug" .. hs .. leg .. (grab and "g" or ""), function()
+        return place(waterbugParts(leg, grab), heading(hs / 16 * TAU), A.scale(1.9, 1.9, 1.9))
+    end)
+end
+
+-- The Giant Centipede, made of parts that are each an enemy: a head with
+-- antennae and poison claws, and segments, each a banded plate on a pair of
+-- long legs. `leg` 0/1 swings them.
+local function centiHeadParts(leg)
+    local parts = {
+        { id = 1, ramp = R.centi, at = ell(0, 2, 0, 3.4, 1.5, 3.2),
+            print = function(ux, uy, uz)
+                if ux > 0.4 and uy > -0.2 and abs(uz) > 0.55 and abs(uz) < 0.8 then return IDX.o end
+                if uy > 0.5 and abs(uz) < 0.1 then return IDX.n end
+            end },
+    }
+    for _, side in ipairs({ -1, 1 }) do
+        -- Poison claws, curled in under the head.
+        parts[#parts + 1] = seg(2.4, 1.4, side * 1.8, 4.4, 1, side * 2, 0.6, R.black, 2)
+        parts[#parts + 1] = seg(4.4, 1, side * 2, 5.2, 0.9, side * 0.4, 0.4, R.black, 2)
+        -- Antennae, long and waving.
+        local wave = (leg == 0 and 0.6 or -0.6) * side
+        parts[#parts + 1] = seg(2.6, 2.6, side * 1, 6, 4.2, side * (3 + wave), 0.3, R.centi, 3)
+        parts[#parts + 1] = seg(6, 4.2, side * (3 + wave), 9.6, 3.6, side * (4.8 + wave), 0.22, R.centi, 3)
+        limb(parts, -1.2, 1.6, side * 2.4, -0.6 + (leg == 0 and 1 or -1) * side, side * 6.4, 1.6, 0.4, R.jaw, 4)
+    end
+    return parts
+end
+
+local function centiSegParts(leg)
+    local parts = {
+        { id = 1, ramp = R.centi, at = ell(0, 2, 0, 3.6, 1.5, 3.3),
+            print = function(ux, uy, uz)
+                if ux < -0.6 then return IDX.u end                     -- the dark band at the back
+                if uy > 0.5 and abs(uz) < 0.08 then return IDX.n end
+                if uy > 0 and abs(abs(uz) - 0.6) < 0.05 then return IDX.n end
+            end },
+    }
+    for _, side in ipairs({ -1, 1 }) do
+        local fwd = (leg + (side > 0 and 1 or 0)) % 2 == 0 and 1.5 or -1.5
+        limb(parts, 0, 1.6, side * 2.6, fwd, side * 7, 2.2, 0.38, R.jaw, 2)
+    end
+    return parts
+end
+
+function M.centipede(h, leg)
+    local hs = step(h, 16)
+    return kept("chead" .. hs .. leg, function() return place(centiHeadParts(leg), heading(hs / 16 * TAU), A.scale(1.7, 1.7, 1.7)) end)
+end
+
+function M.centseg(h, leg)
+    local hs = step(h, 16)
+    return kept("cseg" .. hs .. leg, function() return place(centiSegParts(leg), heading(hs / 16 * TAU), A.scale(1.6, 1.6, 1.6)) end)
+end
+
+-- The Bombardier Beetle: a rust head and thorax, black wing cases banded in
+-- tan, long tan legs. Spraying, it lifts the wing cases and curls the tip of
+-- its abdomen out from under them, behind it.
+local function bombardierParts(leg, spray)
+    local lift = spray and 0.3 or 0
+    local parts = {
+        { id = 1, ramp = R.black, at = A.mul(A.move(-2, 3.4, 0), A.rotZ(-lift), A.scale(4.6, 2.4, 3.4)),
+            print = function(ux, uy, uz)
+                if uy > 0 and abs(uz) < 0.04 then return IDX.o end
+                if uy > 0.1 and abs(ux + 0.15) < 0.12 then return IDX.t end  -- the band across the wing cases
+                if uy > 0.3 and abs((abs(uz) * 5) % 1 - 0.5) < 0.06 then return IDX.u end
+            end },
+        { id = 2, ramp = R.bombard, at = ell(2.8, 3.2, 0, 1.8, 1.7, 2.2) },
+        { id = 3, ramp = R.bombard, at = ell(4.9, 2.7, 0, 1.4, 1.2, 1.6),
+            print = function(ux, uy, uz) if ux > 0.4 and abs(uz) > 0.6 and uy > -0.2 then return IDX.o end end },
+    }
+    if spray then
+        parts[#parts + 1] = seg(-5.6, 2.6, 0, -7.6, 4.4, 0, 0.9, R.bombard, 4)
+    end
+    for _, side in ipairs({ -1, 1 }) do
+        parts[#parts + 1] = seg(5.8, 3, side * 0.6, 7.8, 4.6, side * 1.6, 0.22, R.jaw, 5)
+        parts[#parts + 1] = seg(7.8, 4.6, side * 1.6, 9.8, 4, side * 2.6, 0.2, R.jaw, 5)
+    end
+    for n, x in ipairs({ 2.8, 0.6, -1.8 }) do
+        for _, side in ipairs({ -1, 1 }) do
+            local fwd = ((n + (side > 0 and 1 or 0) + leg) % 2 == 0) and 1.2 or -1.2
+            limb(parts, x, 2.6, side * 1.8, x + (n - 2) * 2.2 + fwd, side * 5.6, 1.8, 0.4, R.jaw, 6)
+        end
+    end
+    return parts
+end
+
+function M.bombardier(h, leg, spray)
+    local hs = step(h, 16)
+    return kept("bomb" .. hs .. leg .. (spray and "s" or ""), function()
+        return place(bombardierParts(leg, spray), heading(hs / 16 * TAU), A.scale(2.3, 2.3, 2.3))
+    end)
+end
+
 --- what is left -----------------------------------------------------------------------
 
 local function fruit(parts, x, y)
@@ -930,6 +1232,21 @@ function M.corpse(kind, h, fruited)
         elseif kind == "dung" then
             parts = flip(dungParts(0), 7, 1.7)
             top = 10
+        elseif kind == "moth" then
+            parts = place(mothParts(1), A.scale(1.4, 1.4, 1.4), A.move(0, 1, 0), A.rotZ(0.15))
+            top = 1
+        elseif kind == "waterbug" then
+            parts = flip(waterbugParts(0), 5.5, 1.9)
+            top = 8
+        elseif kind == "centipede" then
+            parts = flip(centiHeadParts(0), 4.4, 1.7)
+            top = 5
+        elseif kind == "centseg" then
+            parts = flip(centiSegParts(0), 4.4, 1.6)
+            top = 5
+        elseif kind == "bombardier" then
+            parts = flip(bombardierParts(0), 9, 2.3)
+            top = 11
         elseif kind == "ball" then
             -- A broken ball is a heap.
             parts = {}
@@ -951,7 +1268,8 @@ end
 -- Every look of every species, for the model sheet (love . --sheet).
 function M.sheetRows()
     local rows = {}
-    for _, kind in ipairs({ "puffer", "needle", "mat", "mane", "relay", "inky", "shelf", "mortar", "cordyceps" }) do
+    for _, kind in ipairs({ "puffer", "needle", "mat", "mane", "relay", "inky", "shelf", "mortar", "cordyceps",
+        "stink", "lamp", "giant" }) do
         local row = { kind }
         row[#row + 1] = M.tower(kind)
         for b = 1, 2 do

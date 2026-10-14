@@ -29,31 +29,79 @@ local BACK = 2000
 local SLAB = 3 -- how far the patio stands above the soil in the crack
 World.TILE = TILE
 
+-- Each map is one level's board, one character per tile:
+--
 --   #  patio slab (raised)          .  soil, moss in it
---   =  the trail the enemies walk   E  where they come in
+--   =  the trail the enemies walk   E  where they come in (counted from the top)
+--   ~  the trail, flooded           o  open water
+--   "  mown grass                   Y  a tuft of long grass   r  reeds
 --   H  the sprout: the network's Heart
 --   pockets, where fruiting bodies grow:
---   p  a pebble (poor)   L  a fallen leaf, C  a crumb (normal)   B  a dead beetle (rich)
-local MAP = {
-    "################",
-    "E=====#.L###p###",
-    "#..C.=##..######",
-    "#B...=====..C.##",
-    "##.p.#...=.#..##",
-    "#L..##.B.====H.#",
-    "##..#....=C.L..#",
-    "#p..#.C..=.#...#",
-    "E=========.p#..#",
-    "#B..##..L...C..#",
-    "################",
+--   p  a pebble (poor)   L  a fallen leaf, C  a crumb, P  a lily pad, S  a stone (normal)
+--   B  a dead beetle (rich)
+--
+-- A stone is high ground: the Giant Water Bug cannot reach what grows on it.
+-- A leaf and a lily pad lie low: rain washes the spores off them.
+local MAPS = {
+    -- The Crack: a sidewalk crack across an abandoned patio.
+    crack = {
+        "################",
+        "E=====#.L###p###",
+        "#..C.=##..######",
+        "#B...=====..C.##",
+        "##.p.#...=.#..##",
+        "#L..##.B.====H.#",
+        "##..#....=C.L..#",
+        "#p..#.C..=.#...#",
+        "E=========.p#..#",
+        "#B..##..L...C..#",
+        "################",
+    },
+    -- The Pond Edge: the two trails meet on the west shore and wade one
+    -- flooded lane across the pond.
+    pond = {
+        "rrrrrrrrrrrrrrrr",
+        "E===.L..rr.C..rr",
+        "rC.=..ooooooo..r",
+        "r..=.ooPoooooS.r",
+        "rS.=oooooPoooo.r",
+        "r..=~~~~~~~~~=Lr",
+        "rB.=ooooooPoo=.r",
+        "r..=.ooPooo.C=Hr",
+        "rp.=..oooo..S..r",
+        "E===.L....B..L.r",
+        "rrrrrrrrrrrrrrrr",
+    },
+    -- The Lawn: open, mown grass, a dirt path and three ways in.
+    lawn = {
+        "YYYYYYYYYYYYYYYYYY",
+        'E====="L""C""p"""Y',
+        'Y"B""="""""YY""L"Y',
+        'Y"p""=====""C""""Y',
+        'YL"""""""="""B"""Y',
+        'Y""C"""""======"YY',
+        'E======p"""L""=H"Y',
+        'Y"""""=""""===="LY',
+        'YB""L"="C""=""C""Y',
+        'Y""p""======"Y"""Y',
+        'E======"""L"""p""Y',
+        "YYYYYYYYYYYYYYYYYY",
+    },
 }
+World.MAPS = MAPS
 
 local POCKET = {
     p = { kind = "pebble", quality = "poor" },
-    L = { kind = "leaf", quality = "normal" },
+    L = { kind = "leaf", quality = "normal", low = true },
     C = { kind = "crumb", quality = "normal" },
+    P = { kind = "lily", quality = "normal", low = true, wet = true },
+    S = { kind = "stone", quality = "normal", high = true },
     B = { kind = "beetle", quality = "rich" },
 }
+-- Tiles that are water on top, and tiles an enemy can walk.
+local WET = { ["~"] = true, o = true, P = true }
+local WALK = { ["="] = true, E = true, H = true, ["~"] = true }
+World.WET, World.WALK = WET, WALK
 World.QUALITY = {
     poor = { power = 0.75, income = 0 },
     normal = { power = 1, income = 0 },
@@ -131,9 +179,11 @@ end
 local MAT = {}
 local cellAt -- set by World.new: the map character under (x, z)
 
+local water
 MAT.soil = { id = 2, ramp = RAMP.soil, print = function(s, x, y, z, nx, ny, nz, lev)
     if ny > 0.9 then
         local ch = cellAt(x, z)
+        if WET[ch] then return water(x, z, ch) end
         local g = grain(x, z)
         if ch == "=" or ch == "E" then
             -- The trail: trodden flat and pale, with grit.
@@ -141,6 +191,14 @@ MAT.soil = { id = 2, ramp = RAMP.soil, print = function(s, x, y, z, nx, ny, nz, 
             if g < 0.04 then return IDX.w end
             return IDX.t
         end
+        if ch == '"' or ch == "Y" then
+            -- Mown grass, in the stripes the mower left.
+            local stripe = floor((x + z) / 40) % 2 == 0
+            if g > 0.9 then return IDX.d end
+            if g < 0.05 then return IDX.t end
+            return stripe and IDX.m or ((x * 3 + z) % 5 < 1 and IDX.m or IDX.d)
+        end
+        if ch == "r" and grain(floor(x / 3), floor(z / 3), 12) > 0.6 then return IDX.u end -- mud among the reeds
         -- Open soil: brown, with moss creeping in from the slabs' feet.
         local m = grain(floor(x / 3), floor(z / 3), 1)
         if m > 0.9 then return g > 0.4 and IDX.m or IDX.d end
@@ -187,10 +245,43 @@ MAT.mound = { id = 9, ramp = RAMP.soil, print = function(s, x, y, z)
     if g < 0.12 then return IDX.t end
 end }
 
+-- Water, printed on the soil where the map says: murky green, ripples
+-- running across it, a glint or two. On the flooded trail the trodden mud
+-- shows through, and at the shore the mud does too.
+water = function(x, z, ch)
+    local g = grain(x, z, 13)
+    local ripple = math.sin(x * 0.42 + z * 0.23) + math.sin(z * 0.37 - x * 0.19)
+    if g > 0.985 then return IDX.w end
+    if abs(ripple - 0.9) < 0.07 then return IDX.s end
+    if abs(ripple + 0.6) < 0.05 then return IDX.k end
+    local fx, fz = x % TILE, z % TILE
+    local edge = min(fx, fz, TILE - fx, TILE - fz)
+    local function dry(dx, dz) return not WET[cellAt(x + dx, z + dz)] end
+    if edge < 2.2 and grain(x * 2, z * 2, 16) > 0.4 and ((fx < 2.2 and dry(-3, 0)) or (fz < 2.2 and dry(0, -3))
+        or (fx > TILE - 2.2 and dry(3, 0)) or (fz > TILE - 2.2 and dry(0, 3))) then return IDX.u end
+    if ch == "~" then return (floor(x / 3) + floor(z / 3)) % 3 == 0 and IDX.u or (g > 0.6 and IDX.k or IDX.d) end
+    return IDX.d
+end
+MAT.lily = { id = 11, ramp = RAMP.leaf, print = function(s, x, y, z, nx, ny, nz, lev)
+    local a = math.atan2(s.uz or 0, s.ux or 1)
+    if abs(a) < 0.18 then return IDX.d end                          -- the notch
+    if abs(math.sin(a * 7)) < 0.08 and lev <= 3 then return IDX.d end -- veins
+end }
+MAT.stone = { id = 12, ramp = RAMP.stone, print = function(s, x, y, z, nx, ny, nz, lev)
+    local g = grain(x * 2, z * 2 + y, 14)
+    if g > 0.93 then return IDX.k end
+    if ny > 0.6 and g < 0.06 then return IDX.m end                  -- lichen
+end }
+MAT.reed = { id = 13, ramp = T.ramp("t", "m", "m", "d") }
+MAT.cattail = { id = 14, ramp = T.ramp("t", "n", "u", "o") }
+MAT.blade = { id = 15, ramp = RAMP.leaf }
+
 --- building it -------------------------------------------------------------------
 
-function World.new()
+function World.new(id)
     local self = setmetatable({}, World)
+    local MAP = assert(MAPS[id or "crack"], "no map " .. tostring(id))
+    self.id = id or "crack"
     self.solids, self.pockets = {}, {}
     self.rows, self.cols = #MAP, #MAP[1]
     for r, row in ipairs(MAP) do assert(#row == self.cols, "map row " .. r .. " is the wrong length") end
@@ -202,7 +293,8 @@ function World.new()
         return row:sub(c + 1, c + 1)
     end
     self.cell = cell
-    cellAt = function(x, z) return cell(floor(x / TILE), floor(z / TILE)) end
+    self.cellAt = function(x, z) return cell(floor(x / TILE), floor(z / TILE)) end
+    cellAt = self.cellAt
 
     local nextPart = 10
     local function add(kind, mat, s)
@@ -248,6 +340,11 @@ function World.new()
         end
     end
 
+    -- A blade of grass or a reed: a thin leaf from the ground, leaning.
+    local function blade(x, z, h, w, lean, turn, mat)
+        add("ell", mat or MAT.blade, { at = A.mul(A.move(x, 0, z), A.rotY(turn), A.rotZ(lean), A.move(0, h, 0), A.scale(w, h, w * 0.6)) })
+    end
+
     -- Pockets, the Heart, and the trail's ends.
     for r = 0, self.rows - 1 do
         for c = 0, self.cols - 1 do
@@ -265,6 +362,14 @@ function World.new()
                     add("ell", MAT.crumb, { at = ell(cx, 0.5, cz, 4.5, 2.6, 3.6, turn) })
                     add("ell", MAT.crumb, { at = ell(cx + 2.5, 0.2, cz + 2, 2.4, 1.6, 2.2, turn) })
                     top = 2.8
+                elseif pk.kind == "lily" then
+                    add("ell", MAT.lily, { at = ell(cx, 0.1, cz, 7, 0.5, 6.4, turn) })
+                    top = 0.7
+                elseif pk.kind == "stone" then
+                    -- High ground: a boulder, and a smaller one leant on it.
+                    add("ell", MAT.stone, { at = ell(cx, 1.5, cz, 6.6, 5.6, 5.8, turn) })
+                    add("ell", MAT.stone, { at = A.mul(A.move(cx, 0, cz), turn, T.ell(4.6, 0.6, 3, 3, 2.4, 2.6)) })
+                    top = 6.6
                 elseif pk.kind == "beetle" then
                     -- On its back: the reason it is rich.
                     add("ell", MAT.beetle, { at = ell(cx, 0.6, cz, 6, 2.6, 4.2, turn) })
@@ -281,12 +386,33 @@ function World.new()
                     top = 2.3
                 end
                 self.pockets[#self.pockets + 1] = { x = cx, z = cz, y = top, c = c, r = r,
-                    kind = pk.kind, quality = pk.quality }
+                    kind = pk.kind, quality = pk.quality, low = pk.low, high = pk.high, wet = pk.wet }
             elseif ch == "H" then
                 add("ell", MAT.mound, { at = ell(cx, -0.5, cz, 7, 3, 7) })
                 self.heart = { x = cx, z = cz, y = 2.2, c = c, r = r }
             elseif ch == "E" then
                 self.entrances[#self.entrances + 1] = { c = c, r = r, x = cx, z = cz }
+            elseif ch == "r" then
+                -- Reeds, and a cattail or two among them.
+                for k = 1, 3 do
+                    local x, z = cx + (grain(c, r, 20 + k) - 0.5) * 12, cz + (grain(c, r, 30 + k) - 0.5) * 12
+                    local h = 5 + grain(c, r, 40 + k) * 5
+                    blade(x, z, h, 1.25, (grain(c, r, 50 + k) - 0.5) * 0.3, k, MAT.reed)
+                    if k == 1 and grain(c, r, 70) > 0.4 then add("ell", MAT.cattail, { at = ell(x, h * 2 + 1, z, 1.5, 2.8, 1.5) }) end
+                end
+            elseif ch == "Y" then
+                -- A tuft of the grass the mower missed.
+                for k = 1, 7 do
+                    local x, z = cx + (grain(c, r, 20 + k) - 0.5) * 12, cz + (grain(c, r, 30 + k) - 0.5) * 12
+                    blade(x, z, 3.5 + grain(c, r, 40 + k) * 4, 0.8, (grain(c, r, 50 + k) - 0.5) * 0.8, k * 0.9)
+                end
+            elseif ch == '"' then
+                for k = 1, 2 do
+                    if grain(c, r, 60 + k) > 0.45 then
+                        local x, z = cx + (grain(c, r, 20 + k) - 0.5) * 13, cz + (grain(c, r, 30 + k) - 0.5) * 13
+                        blade(x, z, 1.4 + grain(c, r, 40 + k) * 1.2, 0.35, (grain(c, r, 50 + k) - 0.5) * 0.9, k * 1.7)
+                    end
+                end
             elseif ch == "." and grain(c, r, 9) > 0.72 then
                 -- Gravel: not a pocket, just something to look at.
                 add("ell", MAT.pebble, { at = ell(cx + (seed - 4), 0, cz + (seed % 3 - 1) * 3,
@@ -317,10 +443,7 @@ end
 function World:route()
     local dist = {}
     local function key(c, r) return r * self.cols + c end
-    local function walkable(c, r)
-        local ch = self.cell(c, r)
-        return ch == "=" or ch == "E" or ch == "H"
-    end
+    local function walkable(c, r) return WALK[self.cell(c, r)] end
     local h = self.heart
     local queue, head = { { h.c, h.r } }, 1
     dist[key(h.c, h.r)] = 0
@@ -388,6 +511,7 @@ end
 -- Paints the board. A coroutine body: it yields its progress (0..1) every few
 -- rows so the load screen can say how far along it is.
 function World:paint()
+    cellAt = self.cellAt -- the materials' prints ask the board being painted
     local w, h = self.w, self.h
     local b = T.buffer(w, h)
     b.open = true
@@ -450,14 +574,67 @@ function World:paint()
     self.image:setFilter("nearest", "nearest")
 end
 
+-- The board under a weather: the same picture, remapped a pixel at a time
+-- off what the paint kept (the key, whether it faces up, where in the room it
+-- is). Night is everything a step darker; frost rimes what faces up; drought
+-- dries the moss to straw; rain darkens the trodden trail and lays puddles on
+-- it. Made the first time it is wanted, then kept.
+function World:variant(kind)
+    self.variants = self.variants or {}
+    if self.variants[kind] then return self.variants[kind] end
+    cellAt = self.cellAt
+    local w, h = self.w, self.h
+    local data = love.image.newImageData(w, h)
+    local bg = T.RGB[IDX.o]
+    local DARK = T.DARKER
+    local DRY = {}
+    for k = 1, #T.KEYS do DRY[k] = k end
+    DRY[IDX.m], DRY[IDX.d] = IDX.t, IDX.n
+    for pj = 0, h - 1 do
+        for pi = 0, w - 1 do
+            local n = pj * w + pi
+            local k = self.key[n]
+            if k ~= 0 then
+                local x, z = self.wx[n], self.wz[n]
+                if kind == "night" then
+                    k = DARK[k]
+                elseif kind == "frost" then
+                    if self.up[n] == 1 and k ~= IDX.o and grain(x * 1.7, z * 1.7, 15) > 0.72 then k = IDX.w end
+                elseif kind == "drought" then
+                    k = DRY[k]
+                    if self.up[n] == 1 and k ~= IDX.o and abs(math.sin(x * 0.31 + math.sin(z * 0.2) * 2)) < 0.05 then k = IDX.u end
+                elseif kind == "rain" then
+                    local ch = cellAt(x, z)
+                    if self.up[n] == 1 and (ch == "=" or ch == "E") then
+                        local puddle = math.sin(x * 0.21 + z * 0.13) + math.sin(z * 0.27 - x * 0.09) > 1.1
+                        k = puddle and ((pi + pj) % 3 == 0 and IDX.w or IDX.s) or DARK[k]
+                    elseif self.up[n] == 1 and k == IDX.s then
+                        k = IDX.k
+                    end
+                end
+            end
+            local c = k ~= 0 and T.RGB[k] or bg
+            data:setPixel(pi, pj, c[1], c[2], c[3], 1)
+        end
+    end
+    local img = love.graphics.newImage(data)
+    img:setFilter("nearest", "nearest")
+    self.variants[kind] = img
+    return img
+end
+
 --- standing on it ----------------------------------------------------------------
 
 -- The height of the ground at (x, z): the patio or the soil in the crack.
 function World:groundAt(x, z)
-    local ch = cellAt(x, z)
+    local ch = self.cellAt(x, z)
     if ch == "#" then return SLAB end
     return 0
 end
+
+-- Is (x, z) on water? `flooded`: on the trail where it is flooded.
+function World:wetAt(x, z) return WET[self.cellAt(x, z)] or false end
+function World:floodedAt(x, z) return self.cellAt(x, z) == "~" end
 
 -- Screen pixel (relative to the board's image) of a room point, and its depth.
 function World:toImage(x, y, z)
