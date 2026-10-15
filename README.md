@@ -32,7 +32,10 @@ Before a level starts you pick the species to bring: six of the twelve. The rest
 stay home and stay off the toolbar. The picker shows every enemy the level sends,
 with bosses in red. Point at one (tap it on a phone) and the species that answer
 it blink. The first time you play a level it suggests six; after that it starts
-from what you brought last time, which is kept in the save directory. On the
+from what you brought last time, which is kept in the save directory. Tap a
+species card to read all about it in a side panel: what it does, its network
+twist, its numbers and both upgrade branches. Tap it again (or the panel's button)
+to bring it or leave it, and tap anywhere else to close the panel. On the
 Crack a species you bring still opens when its wave is cleared (the `W` number on
 its card).
 
@@ -47,7 +50,7 @@ chew through any thread they cross.
 | drag from a fed node to a pocket (or click one, then the other) | grow a link; cost grows with length, the far end glows if it is in reach |
 | `1` | grow hyphae (the default tool) |
 | `2`–`9`, `0`, `T`, `G`, `H` then click a linked pocket (the species you brought) | Spore Puffer, Enoki Needle, Lion's Mane, Relay, Inky Cap, Puffball Mortar, Cordyceps Bloom, Stinkhorn, Ghost Lamp, Humongous Fungus; Slime Mat (`4`) and Shelf Fungus (`8`) go on a trail tile |
-| click a tower, mat or shelf | select it: its upgrade cards show over the toolbar |
+| click a tower, mat or shelf | select it: its upgrade cards show over the toolbar, and a panel tells all about it as it has grown (live numbers, what is wrong with it, both branches). On a wide screen the camera eases it to a third of the way across with the panel on the right; upright, the panel goes across the top. Click elsewhere to close it |
 | `Z` / `C`, or click a card | upgrade the selection down the left / right branch (after the fork, either key goes on up it) |
 | `1` `2` `3`, or click a card | pick a Mutation when the network offers them |
 | `X` then click | prune a link (half back), clear a tower (60% back), lift a mat |
@@ -62,7 +65,8 @@ chew through any thread they cross.
 | `N` | after a win: on to the next level's loadout |
 | `M` | the level picker (`Esc` there goes back to the run) |
 | `1` `2` `3`, `C` in the picker | pick a level; challenge mode on or off |
-| click a species, or its key, in the loadout | bring it or leave it (six at most) |
+| click a species in the loadout | read it in the panel; click it again to bring it or leave it (six at most) |
+| a species' key in the loadout | bring it or leave it at once |
 | `Enter` / `Space`, `Esc` in the loadout | grow the level with that loadout; back to the levels |
 | mouse wheel, `+` / `-` | zoom in and out (whole steps) |
 | `F11` / `Alt+Enter` | back to a window (it opens fullscreen) |

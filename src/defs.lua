@@ -42,6 +42,9 @@ D.PULSE = { cooldown = 45, duration = 6, rate = 2, damage = 1.5 }
 -- what a slug has to eat through. `unlock` is the wave that has to be cleared
 -- before the species can be grown.
 --
+-- `blurb` is its one line on the toolbar; `role` and `about` are what the
+-- info panel says of it, at length.
+--
 -- Every tower forks twice (the doc's upgrade branches), and each branch has two
 -- tiers. A tier row only names what it changes: a stat is read off the highest
 -- tier that sets it, then the tower's base row (see Game:stat).
@@ -49,6 +52,8 @@ D.TOWERS = {
     { id = "puffer", name = "SPORE PUFFER", cost = 30, key = "2", hp = 30, air = true,
         range = 46, every = 1.3, damage = 6, splash = 12, shot = 0.5, reserve = 8,
         blurb = "LOBS SPORE CLOUDS AT GROUPS. +1 PUFF PER LINK",
+        role = "STARTER DAMAGE",
+        about = "LOBS SPORE CLOUDS THAT HIT EVERYTHING INSIDE THEM, FLIERS TOO. IT THROWS ONE PUFF FOR EVERY LINK IT TOUCHES, UP TO FOUR: GROW IT WHERE THREADS MEET.",
         up = {
             { { name = "LINGERING TOXIN", cost = 35, linger = 2, toxin = 4, blurb = "CLOUDS HANG FOR 2S AND POISON" },
               { name = "MIASMA", cost = 65, linger = 3.5, toxin = 8, splash = 16, blurb = "BIGGER, LONGER, NASTIER CLOUDS" } },
@@ -58,6 +63,8 @@ D.TOWERS = {
     { id = "needle", name = "ENOKI NEEDLE", cost = 45, key = "3", hp = 25, air = true,
         range = 100, every = 1.8, damage = 26, shot = 1.5, reserve = 9, deadEnd = 1.8,
         blurb = "LONG RANGE, PIERCES ARMOR. X1.8 ON A DEAD END",
+        role = "SNIPER",
+        about = "A LONG, HARD SHOT AT WHATEVER IS NEAREST THE SPROUT, STRAIGHT THROUGH ARMOR, FLIERS TOO. ON A DEAD END (ONE LINK ONLY) IT HITS X1.8, BUT A TIP IS THE EASIEST THING TO CUT OFF.",
         up = {
             { { name = "SKEWER", cost = 40, pierce = 2, damage = 32, blurb = "RUNS THROUGH TWO IN A LINE" },
               { name = "LANCE", cost = 75, pierce = 3, damage = 44, range = 118, blurb = "THREE IN A LINE, FURTHER, HARDER" } },
@@ -68,6 +75,8 @@ D.TOWERS = {
     { id = "mat", name = "SLIME MAT", cost = 18, key = "4", onTrail = true,
         slow = 0.55, life = 35, feed = 12, drape = 0.82, drapeDigest = 0.5, maxDrape = 3,
         blurb = "LAID ON THE TRAIL. STICKIER FOR EVERY LINK DRAPED OVER IT",
+        role = "SLOW",
+        about = "LAID ON A TRAIL TILE, NOT A POCKET. WHAT WALKS ON IT IS SLOWED. A LINK DRAPED OVER IT FEEDS IT; UNFED IT WITHERS. EVERY LINK OVER IT, UP TO THREE, MAKES IT STICKIER.",
         up = {
             { { name = "GLUE", cost = 20, slow = 0.37, life = 50, blurb = "STICKIER, LASTS LONGER" },
               { name = "AMBER", cost = 40, slow = 0.22, life = 70, blurb = "ALMOST SET SOLID" } },
@@ -77,6 +86,8 @@ D.TOWERS = {
     { id = "mane", name = "LION'S MANE", cost = 40, key = "5", hp = 35,
         depth = 3, heal = 5, regrow = 0.18, drain = 0.3, reserve = 6,
         blurb = "TENDS THE BRANCH BELOW IT: 3 HOPS AWAY FROM THE SPROUT",
+        role = "HEALER",
+        about = "TENDS THE BRANCH BELOW IT, 3 HOPS ON AWAY FROM THE SPROUT: HEALS CHEWED LINKS AND REGROWS CUT ONES. IT ONLY DRINKS WHILE IT HAS WORK TO DO.",
         up = {
             { { name = "FAST REGROWTH", cost = 35, heal = 8, regrow = 0.3, depth = 4, blurb = "HEALS AND REGROWS 70% FASTER, 4 HOPS" },
               { name = "OLD GROWTH", cost = 60, heal = 13, regrow = 0.46, depth = 5, blurb = "FASTER STILL, 5 HOPS DOWN" } },
@@ -87,6 +98,8 @@ D.TOWERS = {
     { id = "relay", name = "RELAY", cost = 30, key = "6", hp = 30,
         capMul = 2, amp = 1.1,
         blurb = "NO ATTACK. PUMPS X2 FLOW, +10% DAMAGE INTO WHAT IT LINKS TO",
+        role = "SUPPORT",
+        about = "NO ATTACK. THE LINKS FROM IT CARRY TWICE THE FLOW, AND THE TOWERS IT LINKS TO HIT 10% HARDER. THE HUB: GROW IT WHERE BRANCHES MEET, AND FEED THIRSTY TOWERS FROM IT.",
         up = {
             { { name = "BATTERY", cost = 30, battery = 1.7, blurb = "TOWERS LINKED TO IT HOLD 70% MORE RESERVE" },
               { name = "DEEP BATTERY", cost = 55, battery = 2.5, capMul = 2.5, blurb = "2.5X RESERVE, MORE FLOW" } },
@@ -96,6 +109,8 @@ D.TOWERS = {
     { id = "inky", name = "INKY CAP", cost = 35, key = "7", hp = 30, unlock = 2,
         range = 36, feast = 2, inkEvery = 6, inkLife = 5, inkR = 7, inkSlow = 0.7, reserve = 6, shot = 0.5,
         blurb = "DRINKS BODIES FOR X2, INTO WHAT IT LINKS TO FIRST. INK SLOWS",
+        role = "ECONOMY",
+        about = "DRINKS THE BODIES IN ITS REACH FOR TWICE THE NUTRIENTS, FED FIRST INTO WHAT IT LINKS TO. NOW AND THEN IT DRIPS A POOL OF INK UNDER A WALKER, AND THE INK SLOWS.",
         up = {
             { { name = "WIDE REACH", cost = 30, range = 50, feast = 2.3, blurb = "DRINKS FURTHER OUT, X2.3" },
               { name = "SPORE SHADOW", cost = 55, range = 64, feast = 2.7, blurb = "FURTHER STILL, X2.7" } },
@@ -105,6 +120,8 @@ D.TOWERS = {
     { id = "shelf", name = "SHELF FUNGUS", cost = 35, key = "8", onTrail = true, unlock = 4,
         hp = 140, shield = 30, shieldMul = 0.3, touch = 24,
         blurb = "BLOCKS THE TRAIL: THEY MUST CHEW THROUGH. SHIELDS LINKS",
+        role = "BLOCKER",
+        about = "GROWN ACROSS A TRAIL TILE BESIDE A FED LINK. WALKERS MUST CHEW THROUGH ITS WOOD TO PASS. LINKS NEAR IT TAKE A THIRD OF THE CHEWING, AND NOTHING ROLLS OR SHEARS THROUGH THEM.",
         up = {
             { { name = "THICK ARMOR", cost = 35, hp = 260, regen = 2, blurb = "TWICE THE WOOD, AND IT HEALS" },
               { name = "IRONWOOD", cost = 60, hp = 430, regen = 4, blurb = "LIKE CHEWING A NAIL" } },
@@ -114,6 +131,8 @@ D.TOWERS = {
     { id = "mortar", name = "PUFFBALL MORTAR", cost = 70, key = "9", hp = 40, unlock = 5,
         range = 92, minRange = 22, every = 3.6, damage = 38, splash = 20, shot = 3, reserve = 10, thirst = 5, highRange = 1.2,
         blurb = "HUGE SLOW BLASTS, MIN RANGE. NEEDS A RELAY. HIGH GROUND: NO MIN",
+        role = "ARTILLERY",
+        about = "A SLOW, HUGE BLAST FAR OFF, BUT NOTHING NEARER THAN ITS MINIMUM RANGE, AND NO FLIERS. IT DRINKS SO MUCH THAT ON A PLAIN LINK IT FIRES AT HALF PACE: FEED IT FROM A RELAY. ON HIGH GROUND IT REACHES FURTHER AND HAS NO MINIMUM.",
         up = {
             { { name = "CLUSTER BLAST", cost = 55, cluster = 3, clusterDamage = 14, blurb = "THREE BOMBLETS SCATTER AFTER" },
               { name = "CARPET", cost = 90, cluster = 5, clusterDamage = 20, damage = 46, blurb = "FIVE BOMBLETS, BIGGER BLAST" } },
@@ -123,6 +142,8 @@ D.TOWERS = {
     { id = "cordyceps", name = "CORDYCEPS BLOOM", cost = 60, key = "0", hp = 30, unlock = 7,
         range = 54, every = 7, shot = 3, reserve = 6, infect = 4, maxHp = 400, bite = 14, perHop = 0.2, maxHops = 6,
         blurb = "INFECTS ONE: IT TURNS ON ITS OWN. HOLDS LONGER THE DEEPER IT GROWS",
+        role = "CONTROL",
+        about = "INFECTS ONE WALKER OF UP TO 400 HP: IT TURNS AND FIGHTS ITS OWN UNTIL THE SPORES WEAR OFF. THE FURTHER OUT ALONG THE NETWORK IT GROWS, THE LONGER IT HOLDS, +20% A HOP.",
         up = {
             { { name = "LONGER CONTROL", cost = 45, infect = 6.5, maxHp = 700, blurb = "LONGER HOLD, BIGGER HOSTS" },
               { name = "PUPPETEER", cost = 80, infect = 9, maxHp = 1100, every = 5.5, blurb = "LONGER, BIGGER, MORE OFTEN" } },
@@ -132,6 +153,8 @@ D.TOWERS = {
     { id = "stink", name = "STINKHORN", cost = 40, key = "T", hp = 35, unlock = 3,
         range = 24, lane = 8, reek = 0.75, stumble = 0.2, trip = 0.5, bait = 70, hold = 6, drain = 0.35, reserve = 7,
         blurb = "ITS STENCH SLOWS AND TRIPS, AND RUNS DOWN ITS LINKS. BAITS FLIES",
+        role = "DEBUFF AURA",
+        about = "ITS STENCH SLOWS EVERYTHING ROUND IT AND ALONG ITS OWN LINKS, AND TRIPS THEM NOW AND THEN. FLIES ARE DRAWN TO IT, SO IT DOUBLES AS BAIT. IT ONLY DRINKS WHILE SOMETHING IS IN THE STENCH.",
         up = {
             { { name = "WIDER STENCH", cost = 35, range = 30, lane = 11, reek = 0.68, bait = 90, blurb = "WIDER, AND THICKER" },
               { name = "CARRION REEK", cost = 60, range = 36, lane = 14, reek = 0.6, rot = 3, hold = 9, blurb = "SO FOUL IT ROTS THEM, AND HOLDS FLIES LONGER" } },
@@ -141,6 +164,8 @@ D.TOWERS = {
     { id = "lamp", name = "GHOST LAMP", cost = 35, key = "G", hp = 80, unlock = 6,
         range = 30, perHop = 5, maxHops = 8, hold = 5, drain = 0.25, reserve = 6,
         blurb = "A GLOWING DECOY: THEY GO FOR IT FIRST. BRIGHTER FAR FROM THE SPROUT",
+        role = "LURE",
+        about = "A GLOWING DECOY: WHAT WALKS OR FLIES INTO ITS GLOW COMES FOR IT FIRST AND CHEWS AT IT A WHILE. BRIGHTER THE FURTHER IT GROWS FROM THE SPROUT, AND AT NIGHT. BOSSES, BRINE AND MITES IGNORE IT.",
         up = {
             { { name = "LONGER GLOW", cost = 30, hp = 140, hold = 7, range = 36, blurb = "TOUGHER, AND HOLDS THEM LONGER" },
               { name = "WILL-O'-WISP", cost = 55, hp = 220, hold = 9, range = 42, regen = 4, blurb = "TOUGHER STILL, AND HEALS" } },
@@ -154,6 +179,8 @@ D.TOWERS = {
         range = 40, rangePerNode = 3, maxRange = 80, every = 3.2, damage = 8, perNode = 5, hops = 2, shot = 3, reserve = 14,
         growTime = 8,
         blurb = "ONE PER RUN, SLOW. HITS HARDER PER FED NODE NEAR IT OR IN ITS RING",
+        role = "LATE GAME",
+        about = "ONE PER RUN, AND SLOW TO COME UP. THE GROUND ROUND IT HEAVES AND HITS EVERYTHING IN REACH, HARDER AND WIDER FOR EVERY FED NODE WITHIN 2 LINKS, OR IN A FAIRY RING IT STANDS IN.",
         up = {
             { { name = "SPREADING", cost = 70, perNode = 6.5, rangePerNode = 3.5, hops = 3, blurb = "MORE PER NODE, 3 LINKS OFF" },
               { name = "ARMILLARIA", cost = 110, perNode = 9, rangePerNode = 4, every = 2.6, maxRange = 96,

@@ -110,6 +110,9 @@ local speed, paused = 1, false
 local heartFlash = 0
 local shake = 0 -- seconds of shaking left: a boss charging, a ball breaking
 local selected -- the tower, mat or shelf whose upgrades are showing
+-- The camera easing toward a selection: where panx, pany are headed, and what
+-- they were sent there for (a new selection sends them again).
+local focus, focused
 local script -- the --shots run
 local shot -- and the whole screen it photographs
 
@@ -353,6 +356,143 @@ end
 local function barTop() return bar().top end
 local function inside(x, y, rx, ry, rw, rh) return x >= rx and y >= ry and x < rx + rw and y < ry + rh end
 
+-- The info panel: everything about one species, or one fruiting body as it
+-- has grown. Down the right side on a wide screen; across the top of the board
+-- (or the bottom of the loadout) on a narrow one. Shown for whatever is
+-- selected in a run, and for the card tapped in the loadout.
+local function wide() return vw > vh end
+local function infoWidth() return wide() and min(150, floor(vw * 0.36)) or vw - inset.l - inset.r - 6 end
+
+-- Words broken into lines no wider than w.
+local function wrapLines(str, w)
+    local lines, line = {}, ""
+    for word in str:gmatch("%S+") do
+        local try = line == "" and word or line .. " " .. word
+        if Font.width(try) > w and line ~= "" then
+            lines[#lines + 1] = line
+            line = word
+        else
+            line = try
+        end
+    end
+    if line ~= "" then lines[#lines + 1] = line end
+    return lines
+end
+
+local function number(v)
+    if v == floor(v) then return tostring(v) end
+    return string.format("%.1f", v)
+end
+
+-- The panel's lines, each { s, k (colour), x, h }: the name and role beside
+-- the picture, the long account, the numbers (live, for one on the board),
+-- and both upgrade branches with what is grown, open or shut.
+local function infoLines(kind, t, w)
+    local d = D.TOWER[kind]
+    local out, height = {}, 0
+    local function add(str, k, x, h)
+        x = x or 0
+        for _, l in ipairs(wrapLines(str, w - x)) do
+            out[#out + 1] = { s = l, k = k, x = x, h = h or 7 }
+            height = height + (h or 7)
+        end
+    end
+    local function gap(h) out[#out + 1] = { h = h }; height = height + h end
+    local function get(k) if t then return game:stat(t, k) end return d[k] end
+
+    add(t and t.branch and d.up[t.branch][t.tier].name or d.name, "w", 24, 8)
+    add(d.role .. "   " .. (t and ("SPENT " .. t.spent) or ("COST " .. d.cost)), "t", 24)
+    if height < 22 then gap(22 - height) end
+
+    -- On the board: what is wrong with it, if anything.
+    if t then
+        local why
+        if t.hunger == "dormant" then why = "DORMANT: OUT OF NUTRIENTS. LINK IT BACK TO THE SPROUT"
+        elseif t.hunger == "starved" then why = "STARVED: FIRES AT HALF PACE"
+        elseif t.thirsty then why = "THIRSTY: FEED IT A THICKER LINK FROM A RELAY"
+        elseif (t.webbed or 0) > 0 then why = "WEBBED SHUT"
+        elseif kind == "mat" and not t.fed then why = "WITHERING: DRAPE A LINK OVER IT" end
+        if why then add(why, "r"); gap(2) end
+    end
+
+    add(d.about, "w")
+    gap(3)
+    local parts = {}
+    if get("damage") then parts[#parts + 1] = "DAMAGE " .. number(get("damage")) end
+    if get("every") then parts[#parts + 1] = "EVERY " .. number(get("every")) .. "S" end
+    local r = (t and t.node) and game:towerRange(t) or get("range")
+    if r then parts[#parts + 1] = "RANGE " .. floor(r + 0.5) end
+    if get("splash") then parts[#parts + 1] = "SPLASH " .. number(get("splash")) end
+    if kind == "mat" then parts[#parts + 1] = "SLOW " .. floor((1 - (t and game:matSlow(t) or d.slow)) * 100 + 0.5) .. "%" end
+    if kind == "relay" then
+        parts[#parts + 1] = "FLOW X" .. number(get("capMul"))
+        parts[#parts + 1] = "DAMAGE +" .. floor(((get("amp") or 1) - 1) * 100 + 0.5) .. "%"
+    end
+    if t and t.hp and kind ~= "mat" then parts[#parts + 1] = "HP " .. math.ceil(t.hp) .. "/" .. game:maxHp(t)
+    elseif not t and d.hp then parts[#parts + 1] = "HP " .. d.hp end
+    -- A number never parted from its name: lines broken between them.
+    local line = ""
+    for _, part in ipairs(parts) do
+        local try = line == "" and part or line .. "  " .. part
+        if Font.width(try) > w and line ~= "" then add(line, "l"); line = part else line = try end
+    end
+    if line ~= "" then add(line, "l") end
+
+    gap(4)
+    add("UPGRADES", "t")
+    for b = 1, 2 do
+        if b == 2 then add("OR", "s") end
+        local shut = t and t.branch and t.branch ~= b
+        for tier = 1, 2 do
+            local row = d.up[b][tier]
+            local grown = t and t.branch == b and t.tier >= tier
+            local k = grown and "g" or (shut and "k" or "w")
+            add((tier == 1 and "I  " or "II ") .. row.name .. "  " .. (grown and "GROWN" or row.cost), k)
+            add(row.blurb, shut and "k" or "s", 12)
+        end
+    end
+    return out, height
+end
+
+-- The panel open now, laid out: nil if there is none.
+local function info()
+    local kind, t
+    if menu == "loadout" then
+        kind = pick and pick.info
+    elseif not menu and game and selected and (game.phase == "build" or game.phase == "wave") then
+        kind, t = selected.kind, selected
+    end
+    if not kind then return end
+    local w = infoWidth()
+    local lines, h = infoLines(kind, t, w - 8)
+    local P = { kind = kind, t = t, lines = lines, w = w }
+    if menu == "loadout" then
+        if wide() then
+            P.x, P.y, P.h = vw - inset.r - w - 3, inset.t + 3, vh - inset.t - inset.b - 6
+        else
+            -- Room for the BRING / LEAVE button under the words.
+            P.h = min(h + 28, floor(vh * 0.55))
+            P.x, P.y = inset.l + 3, vh - inset.b - 3 - P.h
+        end
+        P.button = { x = P.x + 4, y = P.y + P.h - 18, w = w - 8, h = 14 }
+    else
+        local top = inset.t + TOP + 2
+        if wide() then
+            P.x, P.y, P.h = vw - inset.r - w - 3, top, barTop() - 4 - top
+        else
+            P.x, P.y, P.h = inset.l + 3, top, min(h + 8, floor((barTop() - top) * 0.5))
+        end
+    end
+    return P
+end
+
+-- What the panel leaves free across the screen, as left and right edges.
+local function freeSpan()
+    local P = info()
+    if P and wide() then return inset.l, P.x - 3 end
+    return inset.l, vw - inset.r
+end
+
 -- The upgrade panel over the toolbar: a card for each upgrade open to
 -- whatever is selected (two at the fork, one after, none at the top).
 local CW, CH = 100, 24
@@ -361,7 +501,8 @@ local function panelCards()
     local ups = game:upgrades(selected)
     local n = max(1, #ups)
     local total = n * CW + (n - 1) * 4
-    local x0 = floor((vw - total) / 2)
+    local l, r = freeSpan()
+    local x0 = floor((l + r - total) / 2)
     local y = barTop() - 5 - CH
     local cards = {}
     for k = 1, n do cards[k] = { x = x0 + (k - 1) * (CW + 4), y = y, w = CW, h = CH, up = ups[k] } end
@@ -420,7 +561,13 @@ end
 
 local function loadoutLayout()
     local lv = D.LEVELS[pick.n]
-    local avail = vw - inset.l - inset.r - 8
+    -- With the panel open the picker keeps to the room it leaves: the left on a
+    -- wide screen, the top on a narrow one.
+    local open = pick.info ~= nil
+    local left, right = inset.l, vw - inset.r
+    if open and wide() then right = vw - inset.r - infoWidth() - 6 end
+    local mid = floor((left + right) / 2)
+    local avail = right - left - 8
     local cols = 6
     while cols > 2 and cols * SW + (cols - 1) * 4 > avail do cols = cols == 6 and 4 or cols - 1 end
     local rows = ceil(#D.TOWERS / cols)
@@ -438,27 +585,28 @@ local function loadoutLayout()
 
     local height = 22 + 10 + lines * 12 + 6 + rows * (SH + 4) + 6 + 16
     local y = max(inset.t + 4, floor((vh - inset.b - 12 - height) / 2))
+    if open and not wide() then y = inset.t + 4 end
     local top = y
     y = y + 32
     -- Each chip row centred on its own.
     local ends = {}
     for _, c in ipairs(chips) do ends[c.line] = c.dx + c.w end
     for _, c in ipairs(chips) do
-        c.x = floor((vw - ends[c.line]) / 2) + c.dx
+        c.x = floor(mid - ends[c.line] / 2) + c.dx
         c.y = y + (c.line - 1) * 12
     end
     y = y + lines * 12 + 6
 
     local cards = {}
-    local x0 = floor((vw - (cols * SW + (cols - 1) * 4)) / 2)
+    local x0 = floor(mid - (cols * SW + (cols - 1) * 4) / 2)
     for k, t in ipairs(D.TOWERS) do
         local col, row = (k - 1) % cols, floor((k - 1) / cols)
         cards[k] = { x = x0 + col * (SW + 4), y = y + row * (SH + 4), w = SW, h = SH, t = t }
     end
     y = y + rows * (SH + 4) + 6
-    local back = { x = floor(vw / 2) - 54, y = y, w = 50, h = 16 }
-    local go = { x = floor(vw / 2) + 4, y = y, w = 50, h = 16 }
-    return { top = top, chips = chips, chipsY = top + 32, cards = cards, back = back, go = go }
+    local back = { x = mid - 54, y = y, w = 50, h = 16 }
+    local go = { x = mid + 4, y = y, w = 50, h = 16 }
+    return { top = top, chips = chips, chipsY = top + 32, cards = cards, back = back, go = go, mid = mid }
 end
 
 local function picked()
@@ -483,6 +631,11 @@ local function findHover()
     hover = {}
     local mx, my = mouse.x, mouse.y
     if menu == "loadout" then
+        local P = info()
+        if P then
+            if inside(mx, my, P.button.x, P.button.y, P.button.w, P.button.h) then hover.bring = true return end
+            if inside(mx, my, P.x, P.y, P.w, P.h) then hover.info = true return end
+        end
         local L = loadoutLayout()
         for _, c in ipairs(L.chips) do
             if inside(mx, my, c.x, c.y, c.w, c.h) then hover.enemy = c.kind return end
@@ -507,6 +660,8 @@ local function findHover()
             if inside(mx, my, c.x, c.y, c.w, c.h) then hover.mutation = k return end
         end
     end
+    local P = info()
+    if P and inside(mx, my, P.x, P.y, P.w, P.h) then hover.info = true return end
     for k, c in ipairs(panelCards()) do
         if inside(mx, my, c.x, c.y, c.w, c.h) then hover.card = k return end
     end
@@ -547,6 +702,7 @@ local function start()
     game = Game.new(world, level, { challenge = challenge, loadout = chosen })
     layTools(game)
     mode, drag, panx, pany, selected = "grow", nil, 0, 0, nil
+    focus, focused = nil, nil
     paused, speed = false, 1
     menu = nil
 end
@@ -630,13 +786,23 @@ end
 
 local function click(b)
     if menu == "loadout" then
-        if b == 2 or hover.back then openMenu()
+        -- A card opens its panel; the same card again (or the panel's button)
+        -- brings it or leaves it. Anywhere else shuts the panel.
+        if hover.bring then toggleSpecies(pick.info) return end
+        if hover.info then return end
+        if b == 2 then
+            if pick.info then pick.info = nil else openMenu() end
+            return
+        elseif hover.species then
+            if pick.info == hover.species then toggleSpecies(hover.species) else pick.info = hover.species end
+            return
+        elseif hover.back then openMenu()
         elseif hover.go then setOff()
-        elseif hover.species then toggleSpecies(hover.species)
         elseif hover.enemy then
             -- Pinned, so a finger (which has no hover) can see the answers too.
             pick.enemy = pick.enemy ~= hover.enemy and hover.enemy or nil
         end
+        if pick then pick.info = nil end
         return
     end
     if menu then
@@ -653,6 +819,7 @@ local function click(b)
         if hover.mutation then game:mutate(hover.mutation) end
         return
     end
+    if hover.info then return end
     if hover.card then
         local c = panelCards()[hover.card]
         if c and c.up then game:upgrade(selected, c.up.branch) end
@@ -735,7 +902,7 @@ function love.mousepressed(x, y, b, istouch)
     point(x, y)
     findHover()
     if b == 3 then mouse.pan = { wx = x, wy = y, px = panx, py = pany } return end
-    if b == 1 and not (hover.button or hover.wave or hover.node or hover.card or hover.mutation) and not (mode == "grow" and drag) then
+    if b == 1 and not (hover.button or hover.wave or hover.node or hover.card or hover.mutation or hover.info) and not (mode == "grow" and drag) then
         press = { x = mouse.x, y = mouse.y, wx = x, wy = y, px = panx, py = pany }
         return
     end
@@ -782,6 +949,7 @@ function love.mousemoved(x, y)
         -- In board pixels: the ground stays under the finger at any zoom.
         panx = pan.px - floor((x - pan.wx) / zoom)
         pany = pan.py - floor((y - pan.wy) / zoom)
+        focus = nil
     end
 end
 
@@ -798,6 +966,7 @@ end
 local function zoomTo(step, bx, by, sx, sy)
     local lo, hi = stepRange()
     zoomStep = max(lo, min(hi, step))
+    focus, focused = nil, selected -- aimed at the old zoom; the player has taken over
     fit()
     centre()
     panx = panx + (bx - sx / zoom) - camx
@@ -877,7 +1046,10 @@ function love.keypressed(key)
     end
     if painter then return end
     if menu == "loadout" then
-        if key == "escape" or key == "backspace" then openMenu() return end
+        if key == "escape" or key == "backspace" then
+            if pick.info then pick.info = nil else openMenu() end
+            return
+        end
         if key == "return" or key == "kpenter" or key == "space" then setOff() return end
         for _, t in ipairs(D.TOWERS) do
             if key == t.key:lower() then toggleSpecies(t.id) end
@@ -923,6 +1095,27 @@ function love.keypressed(key)
             if l == level and D.LEVELS[k + 1] then openLoadout(k + 1) return end
         end
     end
+end
+
+-- Where the camera should go to show `s` (a tower, mat or shelf) beside the
+-- info panel: a third of the way across a wide screen, the panel on the right;
+-- on a narrow one in the middle of what is left under the panel. On a wide
+-- screen it only moves up or down as far as it takes to be clear of the bars.
+local function focusOn(s)
+    local x, y, z
+    if s.node then x, y, z = s.node.x, s.node.y + 6, s.node.z else x, y, z = s.x, (s.y or 0) + 3, s.z end
+    local i, j = world:toImage(x, y, z)
+    local hx, hy = (i - camx) * zoom / uz, (j - camy) * zoom / uz
+    local wx, wy
+    if wide() then
+        wx = floor(vw / 3)
+        wy = max(inset.t + TOP + 14, min(barTop() - 34, hy))
+    else
+        local P = info()
+        wx = floor(vw / 2)
+        wy = floor((P.y + P.h + barTop() - 30) / 2)
+    end
+    return { x = panx + toBoard(hx - wx), y = pany + toBoard(hy - wy) }
 end
 
 function love.update(dt)
@@ -987,15 +1180,33 @@ function love.update(dt)
 
     local k = love.keyboard.isDown
     local pan = 120 * dt
+    if k("left", "a", "right", "d", "up", "w", "down", "s") then focus = nil end
     if k("left", "a") then panx = panx - pan end
     if k("right", "d") then panx = panx + pan end
     if k("up", "w") then pany = pany - pan end
     if k("down", "s") then pany = pany + pan end
+    -- Something newly selected: ease the camera to put it beside its panel.
+    if selected ~= focused then
+        focused = selected
+        focus = selected and info() and focusOn(selected) or nil
+    end
+    if focus then
+        local e = 1 - math.exp(-dt * 9)
+        panx, pany = panx + (focus.x - panx) * e, pany + (focus.y - pany) * e
+        if abs(focus.x - panx) < 0.5 and abs(focus.y - pany) < 0.5 then panx, pany, focus = focus.x, focus.y, nil end
+    end
     -- Zoomed in, the board is bigger than the screen: let every edge of it be
-    -- reached, with a little ground to spare.
+    -- reached, with a little ground to spare. With a panel open, further, so a
+    -- tower at the board's edge can still come out beside it. Past the edge the
+    -- camera eases back rather than stopping dead.
     local limx = max(40, (world.w - (cw - toBoard(inset.l + inset.r))) / 2 + 40)
     local limy = max(60, (world.h - (ch - toBoard(inset.t + inset.b + TOP + BOTTOM))) / 2 + 40)
-    panx, pany = max(-limx, min(limx, panx)), max(-limy, min(limy, pany))
+    if info() then limx, limy = limx + cw / 2, limy + ch / 2 end
+    local cx, cy = max(-limx, min(limx, panx)), max(-limy, min(limy, pany))
+    if cx ~= panx or cy ~= pany then
+        local e = min(1, dt * 12)
+        panx, pany = panx + (cx - panx) * e, pany + (cy - pany) * e
+    end
     centre()
 
     if script then script.update(game, dt) end
@@ -1684,8 +1895,9 @@ local function label(s, x, y, k, fill)
     text(s, x, y, k)
 end
 
-local function centred(s, y, k, fill)
-    label(s, floor((vw - Font.width(s)) / 2), y, k, fill)
+-- Centred across the screen, or about `mid`.
+local function centred(s, y, k, fill, mid)
+    label(s, floor((mid or vw / 2) - Font.width(s) / 2), y, k, fill)
 end
 
 local function waveSummary(wave)
@@ -1873,6 +2085,8 @@ local function tooltip()
     end
 end
 
+local drawInfo -- the info panel, drawn by the HUD and the loadout (below)
+
 local function drawHud()
     -- The top strip.
     color("o")
@@ -2023,8 +2237,9 @@ local function drawHud()
     for _, e in ipairs(game.enemies) do if e.boss then boss = e break end end
     if boss then
         local d = D.ENEMIES[boss.kind]
-        local w = min(170, vw - inset.l - inset.r - 20)
-        local bx, by = floor((vw - w) / 2), inset.t + TOP + 3
+        local fl, fr = freeSpan()
+        local w = min(170, fr - fl - 20)
+        local bx, by = floor((fl + fr - w) / 2), inset.t + TOP + 3
         -- A train's health is all of its segments'.
         local hp, top = boss.hp, boss.maxHp
         if boss.train then
@@ -2040,7 +2255,7 @@ local function drawHud()
             love.graphics.rectangle("fill", bx, by + 6, floor(w * boss.ballHp / boss.ballMax), 2)
         end
         local name = d.name .. (boss.under and " (UNDER WATER)" or "")
-        text(name, floor((vw - Font.width(name)) / 2), by + (boss.ballHp and boss.ballHp > 0 and 11 or 7), "w")
+        text(name, floor(bx + (w - Font.width(name)) / 2), by + (boss.ballHp and boss.ballHp > 0 and 11 or 7), "w")
     end
     if game.bossIntro then
         local d = D.ENEMIES[game.bossIntro.kind]
@@ -2056,7 +2271,8 @@ local function drawHud()
     if tip then
         -- Too long for the screen (a phone held upright): broken at a word onto
         -- a second line above, rather than cut off.
-        local room = vw - inset.l - inset.r - 8
+        local fl, fr = freeSpan()
+        local room = fr - fl - 8
         local lines = { tip }
         if Font.width(tip) > room then
             local cut
@@ -2067,9 +2283,12 @@ local function drawHud()
         end
         for n, l in ipairs(lines) do
             if Font.width(l) > room then l = l:sub(1, floor(room / 4)) end
-            centred(l, tipBase - 11 - (#lines - n) * 10, k)
+            centred(l, tipBase - 11 - (#lines - n) * 10, k, nil, floor((fl + fr) / 2))
         end
     end
+
+    local P = info()
+    if P then drawInfo(P) end
 
     if game.phase == "mutate" then
         local cs = mutationCards()
@@ -2156,6 +2375,32 @@ local function drawMenu()
     centred(say("1 2 3 OR CLICK A LEVEL", "TAP A LEVEL") .. (challengeOpen() and say("   C: CHALLENGE", "") or ""), hintY, "s", "o")
 end
 
+-- The info panel, its lines kept inside it (a short screen cuts the end).
+function drawInfo(P)
+    box(P.x, P.y, P.w, P.h, "u", "c")
+    love.graphics.setScissor(P.x, P.y, P.w, P.h)
+    local clock = love.timer.getTime()
+    local t = P.t
+    local pic = icon(P.kind, t and t.branch, t and t.tier or 0, (clock * 0.7) % 1)
+    love.graphics.setScissor(P.x, P.y, 22, 24)
+    blit(pic, P.x + 12, P.kind == "mat" and P.y + 16 or P.y + 22)
+    love.graphics.setScissor(P.x, P.y, P.w, P.h - (P.button and 20 or 0))
+    local y = P.y + 4
+    for _, l in ipairs(P.lines) do
+        if l.s then text(l.s, P.x + 4 + l.x, y, l.k) end
+        y = y + l.h
+    end
+    love.graphics.setScissor()
+    local b = P.button
+    if b then
+        local inn = pick.set[P.kind]
+        local full = not inn and #picked() >= D.LOADOUT
+        local s = inn and "LEAVE IT AT HOME" or (full and "SIX ALREADY: DROP ONE" or "BRING IT")
+        box(b.x, b.y, b.w, b.h, hover.bring and "n" or (inn and "u" or "d"), full and "k" or (inn and "t" or "g"))
+        text(s, b.x + floor((b.w - Font.width(s)) / 2), b.y + 4, full and "k" or (inn and "w" or "g"))
+    end
+end
+
 local function drawLoadout()
     color("o")
     love.graphics.rectangle("fill", 0, 0, vw, vh)
@@ -2163,10 +2408,10 @@ local function drawLoadout()
     local L = loadoutLayout()
     local list = picked()
     local clock = love.timer.getTime()
-    centred(lv.name .. (challenge and " (CHALLENGE)" or ""), L.top, "g", "o")
+    centred(lv.name .. (challenge and " (CHALLENGE)" or ""), L.top, "g", "o", L.mid)
     local count = #list .. "/" .. D.LOADOUT
-    centred("PICK THE SPECIES TO BRING  " .. count, L.top + 11, #list == D.LOADOUT and "l" or "t", "o")
-    text("COMING", floor((vw - Font.width("COMING")) / 2), L.chipsY - 9, "s")
+    centred("PICK THE SPECIES TO BRING  " .. count, L.top + 11, #list == D.LOADOUT and "l" or "t", "o", L.mid)
+    text("COMING", floor(L.mid - Font.width("COMING") / 2), L.chipsY - 9, "s")
 
     -- The enemy pointed at (or pinned) lights up what answers it.
     local enemy = hover.enemy or pick.enemy
@@ -2184,7 +2429,7 @@ local function drawLoadout()
         local inn, on, ans = pick.set[t.id], hover.species == t.id, answers[t.id]
         local edge = inn and "l" or "k"
         if ans and floor(clock * 4) % 2 == 0 then edge = "w" end
-        if on then edge = inn and "w" or "t" end
+        if on or pick.info == t.id then edge = inn and "w" or "t" end
         box(c.x, c.y, c.w, c.h, (inn or on) and "n" or "u", edge)
         -- The picture kept to its corner of the card: a shelf or the giant is wider.
         local pic = icon(t.id, nil, 0, inn and (clock * 0.7) % 1 or 0)
@@ -2210,6 +2455,13 @@ local function drawLoadout()
     box(g.x, g.y, g.w, g.h, ready and (hover.go and "m" or "d") or "u", ready and "g" or "k")
     text("GROW", g.x + floor((g.w - Font.width("GROW")) / 2), g.y + 5, ready and "g" or "k")
 
+    local P = info()
+    if P then
+        drawInfo(P)
+        if pick.full > 0 then centred("ONLY " .. D.LOADOUT .. " COME. DROP ONE FIRST", g.y + g.h + 6, "r", "o", L.mid) end
+        return
+    end
+
     -- One line under it all: what is pointed at, or how it works.
     local tip, k
     if pick.full > 0 then
@@ -2224,8 +2476,8 @@ local function drawLoadout()
     elseif not ready then
         tip, k = "BRING AT LEAST ONE", "r"
     else
-        tip, k = say("CLICK TO BRING OR LEAVE. POINT AT AN ENEMY FOR ITS ANSWER. ENTER TO GROW",
-            "TAP TO BRING OR LEAVE. TAP AN ENEMY FOR ITS ANSWER"), "s"
+        tip, k = say("CLICK A SPECIES TO READ IT, AGAIN TO BRING OR LEAVE IT. POINT AT AN ENEMY FOR ITS ANSWER",
+            "TAP A SPECIES TO READ IT, AGAIN TO BRING OR LEAVE IT. TAP AN ENEMY FOR ITS ANSWER"), "s"
     end
     local room = vw - inset.l - inset.r - 8
     local y = g.y + g.h + 6
