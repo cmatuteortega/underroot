@@ -867,8 +867,11 @@ end
 
 --- drawing the world -------------------------------------------------------------------
 
+-- It never sags below the lower of its two ends' ground, so a thread between
+-- two pockets on the field bridges a sunken trail or the pond rather than
+-- dropping into it; one to a lily pad still comes down to the water.
 local function linkY(l, f, x, z)
-    local g = world:groundAt(x, z) + 0.4
+    local g = max(world:groundAt(x, z), min(0, l.a.y, l.b.y)) + 0.4
     local e = min(f, 1 - f) * l.len
     local ny = f < 0.5 and l.a.y or l.b.y
     return max(g, ny - e * 0.5)

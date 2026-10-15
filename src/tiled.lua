@@ -49,7 +49,6 @@ local SET = {
     bush = { 33, 34, 35, 36, 32, 31 },
     slab = { 63, 63, 61 },
     water = { 110, 111, 112, 113, 114, 115, 116, 117, 118, 119 },
-    shallow = { 120 },
     rimProp = { 45, 44, 52, 57, 53, 54, 64, 65, 49, 51, 45, 56 },
     fieldProp = { 43, 46, 58, 56 },
     pebbles = { 62, 53, 43 },
@@ -84,7 +83,7 @@ local function pick(list, c, r, k) return list[floor(grain(c, r, k) * #list) + 1
 -- The map's characters as heights, in blocks: the top block of the column.
 local TRAIL = { ["="] = true, E = true }
 local WATER = { o = true, ["~"] = true, P = true }
-local DEEP = { o = true, P = true } -- open water, half a block down in its block
+local DEEP = { o = true, P = true, ["~"] = true } -- water, half a block down in its block
 
 -- Raised ground stands a block up (two, now and then, along the back of a
 -- `tall` level) and comes down to the field's height along the two near
@@ -100,8 +99,8 @@ function Tiled.level(world, ch, c, r)
     return 0
 end
 
--- The height of what stands on (c, r): open water's surface is half a block
--- down inside its block; the flooded trail is shallow, level with the trail.
+-- The height of what stands on (c, r): water's surface is half a block down
+-- inside its block.
 function Tiled.ground(world, ch, c, r)
     local top = Tiled.level(world, ch, c, r) * L
     if DEEP[ch] then return top - L / 2 end
@@ -156,7 +155,9 @@ function Tiled.paint(world)
     -- as a block of cell (c, r), or (`prop`) as a thing standing in it.
     -- `calm`: a water tile's top, whose bright rim is only kept along a shore,
     -- so open water reads as one sheet rather than a grid of tiles.
-    local function stamp(t, c, r, top, drop, prop, calm)
+    -- `ford`: a trail tile seen through the water's top, half and half, for a
+    -- flooded stretch of trail: the trodden path under the water.
+    local function stamp(t, c, r, top, drop, prop, calm, ford)
         local cx, cz = c * TILE + TILE / 2, r * TILE + TILE / 2
         local si, sj = world:toImage(cx, top, cz)
         local bi, bj = floor(si + 0.5) - PX / 2, floor(sj + 0.5) - PX / 2
@@ -204,6 +205,14 @@ function Tiled.paint(world)
                                 rgb[p * 3], rgb[p * 3 + 1], rgb[p * 3 + 2] = still[1], still[2], still[3]
                             end
                         end
+                        if ford and isUp then
+                            local q = (((floor(ford / COLS) * PX) + v - drop) * sw + (ford % COLS) * PX + u) * 4
+                            if spx[q + 3] > 127 then
+                                rgb[p * 3] = (rgb[p * 3] + spx[q]) / 2
+                                rgb[p * 3 + 1] = (rgb[p * 3 + 1] + spx[q + 1]) / 2
+                                rgb[p * 3 + 2] = (rgb[p * 3 + 2] + spx[q + 2]) / 2
+                            end
+                        end
                         dep[p] = BACK - tt
                         wx[p], wy[p], wz[p] = x, y, z
                         up[p] = isUp and 1 or 0
@@ -223,17 +232,18 @@ function Tiled.paint(world)
             local top = Tiled.level(world, ch, c, r)
             local raised = theme.raised[ch]
             for k = BASE, top do
-                local t, drop, calm = pick(SET.under, c, r, k + 90), 0, false
+                local t, drop, calm, ford = pick(SET.under, c, r, k + 90), 0, false, nil
                 if k == top then
                     if raised then t = pick(theme.raisedTop, c, r, 82)
                     elseif TRAIL[ch] then t = pick(SET.trail, c, r, 83)
-                    elseif ch == "~" then t = pick(SET.shallow, c, r, 84)
-                    elseif WATER[ch] then t, drop, calm = pick(SET.water, c, r, 84), 4, true
+                    elseif WATER[ch] then
+                        t, drop, calm = pick(SET.water, c, r, 84), 4, true
+                        if ch == "~" then ford = pick(SET.trail, c, r, 83) end
                     else t = pick(theme.field, c, r, 85) end
                 elseif raised and k > 0 then
                     t = pick(theme.raisedSide, c, r, k + 86)
                 end
-                stamp(t, c, r, k * L, drop, false, calm)
+                stamp(t, c, r, k * L, drop, false, calm, ford)
             end
             -- Something growing on the raised ground, or now and then in the field.
             local grow = raised and theme.raisedProp or theme.fieldProp[ch]
