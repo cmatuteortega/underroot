@@ -1,7 +1,10 @@
 function love.conf(t)
-    t.identity = "underfoot"
-    t.version = "11.4"
-    t.window.title = "Underfoot"
+    t.identity = "underfoot" -- from when it was called that; saves stay put
+    -- The running engine, on purpose: the field only decides whether LÖVE
+    -- opens its "Compatibility Warning" box on a mismatch, and this ships on
+    -- two engines -- 11.x on desktop, 12.0 in the Android build.
+    t.version = love._version
+    t.window.title = "Groute"
     t.window.width = 1280
     t.window.height = 720
     t.window.resizable = true

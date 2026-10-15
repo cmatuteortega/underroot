@@ -1,0 +1,243 @@
+# Desktop builds
+#
+# Fuses game.love onto the stock LÖVE 11.5 runtimes, so a player on a computer
+# downloads one thing and runs it with no LÖVE installed. Same triggers as the
+# Android build: commits that only touch docs don't build. Nothing is patched
+# or compiled: each job is a download, a zip and a copy (and an icon), which is
+# why it runs in a couple of minutes where the APK takes most of an hour. The
+# same workflow as Survive School's.
+#
+# Outputs (workflow artifacts):
+#   - "Groute (Windows)"  a folder: Groute.exe (love.exe with game.love
+#     appended -- LÖVE's own fusing) and the DLLs it loads. 64-bit.
+#   - "Groute (macOS)"    Groute.app, zipped with ditto so the frameworks'
+#     symlinks survive. Universal (Intel and Apple Silicon).
+#   - "Groute (Linux)"    Groute.AppImage (x86_64). The artifact zip drops the
+#     executable bit: chmod +x it once after unzipping.
+#   - "Groute (love)"     the bare game.love, for anyone with LÖVE 11.x.
+#   - tags v*: all four attached to the GitHub Release (the Android workflow
+#     attaches the APK to the same one).
+#
+# Icon: the Shelf Fungus on its grass block in the dusk glow, baked from
+# assets/icon/ by desktop/icon.py into the .exe (rcedit, on a Windows runner),
+# the .app's icon.icns and the AppImage's icon, the same picture as the Android
+# launcher icon. The window's own title-bar / taskbar icon is set at run time
+# in main.lua.
+#
+# Signing: none. Windows SmartScreen asks once ("More info" → "Run anyway").
+# The .app is re-signed ad hoc, because putting game.love inside LÖVE's signed
+# bundle breaks its signature and an Apple Silicon Mac then calls the app
+# "damaged"; ad hoc it is merely unidentified, and opens with right-click →
+# Open (or System Settings → Privacy & Security → Open Anyway). Notarising it
+# for real needs an Apple Developer ID and is not done here.
+#
+# Saves: a fused game keeps them under its identity directly, not inside LOVE/
+# -- %APPDATA%\underfoot on Windows, ~/Library/Application Support/underfoot
+# on a Mac, ~/.local/share/underfoot on Linux (the identity is from before the
+# game was called Groute) -- so they are separate from the ones `love .`
+# writes while developing.
+
+name: Desktop builds
+
+on:
+  push:
+    branches: ['**']
+    tags: ['v*']
+    paths-ignore:
+      - 'shots/**'
+      - '**.md'
+      - '**.txt'
+      - '.claude/**'
+  workflow_dispatch:
+
+concurrency:
+  group: desktop-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # The desktop engine the game is written for (README). Bump on
+  # purpose: the asset names below follow LÖVE's release naming.
+  LOVE_VERSION: '11.5'
+  APP_NAME: Groute
+  MAC_BUNDLE_ID: ${{ vars.MAC_BUNDLE_ID || 'com.cmatute.groute' }}
+
+jobs:
+  windows:
+    # A Windows runner for rcedit, which writes the icon into the .exe.
+    runs-on: windows-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Icons
+        run: python desktop/icon.py "$RUNNER_TEMP/icons"
+
+      - name: Package game.love
+        run: 7z a -tzip -mx=9 "$RUNNER_TEMP/game.love" main.lua conf.lua src assets '-xr!.DS_Store' > /dev/null
+
+      - name: Fuse with LÖVE for Windows
+        run: |
+          cd "$(cygpath -u "$RUNNER_TEMP")"
+          curl -sSLf -o love.zip "https://github.com/love2d/love/releases/download/$LOVE_VERSION/love-$LOVE_VERSION-win64.zip"
+          curl -sSLf -o rcedit.exe https://github.com/electron/rcedit/releases/download/v2.0.0/rcedit-x64.exe
+          7z x love.zip > /dev/null
+          src="love-$LOVE_VERSION-win64"
+          # The icon and names go into love.exe first: rcedit rewrites the
+          # executable and would drop anything appended to it.
+          ./rcedit.exe "$src/love.exe" --set-icon icons/icon.ico \
+            --set-version-string ProductName "$APP_NAME" \
+            --set-version-string FileDescription "$APP_NAME" \
+            --set-version-string OriginalFilename "$APP_NAME.exe" \
+            --set-version-string InternalName "$APP_NAME"
+          out="$APP_NAME"
+          mkdir -p "$out"
+          # love.exe with the game appended is a fused game: it runs what it
+          # carries instead of asking for one.
+          cat "$src/love.exe" game.love > "$out/$APP_NAME.exe"
+          cp "$src"/*.dll "$src/license.txt" "$out/"
+          ls -l "$out"
+          echo "OUT=$RUNNER_TEMP\\$out" >> "$GITHUB_ENV"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.APP_NAME }} (Windows)
+          path: ${{ env.OUT }}
+          if-no-files-found: error
+
+  macos:
+    # A Mac runner for codesign; see the note on signing at the top.
+    runs-on: macos-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # tags for git describe
+
+      - name: Package game.love
+        run: zip -9 -r "$RUNNER_TEMP/game.love" main.lua conf.lua src assets -x '*.DS_Store'
+
+      - name: Icons
+        run: python3 desktop/icon.py "$RUNNER_TEMP/icons"
+
+      - name: Build the app
+        run: |
+          version=$(git describe --tags --always | sed 's/^v//')
+          cd "$RUNNER_TEMP"
+          curl -sSLf -o love.zip "https://github.com/love2d/love/releases/download/$LOVE_VERSION/love-$LOVE_VERSION-macos.zip"
+          ditto -x -k love.zip .
+          app="$RUNNER_TEMP/$APP_NAME.app"
+          mv love.app "$app"
+          # A .love inside Resources is what LÖVE's Mac build runs fused.
+          cp game.love "$app/Contents/Resources/"
+          plist="$app/Contents/Info.plist"
+          # The Shelf Fungus in place of LÖVE's heart. Assets.car carries the heart
+          # too, and current macOS reads it first by CFBundleIconName, so both
+          # go and the .icns is all that is left to read.
+          cp icons/icon.icns "$app/Contents/Resources/"
+          rm -f "$app/Contents/Resources/Assets.car" "$app/Contents/Resources/OS X AppIcon.icns"
+          plutil -replace CFBundleIconFile -string icon "$plist"
+          plutil -remove CFBundleIconName "$plist" || true
+          plutil -replace CFBundleName -string "$APP_NAME" "$plist"
+          plutil -replace CFBundleIdentifier -string "$MAC_BUNDLE_ID" "$plist"
+          plutil -replace CFBundleShortVersionString -string "$version" "$plist"
+          # Left in, the game would claim .love files and the LÖVE type as its
+          # own on every Mac it lands on.
+          plutil -remove UTExportedTypeDeclarations "$plist" || true
+          plutil -remove CFBundleDocumentTypes "$plist" || true
+          plutil -lint "$plist"
+          codesign --force --deep --sign - "$app"
+          codesign --verify --deep --strict "$app"
+          zip="$RUNNER_TEMP/$APP_NAME (macOS).zip"
+          ditto -c -k --keepParent "$app" "$zip"
+          ls -l "$zip"
+          echo "ZIP=$zip" >> "$GITHUB_ENV"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.APP_NAME }} (macOS)
+          path: ${{ env.ZIP }}
+          if-no-files-found: error
+
+  linux:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Package game.love
+        run: zip -9 -r "$RUNNER_TEMP/game.love" main.lua conf.lua src assets -x '*.DS_Store'
+
+      - name: Icons
+        run: python3 desktop/icon.py "$RUNNER_TEMP/icons"
+
+      - name: Build the AppImage
+        env:
+          # Runners have no FUSE; AppImages unpack themselves and run instead.
+          APPIMAGE_EXTRACT_AND_RUN: 1
+          ARCH: x86_64
+        run: |
+          cd "$RUNNER_TEMP"
+          curl -sSLf -o love.AppImage "https://github.com/love2d/love/releases/download/$LOVE_VERSION/love-$LOVE_VERSION-x86_64.AppImage"
+          curl -sSLf -o appimagetool https://github.com/AppImage/appimagetool/releases/download/continuous/appimagetool-x86_64.AppImage
+          chmod +x love.AppImage appimagetool
+          ./love.AppImage --appimage-extract > /dev/null
+          cp game.love squashfs-root/
+          # LÖVE's AppRun runs FUSE_PATH fused when it is set; it ships the line
+          # commented out for exactly this.
+          sed -i 's|^#FUSE_PATH="$APPDIR/my_game.love"|FUSE_PATH="$APPDIR/game.love"|' squashfs-root/AppRun
+          grep -q '^FUSE_PATH="$APPDIR/game.love"' squashfs-root/AppRun || { echo "::error::AppRun FUSE_PATH line not found"; exit 1; }
+          sed -i "s/^Name=.*/Name=$APP_NAME/; s/^Comment=.*/Comment=A tower defense where you are the mycelium under a sprout/; s/^Categories=.*/Categories=Game;/; s/^Icon=.*/Icon=groute/; /^NoDisplay=/d; /^MimeType=/d" squashfs-root/love.desktop
+          # The Shelf Fungus as the AppImage's icon (what file managers and
+          # AppImageLauncher show), in place of LÖVE's.
+          rm -f squashfs-root/love.svg squashfs-root/.DirIcon
+          cp icons/icon.png squashfs-root/groute.png
+          ln -s groute.png squashfs-root/.DirIcon
+          out="$RUNNER_TEMP/$APP_NAME.AppImage"
+          ./appimagetool squashfs-root "$out"
+          ls -l "$out"
+          echo "APPIMAGE=$out" >> "$GITHUB_ENV"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.APP_NAME }} (Linux)
+          path: ${{ env.APPIMAGE }}
+          if-no-files-found: error
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.APP_NAME }} (love)
+          path: ${{ runner.temp }}/game.love
+          if-no-files-found: error
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [windows, macos, linux]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+
+      # Release assets are single files: the Windows folder goes up zipped,
+      # the rest as they are.
+      - name: Gather
+        run: |
+          cd dist
+          (cd "$APP_NAME (Windows)" && zip -9 -r "../$APP_NAME (Windows).zip" .)
+          mv "$APP_NAME (macOS)/$APP_NAME (macOS).zip" .
+          mv "$APP_NAME (Linux)/$APP_NAME.AppImage" .
+          mv "$APP_NAME (love)/game.love" "Groute.love"
+          ls -l
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist/*.zip
+            dist/*.AppImage
+            dist/*.love
+          generate_release_notes: true
