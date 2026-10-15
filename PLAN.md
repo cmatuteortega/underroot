@@ -24,8 +24,8 @@ the game; the numbers behind every ticked item are rows in `src/defs.lua`.
 
 ### MVP3
 - [x] Stinkhorn (stench aura that slows and trips; flies hang about it as bait; Panic branch)
-- [x] Ghost Lamp (lure for walkers and fliers; brighter with flow and at night; Flare branch)
-- [x] Humongous Fungus (one per run, slow to grow, a quake stronger per fed node)
+- [x] Ghost Lamp (lure for walkers and fliers; brighter far from the Heart and at night; Flare branch)
+- [x] Humongous Fungus (one per run, slow to grow, a quake stronger per fed node near it or in its ring)
 - [x] Giant Water Bug (the Pond Edge: untouchable under the flooded lane, drags towers under; stones are safe)
 - [x] Giant Centipede (the Lawn: segments with their own HP, each cuts links, splits where broken)
 - [x] Bombardier Beetle (challenge mode: scalds as it walks, sprays the sprout from the end of the trail; shelves and towers are cover)

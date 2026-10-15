@@ -167,26 +167,27 @@ function Game:recompute()
             end
         end
     end
-    -- What a fed relay or mane does to what is round it.
+    -- What a fed relay does to the nodes it is linked to, and which branch a
+    -- mane tends.
     for _, n in ipairs(self.nodes) do
         local t = n.tower
         if t and n.conn and t.kind == "relay" then
-            local r = self:stat(t, "range")
             local m = self:stat(t, "capMul")
-            for _, l in ipairs(self.links) do
-                if dist(l.a, n) <= r or dist(l.b, n) <= r then l.capMul = max(l.capMul, m) end
-            end
             local bat, amp = self:stat(t, "battery") or 1, self:stat(t, "amp") or 1
-            for _, o in ipairs(self.nodes) do
-                if o.tower and o ~= n and dist(o, n) <= r then
-                    o.tower.battery = max(o.tower.battery, bat)
-                    o.tower.amp = max(o.tower.amp, amp)
+            for _, l in ipairs(n.links) do
+                if alive(l) then
+                    l.capMul = max(l.capMul, m)
+                    local o = l.a == n and l.b or l.a
+                    if o.tower then
+                        o.tower.battery = max(o.tower.battery, bat)
+                        o.tower.amp = max(o.tower.amp, amp)
+                    end
                 end
             end
-        elseif t and n.conn and t.kind == "mane" and self:stat(t, "webProof") then
-            local r = self:stat(t, "range")
-            for _, o in ipairs(self.nodes) do
-                if o.tower and dist(o, n) <= r then o.tower.warded = true end
+        elseif t and t.kind == "mane" then
+            t.care = self:branch(n, self:stat(t, "depth"))
+            if n.conn and self:stat(t, "webProof") then
+                for o in pairs(t.care) do if o.tower then o.tower.warded = true end end
             end
         end
     end
@@ -194,6 +195,14 @@ function Game:recompute()
     for _, l in ipairs(self.links) do
         l.thick = l.capMul > 1
         l.cap = D.LINK.cap * l.capMul * flow
+    end
+    -- A relay pumps: what it is linked to is fed at its own links' width,
+    -- however thin the way to it is.
+    for _, n in ipairs(self.nodes) do
+        local t = n.tower
+        if t and n.conn and t.kind == "relay" then
+            n.cap = max(n.cap, D.LINK.cap * self:stat(t, "capMul") * flow)
+        end
     end
     self.fed = 0
     for _, n in ipairs(self.nodes) do if n.conn and not n.heart then self.fed = self.fed + 1 end end
@@ -372,6 +381,34 @@ function Game:findRings()
         end
     end
     for _, n in ipairs(self.nodes) do n.ringed = self:ringed(n.x, n.z, n) end
+end
+
+-- The branch below a node: itself and every node whose way to the Heart runs
+-- through it, up to `depth` hops further out. Cut off, it is the node alone.
+function Game:branch(node, depth)
+    local set = { [node] = true }
+    if not node.conn then return set end
+    for _, o in ipairs(self.nodes) do
+        local p, k = o, 0
+        while p and p ~= node and k < depth do p, k = p.parent, k + 1 end
+        if p == node then set[o] = true end
+    end
+    return set
+end
+
+-- What a tower is linked to over living links.
+function Game:neighbours(node)
+    local out = {}
+    for _, l in ipairs(node.links) do
+        if alive(l) then out[#out + 1] = l.a == node and l.b or l.a end
+    end
+    return out
+end
+
+-- How many hops out from the Heart a fed node is, for the rules that like
+-- the far end of a branch; 1 if it is cut off.
+function Game:depth(node)
+    return node.conn and node.hop or 1
 end
 
 -- Inside a ring (or one of the nodes that make it)?
@@ -1003,7 +1040,7 @@ function Game:fire(n, t, d, dt)
         local e = self:infectable(n.x, n.z, range, S("maxHp"))
         list = { e }
     else
-        list = self:targets(n, range, d.air, d.minRange)
+        list = self:targets(n, range, d.air, not (n.pocket and n.pocket.high) and d.minRange or nil)
     end
     if not list[1] then return end
     t.cool = S("every")
@@ -1060,36 +1097,42 @@ function Game:fire(n, t, d, dt)
     elseif t.kind == "giant" then
         self:quake(n, t, S, power, range, list)
     elseif t.kind == "cordyceps" then
-        local dur = S("infect") * (n.quality == "rich" and 1.5 or 1) * (t.boost and 1.5 or 1)
+        local dur = S("infect") * self:deepHold(t) * (t.boost and 1.5 or 1)
         self.shots[#self.shots + 1] = { kind = "cordy", x0 = n.x, y0 = n.y + 10, z0 = n.z, target = e,
             tx = e.x, tz = e.z, t = 0, flight = 0.6, infect = dur, spread = S("spread") or 0, bite = S("bite") * power,
             maxHp = S("maxHp") }
     end
 end
 
--- Lion's Mane: heal what is chewed and regrow what is cut, within reach; on
--- the purge branch, clear webs and heal fruiting bodies too. It only drinks
--- while it has something to do.
+-- A cordyceps holds its host longer the further out along the network it
+-- grows: one hop from the Heart is the plain hold.
+function Game:deepHold(t)
+    local d = D.TOWER.cordyceps
+    return 1 + d.perHop * min(d.maxHops, self:depth(t.node) - 1)
+end
+
+-- Lion's Mane: heal what is chewed and regrow what is cut on the branch below
+-- it (every link with an end in its care, the one that feeds it included); on
+-- the purge branch, clear webs and heal the fruiting bodies there too. It only
+-- drinks while it has something to do.
 function Game:mane(n, t, S, power, boost, dt)
     local busy = false
-    local deg = self:degree(n)
-    local range, full = S("range"), self:linkHp()
+    local care, full = t.care or { [n] = true }, self:linkHp()
     for _, l in ipairs(self.links) do
-        local dd = segDist(n.x, n.z, l.a.x, l.a.z, l.b.x, l.b.z)
-        if dd <= range then
+        if care[l.a] or care[l.b] then
             if l.state == "alive" and l.hp < full then
                 l.hp = min(full, l.hp + S("heal") * power * boost * dt)
                 busy = true
             elseif l.state == "cut" and not l.salted then
-                l.regrow = l.regrow + S("regrow") * (1 + 0.5 * deg) * power * boost * dt
+                l.regrow = l.regrow + S("regrow") * power * boost * dt
                 busy = true
             end
         end
     end
     if S("purge") then
-        for _, o in ipairs(self.nodes) do
+        for o in pairs(care) do
             local ot = o.tower
-            if ot and dist(o, n) <= range then
+            if ot then
                 if ot.webbed > 0 or ot.stun > 0 then ot.webbed, ot.stun, busy = 0, 0, true end
                 if ot.hp < self:maxHp(ot) then
                     ot.hp = min(self:maxHp(ot), ot.hp + S("towerHeal") * power * boost * dt)
@@ -1112,6 +1155,7 @@ function Game:inky(n, t, S, power, boost, dt)
     local e = list[1]
     if not e then return end
     t.ink = S("inkEvery")
+    t.reserve = t.reserve - D.TOWER.inky.shot
     t.squash = 1
     t.fired = 0
     local r = S("inkR") * power
@@ -1126,18 +1170,21 @@ function Game:towerRange(t)
     if not r then return end
     if t.kind == "lamp" then return self:lure(t) end
     if t.kind == "giant" then
-        r = min(self:stat(t, "maxRange"), r + self:stat(t, "rangePerNode") * (self.fed or 0))
+        r = min(self:stat(t, "maxRange"), r + self:stat(t, "rangePerNode") * (self:rooted(t)))
     end
+    local n = t.node
+    if t.kind == "mortar" and n and n.pocket and n.pocket.high then r = r * D.TOWER.mortar.highRange end
     return r * (t.reach or 1) * (self:sky().range or 1)
 end
 
--- A Ghost Lamp's pull: brighter the more flow reaches it, brighter still at
--- night. Out of reserve it is dark.
+-- A Ghost Lamp's pull: brighter the further out from the Heart it grows,
+-- brighter still at night. Out of reserve it is dark.
 function Game:lure(t)
     local n = t.node
     if not n or t.hunger == "dormant" then return 0 end
-    local flow = n.conn and min(n.cap, 9) or 0
-    return (self:stat(t, "range") + self:stat(t, "perFlow") * flow) * (t.reach or 1) * (self:sky().lamp or 1)
+    local d = D.TOWER.lamp
+    local out = min(d.maxHops, self:depth(n) - 1)
+    return (self:stat(t, "range") + d.perHop * out) * (t.reach or 1) * (self:sky().lamp or 1)
 end
 
 -- Can a lamp pull this one off its way? Not a boss, not salt, not a mite
@@ -1159,9 +1206,18 @@ function Game:stink(n, t, S, power, boost, dt)
     t.panicT = (t.panicT or 0) - dt * boost
     local panic = S("panic") and t.panicT <= 0
     local busy, fled = false, false
+    -- The stench runs down its own living links: a lane along each.
+    local lanes, lane = {}, S("lane")
+    for _, l in ipairs(n.links) do if alive(l) then lanes[#lanes + 1] = l end end
+    local function reeks(e)
+        if (e.x - n.x) ^ 2 + (e.z - n.z) ^ 2 <= r2 then return true end
+        for _, l in ipairs(lanes) do
+            if segDist(e.x, e.z, l.a.x, l.a.z, l.b.x, l.b.z) <= lane then return true end
+        end
+    end
     for _, e in ipairs(self.enemies) do
         local d = D.ENEMIES[e.kind]
-        if not e.dead and not d.fly and not e.under and not e.hidden and (e.x - n.x) ^ 2 + (e.z - n.z) ^ 2 <= r2 then
+        if not e.dead and not d.fly and not e.under and not e.hidden and reeks(e) then
             busy = true
             e.reek = (e.reekT or 0) > 0 and min(e.reek, S("reek")) or S("reek")
             e.reekT = 0.25
@@ -1183,9 +1239,15 @@ function Game:stink(n, t, S, power, boost, dt)
     t.busy = busy
     if busy then
         t.reserve = max(0, t.reserve - D.TOWER.stink.drain * dt)
-        if random() < dt * 5 then
+        if random() < dt * (5 + 3 * #lanes) then
             local a, u = random() * 2 * math.pi, random() * range * 0.8
-            self.fx[#self.fx + 1] = { x = n.x + cos(a) * u, y = 2, z = n.z + sin(a) * u, vx = 0, vy = 14, vz = 0,
+            local x, z = n.x + cos(a) * u, n.z + sin(a) * u
+            if lanes[1] and random() < 0.6 then
+                local l, f = lanes[random(#lanes)], random()
+                u = random() * lane * 0.8
+                x, z = l.a.x + (l.b.x - l.a.x) * f + cos(a) * u, l.a.z + (l.b.z - l.a.z) * f + sin(a) * u
+            end
+            self.fx[#self.fx + 1] = { x = x, y = 2, z = z, vx = 0, vy = 14, vz = 0,
                 life = 0.5, k = random() < 0.5 and "m" or "d", rise = true }
         end
     end
@@ -1235,8 +1297,51 @@ end
 -- The Humongous Fungus: the ground round it heaves, everything on it is hit
 -- for more the bigger the network is, and on the honey branch it sticks and
 -- the links in reach are mended.
+-- The Humongous Fungus counts the fed nodes round it: those within `hops`
+-- links, and every node of a Fairy Ring it stands in.
+function Game:rooted(t)
+    local n = t.node
+    if not n then return 0, {} end
+    local seen, count, set = { [n] = true }, 0, {}
+    local frontier = { n }
+    for _ = 1, self:stat(t, "hops") do
+        local nxt = {}
+        for _, f in ipairs(frontier) do
+            for _, o in ipairs(self:neighbours(f)) do
+                if not seen[o] then
+                    seen[o] = true
+                    nxt[#nxt + 1] = o
+                    if o.conn and not o.heart then count, set[o] = count + 1, true end
+                end
+            end
+        end
+        frontier = nxt
+    end
+    for _, r in ipairs(self.rings) do
+        if r.set[n] then
+            for m in pairs(r.set) do
+                if not seen[m] and m.conn and not m.heart then seen[m], set[m], count = true, true, count + 1 end
+            end
+        end
+    end
+    return count, set
+end
+
+-- The nodes a tower's network rule works on, for showing them: a mane's
+-- branch, what a relay pumps into or an inky feeds, what a giant counts.
+function Game:touches(t)
+    local n = t.node
+    if t.kind == "mane" then return t.care end
+    if t.kind == "giant" then return select(2, self:rooted(t)) end
+    if t.kind == "relay" or t.kind == "inky" then
+        local set = {}
+        for _, o in ipairs(self:neighbours(n)) do set[o] = true end
+        return set
+    end
+end
+
 function Game:quake(n, t, S, power, range, list)
-    local dmg = (S("damage") + S("perNode") * (self.fed or 0)) * power
+    local dmg = (S("damage") + S("perNode") * (self:rooted(t))) * power
     local stick, quake = S("stick"), S("quake")
     for _, e in ipairs(list) do
         self:hurt(e, dmg)
@@ -1265,11 +1370,14 @@ function Game:updateMats(dt)
         local m = self.mats[k]
         m.grown = min(1, m.grown + dt * 1.6)
         if m.kind == "mat" then
-            -- A mat touching a link feeds on it and does not wither.
-            m.fed = false
+            -- Every link draped over a mat feeds it: one keeps it from
+            -- withering, and each (up to `maxDrape`) makes it stickier.
+            m.draped = 0
             for _, l in ipairs(self.links) do
-                if alive(l) and segDist(m.x, m.z, l.a.x, l.a.z, l.b.x, l.b.z) <= D.TOWER.mat.feed then m.fed = true break end
+                if alive(l) and segDist(m.x, m.z, l.a.x, l.a.z, l.b.x, l.b.z) <= D.TOWER.mat.feed then m.draped = m.draped + 1 end
             end
+            m.draped = min(m.draped, D.TOWER.mat.maxDrape)
+            m.fed = m.draped > 0
             if not m.fed then m.life = m.life - dt * (self:sky().wither or 1) end
             if m.life <= 0 then table.remove(self.mats, k) end
         else
@@ -1279,6 +1387,17 @@ function Game:updateMats(dt)
             if m.hp <= 0 then self:breakMat(m) end
         end
     end
+end
+
+-- How slow a mat holds what is on it, and how fast it dissolves it: both
+-- grow with the links draped over it.
+function Game:matSlow(m)
+    return self:stat(m, "slow") * D.TOWER.mat.drape ^ (m.draped or 0)
+end
+
+function Game:matDigest(m)
+    local dg = self:stat(m, "digest")
+    return dg and dg * (1 + D.TOWER.mat.drapeDigest * (m.draped or 0))
 end
 
 -- The mat under an enemy, if any.
@@ -1365,7 +1484,7 @@ function Game:feast(x, z)
     local best
     for _, n in ipairs(self.nodes) do
         local t = n.tower
-        if t and t.kind == "inky" and n.conn then
+        if t and t.kind == "inky" and t.hunger ~= "dormant" then
             local r = self:stat(t, "range") * (t.reach or 1)
             if (n.x - x) ^ 2 + (n.z - z) ^ 2 <= r * r then
                 local f = self:stat(t, "feast")
@@ -1374,6 +1493,21 @@ function Game:feast(x, z)
         end
     end
     return best
+end
+
+-- What an Inky Cap drinks goes first to itself and the fruiting bodies it is
+-- linked to, topping up their reserves (cut off or not); the rest to the bank.
+function Game:feedFrom(n, amount)
+    local list = self:neighbours(n)
+    list[#list + 1] = n
+    for _, o in ipairs(list) do
+        local t = o.tower
+        if t and amount > 0 then
+            local give = min(amount, self:reserveMax(t) - t.reserve)
+            if give > 0 then t.reserve, amount = t.reserve + give, amount - give end
+        end
+    end
+    return amount
 end
 
 function Game:updateCorpses(dt)
@@ -1390,8 +1524,9 @@ function Game:updateCorpses(dt)
             -- Being drunk: the value goes over a second and a half, and you see it go.
             local take = min(c.value, c.full * dt / 1.5)
             c.value = c.value - take
-            self.nutrients = self.nutrients + take
             self.stats.drunk = self.stats.drunk + take
+            if c.inky then take = self:feedFrom(c.inky, take) end
+            self.nutrients = self.nutrients + take
             if random() < dt * 20 then
                 self.fx[#self.fx + 1] = { glow = true, x = c.x, y = 2, z = c.z, tx = c.ax, tz = c.az, t = 0, life = 0.5, max = 0.5 }
             end
@@ -1402,7 +1537,7 @@ function Game:updateCorpses(dt)
             local mult = self.mods.feast and 1.5 or 1
             local inky = self:feast(c.x, c.z)
             if inky then
-                c.absorb, c.ax, c.az = true, inky.n.x, inky.n.z
+                c.absorb, c.ax, c.az, c.inky = true, inky.n.x, inky.n.z, inky.n
                 mult = mult * inky.f
             else
                 for _, l in ipairs(self.links) do
@@ -1569,7 +1704,7 @@ function Game:move(e, dt)
     e.blind = ink ~= nil
     local slow = 1
     if not d.noSlow then
-        if mat then slow = slow * self:stat(mat, "slow") end
+        if mat then slow = slow * self:matSlow(mat) end
         if ink then slow = slow * ink.slow end
         if self.rings[1] and self:ringed(e.x, e.z) then slow = slow * self:ringSlow() end
         if (e.reekT or 0) > 0 then slow = slow * e.reek end
@@ -1579,7 +1714,7 @@ function Game:move(e, dt)
     slow = slow * pace
     -- A stomach mat dissolves what stands on it.
     if mat then
-        local dg = self:stat(mat, "digest")
+        local dg = self:matDigest(mat)
         if dg then self:hurt(e, dg * dt, true, true) end
         if e.dead then return end
     end
@@ -1856,12 +1991,12 @@ function Game:follow(e, d, slow, dt)
     for _, l in ipairs(self:linksNear(e.x, e.z, d.crushR)) do self:crush(l) end
 end
 
--- Is a fed Lion's Mane in reach of this node? Its threads hold what the
--- Water Bug grabs.
+-- Does a fed Lion's Mane tend this node? Its threads hold what the Water Bug
+-- grabs.
 function Game:maned(node)
     for _, n in ipairs(self.nodes) do
         local t = n.tower
-        if t and t.kind == "mane" and n.conn and t.hunger ~= "dormant" and dist(n, node) <= self:stat(t, "range") then return true end
+        if t and t.kind == "mane" and n.conn and t.hunger ~= "dormant" and t.care and t.care[node] then return true end
     end
     return false
 end

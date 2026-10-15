@@ -101,8 +101,9 @@ it). If the thread it is on is pruned or cut, it falls into the soil and fizzles
 That is the design doc's counterplay: prune the link it is on, accept the loss,
 save what is downstream.
 
-**Regrowing.** Lion's Mane heals chewed links in its reach and regrows cut ones,
-faster for every link it touches. Any cut link can also be regrown by hand.
+**Regrowing.** Lion's Mane tends the branch below it: it heals chewed links and
+regrows cut ones on every link with an end at a node whose way to the Heart runs
+through it, up to three hops further out. Any cut link can also be regrown by hand.
 
 **Rerouting and the Fairy Ring.** A loop costs more links and more upkeep but
 keeps flowing when one link goes. Close a loop of four or more fed nodes around
@@ -115,7 +116,11 @@ for nutrients over a second and a half (you see it go). Worker ants pick up
 bodies lying in their way and carry them off to the sprout. Kill the ant and it
 drops the body.
 
-**Towers.** Each has its network rule from the doc, and two upgrade branches of
+**Towers.** Each has a network rule that asks for its own place in the graph, so
+the rules pull against each other: a hub (Puffer), a dead end (Needle), the fork
+at the root of a branch (Mane), the far end of a long chain (Cordyceps, Lamp), the
+centre of a star (Relay), an outpost (Inky), links fanned over the trail (Mat,
+Stinkhorn), a dense knot or a ring (Humongous Fungus). Each has two upgrade branches of
 two tiers each. Every tier is a new model, not a recolour: a toxin puffer goes
 green and grows satellites, a lance-tipped enoki clump stands a head taller than
 the rest, a bramble shelf bristles. Each one breathes or sways on its own beat,
@@ -127,16 +132,16 @@ levels everything grows from the start but the Humongous Fungus.
 | --- | --- | --- | --- | --- | --- |
 | Spore Puffer | 30 | lobs spore clouds, splash; hits fliers | +1 puff per link at its node (up to 4) | Lingering Toxin, Miasma | Rapid Fire, Spore Gatling |
 | Enoki Needle | 45 | long range, single target, ignores armor; hits fliers | x1.8 damage on a dead end (one link) | Skewer, Lance (runs through 2, 3 in a line) | Mark Target, Hunter's Mark (marked prey takes more from everything) |
-| Slime Mat | 18 | on the trail: slows, catches a rolling pillbug | doesn't wither while a link touches it | Glue, Amber | Digest, Stomach (dissolves what stands on it) |
-| Lion's Mane | 40 | heals links, regrows cut ones | +50% regrowth per link it touches | Fast Regrowth, Old Growth | Purge (clears webs and stuns, heals towers), Sanctuary (towers in reach can't be webbed or stunned) |
-| Relay | 30 | no attack | doubles the flow cap of links in reach | Battery, Deep Battery (towers in reach hold more) | Amplifier, Resonator (towers in reach hit harder, triple flow) |
-| Inky Cap (wave 2) | 35 | drinks bodies in reach for x2, drips ink pools that slow and blind (no chewing) | works with no link near the body, only to itself | Wide Reach, Spore Shadow | Big Ink, Ink Flood |
+| Slime Mat | 18 | on the trail: slows, catches a rolling pillbug | stickier for every living link draped over it (x0.82 slow and +50% digest each, up to 3); with none it withers | Glue, Amber | Digest, Stomach (dissolves what stands on it) |
+| Lion's Mane | 40 | heals links, regrows cut ones | tends only the branch below it, 3 hops out (Mane at the fork, not the hub) | Fast Regrowth, Old Growth (4, 5 hops) | Purge (clears webs and stuns, heals the towers it tends), Sanctuary (they can't be webbed or stunned) |
+| Relay | 30 | no attack | works on what it is linked to: its links carry x2 flow and it pumps them full however thin the way to it, and the towers linked to it hit 10% harder | Battery, Deep Battery (they hold more) | Amplifier, Resonator (they hit harder, triple flow) |
+| Inky Cap (wave 2) | 35 | drinks bodies in reach for x2, drips ink pools that slow and blind (no chewing) | what it drinks tops up itself and the towers linked to it first, cut off or not, then the bank: an outpost's battery | Wide Reach, Spore Shadow | Big Ink, Ink Flood |
 | Shelf Fungus (wave 4) | 35 | on the trail: blocks it, enemies must chew through | must grow beside a fed link; shields links near it from chewing and crushing | Thick Armor, Ironwood (more wood, heals) | Thorny, Bramble (bites back) |
-| Puffball Mortar (wave 5) | 70 | huge slow blast, minimum range, ground only | drinks three times as much: on a link that isn't relayed it fires at half pace | Cluster Blast, Carpet (bomblets) | Smoke, Blackout (stuns, makes carriers drop bodies) |
-| Cordyceps Bloom (wave 7) | 60 | infects one enemy: it turns, walks back biting its own, then dies and fruits | +50% on a rich pocket | Longer Control, Puppeteer (longer, bigger hosts) | Spreads on Death, Plague |
-| Stinkhorn (wave 3) | 40 | a stench round it: everything in it wades (×0.75) and now and then trips and is stunned | flies (gnats, moths) that smell it from 70 off come and hang about it for 6 s instead of flying on: bait for the puffers and needles | Wider Stench, Carrion Reek (wider, slower, rots them) | Panic (now and then they turn and flee), Terror; it becomes a red basket stinkhorn |
-| Ghost Lamp (wave 6) | 35 | a glowing decoy: walkers and fliers that come into its glow leave the trail for it and chew it until it goes out or they give up (5 s); bosses, brine and mites ignore it | its glow is 30 + 5 per unit of flow reaching it, so a relayed lamp pulls from much further; night adds 40% | Longer Glow, Will-o'-Wisp (tougher, holds them longer, heals) | Flare, Starburst (bursts when it is destroyed, and stuns) |
-| Humongous Fungus (wave 9) | 150 | one per run, and slow to grow (8 s before it does anything): a quake round it every 3.2 s that hits every walker in reach | stronger for every fed node in the network: +2.5 damage and +1.5 reach a node | Spreading, Armillaria (more per node) | Honey Root, Ancient (quakes stick them, mend links in reach, then stun) |
+| Puffball Mortar (wave 5) | 70 | huge slow blast, minimum range, ground only | drinks three times as much: unless a relay pumps into it, it fires at half pace. On high ground it has no minimum range and reaches 20% further | Cluster Blast, Carpet (bomblets) | Smoke, Blackout (stuns, makes carriers drop bodies) |
+| Cordyceps Bloom (wave 7) | 60 | infects one enemy: it turns, walks back biting its own, then dies and fruits | holds its host 20% longer for every hop out from the Heart past the first (up to +120%) | Longer Control, Puppeteer (longer, bigger hosts) | Spreads on Death, Plague |
+| Stinkhorn (wave 3) | 40 | a stench round it: everything in it wades (×0.75) and now and then trips and is stunned | the stench runs down each of its living links, a lane 8 wide along the thread: fan its links over the trail. Flies (gnats, moths) that smell it from 70 off come and hang about it for 6 s instead of flying on: bait for the puffers and needles | Wider Stench, Carrion Reek (wider, slower, rots them) | Panic (now and then they turn and flee), Terror; it becomes a red basket stinkhorn |
+| Ghost Lamp (wave 6) | 35 | a glowing decoy: walkers and fliers that come into its glow leave the trail for it and chew it until it goes out or they give up (5 s); bosses, brine and mites ignore it | its glow is 30 + 5 for every hop out from the Heart past the first (up to 8), so it belongs out front; night adds 40% | Longer Glow, Will-o'-Wisp (tougher, holds them longer, heals) | Flare, Starburst (bursts when it is destroyed, and stuns) |
+| Humongous Fungus (wave 9) | 150 | one per run, and slow to grow (8 s before it does anything): a quake round it every 3.2 s that hits every walker in reach | stronger for every fed node within two links of it, and every node of a Fairy Ring it stands in: +5 damage and +3 reach a node | Spreading, Armillaria (more per node, three links out) | Honey Root, Ancient (quakes stick them, mend links in reach, then stun) |
 
 **Enemies.** Night Moth (comes out on night waves; flies to the brightest light,
 a lit Ghost Lamp first, else the nearest fed fruiting body, and eats it), Worker Ant (fast, chews, steals corpses), Pillbug (armored 3; rolls
@@ -164,7 +169,7 @@ shake the board.
 - **Giant Water Bug** (the Pond Edge, wave 12): under the flooded lane it cannot
   be seen or hurt, only its ripples. Every seven seconds it surfaces, lunges at
   the nearest fruiting body within 44 and drags at it for 2.6 s. Answer: build on
-  the stones (high ground, out of its reach), keep a fed Lion's Mane in reach
+  the stones (high ground, out of its reach), keep the towers off the stones on a fed Lion's Mane's branch
   (it halves the grip), and hit it while it is out.
 - **Giant Centipede** (the Lawn, wave 15): a head and eleven segments, each its
   own enemy with its own HP and armor 5, each crushing every link it runs over.
@@ -227,8 +232,8 @@ tune in playtesting, and they are. Upgrade tiers only name what they change:
 
 `love . --bot 10 [level]` plays a level headless with one fixed, sensible build
 order written for its map: it grows the same network, upgrades along the way,
-repairs cuts and prunes brine, and takes the first mutation offered. Over ten runs
-it wins the Crack 8 times, the Pond Edge 8 and the Lawn 7, usually with the sprout
+repairs cuts and prunes brine, and takes the first mutation offered. Over twenty
+runs it wins the Crack 18 times, the Pond Edge 15 and the Lawn 12, usually with the sprout
 badly hurt. The Stag Beetle still gets through to the sprout in most runs, because
 the bot never builds a second route or a Sanctuary, and the Water Bug often
 reaches the sprout nearly dead. In challenge mode it wins the Crack 4 times in 5,

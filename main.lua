@@ -231,6 +231,12 @@ local function line3(x0, y0, z0, x1, y1, z1, k)
     end
 end
 
+local function members(set)
+    local k = 0
+    for _ in pairs(set or {}) do k = k + 1 end
+    return k
+end
+
 -- A ring on the ground: a tower's reach.
 local function ring(x, z, r, k, dash)
     local n = max(24, floor(r * 1.6))
@@ -1246,6 +1252,29 @@ local function drawBoard()
     -- Reach: whatever is hovered or selected, or what is about to be grown.
     local towerMode = D.TOWER[mode] and not trailMode
     local shown = hover.node and hover.node.tower or selected
+    -- The rules that work through the network show the nodes they work on.
+    local touched = shown and shown.node and game:touches(shown)
+    if touched then
+        for o in pairs(touched) do ring(o.x, o.z, 7, IDX.l, true) end
+    end
+    if shown and shown.kind == "stink" and shown.node then
+        local lane = game:stat(shown, "lane")
+        for _, l in ipairs(shown.node.links) do
+            if game.alive(l) then
+                local dx, dz = l.b.x - l.a.x, l.b.z - l.a.z
+                local len = max(1, math.sqrt(dx * dx + dz * dz))
+                local nx, nz = -dz / len * lane, dx / len * lane
+                for s = 0, floor(len / 3) do
+                    local f = s * 3 / len
+                    for side = -1, 1, 2 do
+                        local px, pz = l.a.x + dx * f + nx * side, l.a.z + dz * f + nz * side
+                        local i, j, d = world:toImage(px, world:groundAt(px, pz) + 0.3, pz)
+                        if visible(floor(i), floor(j), d + 1) then put(IDX.d, i, j) end
+                    end
+                end
+            end
+        end
+    end
     if shown and game:stat(shown, "range") and shown.kind ~= "shelf" then
         local x, z = shown.node and shown.node.x or shown.x, shown.node and shown.node.z or shown.z
         local r = shown.node and game:towerRange(shown) or game:stat(shown, "range")
@@ -1610,15 +1639,22 @@ local function tooltip()
         elseif t.stun > 0 then s = s .. ": STUNNED"
         elseif t.hunger == "dormant" then s = s .. ": DORMANT, NO NUTRIENTS"
         elseif not hover.node.conn then s = s .. ": CUT OFF, ON ITS RESERVE"
-        elseif t.thirsty then s = s .. ": THIRSTY, NEEDS A RELAYED LINK"
+        elseif t.thirsty then s = s .. ": THIRSTY, NEEDS A RELAY BESIDE IT"
         elseif t.hunger == "starved" then s = s .. ": STARVED" end
         if t.hp < game:maxHp(t) then s = s .. "  HP " .. math.ceil(t.hp) end
         if t.kind == "puffer" then s = s .. "  PUFFS " .. max(1, min(4, game:degree(hover.node))) end
         if t.kind == "needle" and game:degree(hover.node) == 1 then s = s .. "  DEAD END X1.8" end
         if t.kind == "lamp" then s = s .. "  GLOW " .. floor(t.glow or 0) end
+        if t.kind == "mane" then s = s .. "  TENDS " .. members(t.care) .. " NODES" end
+        if t.kind == "relay" then s = s .. "  PUMPS INTO " .. #game:neighbours(hover.node) end
+        if t.kind == "inky" then s = s .. "  FEEDS " .. #game:neighbours(hover.node) .. " FIRST" end
+        if t.kind == "cordyceps" then s = s .. "  HOLD X" .. string.format("%.1f", game:deepHold(t)) end
+        if t.kind == "stink" then s = s .. "  REEKS DOWN " .. game:degree(hover.node) .. " LINKS" end
+        if t.kind == "mortar" and hover.node.pocket.high then s = s .. "  HIGH: NO MIN RANGE" end
         if t.kind == "giant" then
+            local k = game:rooted(t)
             if t.grown < 1 then s = s .. "  GROWING " .. floor(t.grown * 100) .. "%"
-            else s = s .. "  " .. game.fed .. " NODES: HITS " .. floor(game:stat(t, "damage") + game:stat(t, "perNode") * game.fed) end
+            else s = s .. "  " .. k .. " NODES: HITS " .. floor(game:stat(t, "damage") + game:stat(t, "perNode") * k) end
         end
         if hover.node.ringed then s = s .. "  RING" end
         if (t.amp or 1) > 1 then s = s .. "  AMPED" end
@@ -1665,7 +1701,10 @@ local function tooltip()
     if hover.mat and mode == "grow" then
         local m = hover.mat
         local s = towerName(m)
-        if m.kind == "mat" then s = s .. (m.fed and ": FED BY A LINK" or ": WITHERING " .. math.ceil(m.life) .. "S")
+        if m.kind == "mat" then
+            s = s .. (m.fed and (": " .. m.draped .. " LINK" .. (m.draped > 1 and "S" or "") .. " OVER IT")
+                or ": WITHERING " .. math.ceil(m.life) .. "S")
+            s = s .. "  SLOW " .. floor((1 - game:matSlow(m)) * 100) .. "%"
         else s = s .. "  HP " .. math.ceil(m.hp) .. "/" .. game:maxHp(m) end
         return s, "w"
     end
