@@ -113,8 +113,8 @@ local tapped -- the node just flair.pressed: let go of it where it was, and it i
 local hover = {}
 -- The pointer in HUD pixels (x, y) and window pixels (wx, wy).
 local mouse = { x = 0, y = 0, wx = 0, wy = 0 }
--- The safe area, in HUD pixels: a notch, a rounded corner or a home bar eats
--- into the window on a phone. The board runs under them; the HUD keeps out.
+-- How far the HUD keeps in from each screen edge, in HUD pixels. None: the HUD
+-- runs right to the border, notch and rounded corners and all, on a phone too.
 local inset = { l = 0, t = 0, r = 0, b = 0 }
 -- Played with a finger: no hover, no right button, no keyboard. Set by the
 -- last thing that pressed, so a tablet with a mouse plugged in reads the mouse.
@@ -197,9 +197,6 @@ local function fit()
     vw, vh = ceil(w / uz), ceil(h / uz)
     ui = love.graphics.newCanvas(vw, vh)
     ui:setFilter("nearest", "nearest")
-    local sx, sy, sw, sh = love.window.getSafeArea()
-    inset.l, inset.t = ceil(sx / uz), ceil(sy / uz)
-    inset.r, inset.b = ceil((w - sx - sw) / uz), ceil((h - sy - sh) / uz)
 
     zoom = base + zoomStep
     cw, ch = ceil(w / zoom), ceil(h / zoom)
@@ -416,7 +413,7 @@ local function layTools(g)
 end
 layTools()
 
--- The toolbar sits in the safe area along the bottom with the wave button at
+-- The toolbar sits along the bottom with the wave button at
 -- its end. A screen too narrow for both (a phone held upright) narrows the
 -- buttons first and then lifts the wave button onto a row of its own, at the
 -- right, where a thumb is.
