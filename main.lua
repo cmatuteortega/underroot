@@ -9,10 +9,10 @@
 -- painter's order. So an ant goes behind a slab of the patio and a thread of
 -- hypha dips out of sight past a crumb with nothing traced but the ant.
 --
--- The camera goes round the board a quarter turn at a time (the button at the
--- bottom right, or E): the board has a picture for each side (see World:toView)
--- and the turn between them is the picture going round, squashed as the ground
--- is, before the next one takes its place.
+-- The camera goes round the board a quarter turn at a time (the buttons at the
+-- bottom right and left, or E and Q): the board has a picture for each side
+-- (see World:toView) and the turn between them is the picture going round,
+-- squashed as the ground is, before the next one takes its place.
 --
 -- This file is the screen: the canvas, the camera, compositing, the HUD and
 -- what the mouse (or a finger) means. The rules are in src/game.lua and the numbers in
@@ -413,11 +413,12 @@ local function waveRect()
 end
 -- The top of everything the toolbar puts down: the tip line sits above it.
 local function barTop() return bar().top end
--- The button that takes the camera round the board: in the bottom right
--- corner, over the toolbar.
+-- The buttons that take the camera round the board, over the toolbar:
+-- clockwise (d = 1) in the bottom right corner, back (d = -1) in the left.
 local RW, RH = 22, 18
-local function turnRect()
-    return vw - inset.r - 2 - RW, barTop() - RH - 5, RW, RH
+local function turnRect(d)
+    local x = d == -1 and inset.l + 2 or vw - inset.r - 2 - RW
+    return x, barTop() - RH - 5, RW, RH
 end
 local function inside(x, y, rx, ry, rw, rh) return x >= rx and y >= ry and x < rx + rw and y < ry + rh end
 
@@ -558,7 +559,7 @@ local function info()
     else
         local top = inset.t + TOP + 2
         if wide() then
-            local _, ty = turnRect()
+            local _, ty = turnRect(1)
             P.x, P.y, P.h = vw - inset.r - w - 3, top, ty - 4 - top
         else
             P.x, P.y, P.h = inset.l + 3, top, min(h + 8, floor((barTop() - top) * 0.6))
@@ -745,7 +746,8 @@ local function findHover()
         if inside(mx, my, buttonRect(n)) then hover.button = n return end
     end
     if inside(mx, my, waveRect()) then hover.wave = true return end
-    if inside(mx, my, turnRect()) then hover.turn = true return end
+    if inside(mx, my, turnRect(1)) then hover.turn = 1 return end
+    if inside(mx, my, turnRect(-1)) then hover.turn = -1 return end
     if my < inset.t + TOP then hover.strip = true return end
     local ci, cj = cursor()
     local best, bd = nil, 9
@@ -921,7 +923,7 @@ local function turnCamera(d)
     local n1, m1 = world:toImage(x + 10, y, z)
     local a = math.atan2((m1 - m0) * 2, n1 - n0) - a0
     a = (a + math.pi) % (2 * math.pi) - math.pi
-    turning = { t = 0, old = old, px = px, py = py, angle = a }
+    turning = { t = 0, old = old, px = px, py = py, angle = a, d = d }
 end
 
 local function click(b)
@@ -984,7 +986,7 @@ local function click(b)
         if game.phase == "build" then game:startWave() else speed = speed % 3 + 1 end
         return
     end
-    if hover.turn then turnCamera(1) return end
+    if hover.turn then turnCamera(hover.turn) return end
     if game.phase == "won" or game.phase == "lost" then openMenu() return end
     if hover.strip then
         -- No P key on a phone: the top strip is the pause button.
@@ -1254,6 +1256,7 @@ function love.keypressed(key)
     end
     if key == "f" then speed = speed % 3 + 1 end
     if key == "e" then turnCamera(love.keyboard.isDown("lshift", "rshift") and -1 or 1) end
+    if key == "q" then turnCamera(-1) end
     if key == "p" then paused = not paused end
     if key == "r" and (game.phase == "won" or game.phase == "lost" or love.keyboard.isDown("lshift")) then start() end
     if key == "m" then openMenu() end
@@ -2242,7 +2245,8 @@ local function tooltip()
         if b.tower and b.mode == mode then return say(b.name .. ": CLICK AGAIN TO READ IT", b.name .. ": TAP AGAIN TO READ IT"), "w" end
         return b.name .. (b.cost and (" (" .. b.cost .. ")") or "") .. ": " .. b.blurb, "w"
     end
-    if hover.turn then return say("TURN THE BOARD (E, SHIFT+E BACK)", "TURN THE BOARD"), "w" end
+    if hover.turn == 1 then return say("TURN THE BOARD (E)", "TURN THE BOARD"), "w" end
+    if hover.turn == -1 then return say("TURN THE BOARD BACK (Q)", "TURN THE BOARD BACK"), "w" end
     if hover.wave then
         return game.phase == "build" and say("START THE NEXT WAVE (SPACE)", "START THE NEXT WAVE") or say("GAME SPEED (F)", "GAME SPEED"), "w"
     end
@@ -2342,14 +2346,16 @@ end
 
 local drawInfo -- the info panel, drawn by the HUD and the loadout (below)
 
--- The turn button: a ring of ground going round, an arrowhead on its end, and
--- a mark on the ring for the side the camera is on.
-local function drawTurnButton()
-    local x, y, w, h = turnRect()
-    box(x, y, w, h, (hover.turn or turning) and "n" or "u", hover.turn and "t" or "o")
+-- A turn button: a ring of ground going round, an arrowhead on its end, and
+-- a mark on the ring for the side the camera is on. d = -1 is the clockwise
+-- one mirrored.
+local function drawTurnButton(d)
+    local x, y, w, h = turnRect(d)
+    local going = turning and turning.d == d
+    box(x, y, w, h, (hover.turn == d or going) and "n" or "u", hover.turn == d and "t" or "o")
     local cx, cy = x + floor(w / 2), y + floor(h / 2) + 1
-    local spin = turning and turning.t / TURN_TIME * (turning.angle > 0 and 1 or -1) or 0
-    local function at(a, rx, ry) return cx + floor(math.cos(a) * rx + 0.5), cy + floor(math.sin(a) * ry + 0.5) end
+    local spin = turning and turning.t / TURN_TIME * (turning.angle > 0 and 1 or -1) * d or 0
+    local function at(a, rx, ry) return cx + floor(d * math.cos(a) * rx + 0.5), cy + floor(math.sin(a) * ry + 0.5) end
     -- The ring is the ground seen from the camera: twice as wide as it is deep.
     color("k")
     for s = 0, 23 do
@@ -2367,13 +2373,13 @@ local function drawTurnButton()
     local i, j = at(ae, 7, 4)
     love.graphics.rectangle("fill", i - 1, j - 1, 3, 1)
     love.graphics.rectangle("fill", i, j - 2, 1, 1)
-    love.graphics.rectangle("fill", i - 1, j - 1, 1, 3)
+    love.graphics.rectangle("fill", i - d, j - 1, 1, 3)
     -- Which side: a dot per view, the one shown lit.
     for q = 0, World.TURNS - 1 do
         color(q == world.turn and "l" or "k")
         love.graphics.rectangle("fill", x + 3 + q * 2, y + 2, 1, 1)
     end
-    if not touch then text("E", x + w - 4, y + 1, "s") end
+    if not touch then text(d == 1 and "E" or "Q", x + w - 4, y + 1, "s") end
 end
 
 local function drawHud()
@@ -2502,7 +2508,8 @@ local function drawHud()
         text(s2, wx + floor((ww - Font.width(s2)) / 2), wy + 9, "w")
         if not touch then text("F", wx + floor((ww - 3) / 2), wy + 18, "s") end
     end
-    drawTurnButton()
+    drawTurnButton(1)
+    drawTurnButton(-1)
 
     local tipBase = barTop()
 
