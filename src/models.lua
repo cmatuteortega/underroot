@@ -188,6 +188,7 @@ do
     local l = sqrt(EYE_UX ^ 2 + EYE_UY ^ 2 + EYE_UZ ^ 2)
     EYE_UX, EYE_UY, EYE_UZ = EYE_UX / l, EYE_UY / l, EYE_UZ / l
 end
+local HAT_TILT = -0.4 -- how far the cap is cocked over, like a hat
 local SCLERA = ramp("w", "w", "w", "t")
 local CAP = RAMP.sprout
 -- Its spots, round the side you see (and two peeking over the back): a way
@@ -251,6 +252,21 @@ function M.shroom(wilt, blink)
                     if f > 0.84 then return f > 0.9 and IDX.d or IDX.c end
                 end },
         }
+        -- The cap is worn like a hat: tipped over to one side of the stalk and
+        -- slid a little down it, eye and all.
+        local hat = A.mul(A.move(0, 11.5, 0), A.rotY(-math.pi / 4), A.rotX(HAT_TILT), A.rotY(math.pi / 4),
+            A.move(0, -12.3, 0))
+        for k = 3, #parts do
+            local m = A.mul(hat, parts[k].at)
+            -- The socket and the eye ride on the cap, but the eye keeps looking at you.
+            if k >= 5 then
+                m = parts[k].at
+                m[4], m[8], m[12] = hat[1] * m[4] + hat[2] * m[8] + hat[3] * m[12] + hat[4],
+                    hat[5] * m[4] + hat[6] * m[8] + hat[7] * m[12] + hat[8],
+                    hat[9] * m[4] + hat[10] * m[8] + hat[11] * m[12] + hat[12]
+            end
+            parts[k].at = m
+        end
         return place(parts, A.scale(1.15, 1.15, 1.15), A.rotZ(-0.3 * w), A.rotX(0.2 * w))
     end)
 end
