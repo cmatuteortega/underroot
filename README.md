@@ -50,7 +50,8 @@ chew through any thread they cross.
 | drag from a fed node to a pocket (or click one, then the other) | grow a link; cost grows with length, the far end glows if it is in reach |
 | `1` | grow hyphae (the default tool) |
 | `2`–`9`, `0`, `T`, `G`, `H` then click a linked pocket (the species you brought) | Spore Puffer, Enoki Needle, Lion's Mane, Relay, Inky Cap, Puffball Mortar, Cordyceps Bloom, Stinkhorn, Ghost Lamp, Humongous Fungus; Slime Mat (`4`) and Shelf Fungus (`8`) go on a trail tile |
-| click a tower, mat or shelf | select it: its upgrade cards show over the toolbar, and a panel tells all about it as it has grown (live numbers, what is wrong with it, both branches). On a wide screen the camera eases it to a third of the way across with the panel on the right; upright, the panel goes across the top. Click elsewhere to close it |
+| click a tower, mat or shelf | select it: its upgrade cards show over the toolbar, and a panel tells all about it as it has grown (live numbers, what is wrong with it, both branches). On a wide screen the camera eases it to a third of the way across and half way down, with the panel on the right; upright, the panel goes across the top. Click elsewhere to close it |
+| click on nothing (no pocket, plant or thread, or off the board) | put everything down: the tool in hand, a thread being pulled, the selection |
 | `Z` / `C`, or click a card | upgrade the selection down the left / right branch (after the fork, either key goes on up it) |
 | `1` `2` `3`, or click a card | pick a Mutation when the network offers them |
 | `X` then click | prune a link (half back), clear a tower (60% back), lift a mat |

@@ -784,6 +784,12 @@ function love.load(args)
     end
 end
 
+-- A tap on nothing (no pocket, no plant, no thread, off the board) puts
+-- everything down: the tool in hand, a thread being pulled, the selection.
+local function letGo()
+    mode, drag, selected = "grow", nil, nil
+end
+
 local function click(b)
     if menu == "loadout" then
         -- A card opens its panel; the same card again (or the panel's button)
@@ -869,18 +875,26 @@ local function click(b)
             game:prune(hover.link)
         elseif hover.mat then
             game:liftMat(hover.mat)
+        else
+            letGo()
         end
     elseif D.TOWER[mode] and D.TOWER[mode].onTrail then
-        if hover.c then
+        -- Off the trail (or off the board) there is nowhere to lay it.
+        if hover.c and world:distAt(hover.c, hover.r) then
             local m = game:lay(mode, hover.c, hover.r)
             if m then selected = m end
+        else
+            letGo()
         end
     elseif mode == "pulse" then
-        if hover.node and game:pulse(hover.node) then mode = "grow" end
+        if not hover.node then letGo()
+        elseif game:pulse(hover.node) then mode = "grow" end
     else
         if hover.node then
             local t = game:build(mode, hover.node)
             if t then selected = t end
+        else
+            letGo()
         end
     end
 end
@@ -1099,8 +1113,8 @@ end
 
 -- Where the camera should go to show `s` (a tower, mat or shelf) beside the
 -- info panel: a third of the way across a wide screen, the panel on the right;
--- on a narrow one in the middle of what is left under the panel. On a wide
--- screen it only moves up or down as far as it takes to be clear of the bars.
+-- and half way down; on a narrow one in the middle of what is left under the
+-- panel.
 local function focusOn(s)
     local x, y, z
     if s.node then x, y, z = s.node.x, s.node.y + 6, s.node.z else x, y, z = s.x, (s.y or 0) + 3, s.z end
@@ -1108,8 +1122,7 @@ local function focusOn(s)
     local hx, hy = (i - camx) * zoom / uz, (j - camy) * zoom / uz
     local wx, wy
     if wide() then
-        wx = floor(vw / 3)
-        wy = max(inset.t + TOP + 14, min(barTop() - 34, hy))
+        wx, wy = floor(vw / 3), floor(vh / 2)
     else
         local P = info()
         wx = floor(vw / 2)
