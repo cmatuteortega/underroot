@@ -137,6 +137,15 @@ jobs:
           sed -i -E "s/^( *compileSdk)( *=)? *[0-9]+/\1 = $TARGET_SDK/; s/^( *targetSdk) +[0-9]+/\1 $TARGET_SDK/" app/build.gradle
           grep -Eq "^ *targetSdk $TARGET_SDK\$" app/build.gradle && grep -Eq "^ *compileSdk = $TARGET_SDK\$" app/build.gradle || { echo "::error::target SDK patch did not apply to app/build.gradle"; exit 1; }
           grep -nE 'minSdk|compileSdk|targetSdk' app/build.gradle
+          # Edge to edge: the stock activity keeps the window out of the notch's
+          # strip (cutout mode NEVER, set in onCreate), which sideways is a black
+          # bar down one side; LÖVE's later switch to SHORT_EDGES on going
+          # fullscreen only edits the attributes and never reaches the window.
+          # The game is always fullscreen, so lay out under the cutout from the
+          # start, before the window is attached.
+          act=app/src/main/java/org/love2d/android/GameActivity.java
+          sed -i 's/LAYOUT_IN_DISPLAY_CUTOUT_MODE_NEVER/LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES/g' "$act"
+          ! grep -q 'CUTOUT_MODE_NEVER' "$act" || { echo "::error::cutout patch did not apply to GameActivity.java"; exit 1; }
           grep -n '^app\.' gradle.properties
           # The Shelf Fungus launcher icon (replaces the LÖVE heart)
           python3 ../game/android/icon.py app/src/main/res
