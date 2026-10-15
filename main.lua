@@ -1065,7 +1065,11 @@ function love.mousereleased(x, y, b, istouch)
         game:grow(drag, hover.node)
         drag = nil
     elseif b == 1 and t and drag == t and hover.node == t then
+        -- A tap on a tower is a look, not the start of a thread: it is
+        -- selected and nothing is left in hand. Links from it are dragged.
+        -- A tap on a bare pocket or the sprout still starts one.
         selected = t.tower
+        if t.tower then drag = nil end
     elseif b == 1 and istouch and mode == "grow" and drag and not hover.node and not hover.button then
         -- A thread pulled out on a phone and dropped on bare ground was not
         -- meant: with no right button to cancel, letting go cancels.

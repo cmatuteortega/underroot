@@ -81,7 +81,7 @@ keeps clear of the notch and home bar:
 
 | touch | what it does |
 | --- | --- |
-| drag from a node to a pocket, or tap one then the other | grow a link; letting go on bare ground cancels the thread |
+| drag from a node to a pocket, or tap one then the other | grow a link; letting go on bare ground cancels the thread. A tap on a tower selects it rather than starting a thread: drag to link from one |
 | tap a tool, then tap where it goes | build, prune, lay a mat, pulse; tap a species' tool again to open its panel (again to shut it), tap the ground to put it down |
 | tap a tower, mat or shelf, then an upgrade in its panel | upgrade it |
 | drag on open ground | pan |
