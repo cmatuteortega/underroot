@@ -316,6 +316,33 @@ end
 
 function Game:repairCost(l) return max(1, floor(l.cost * D.LINK.repair + 0.5)) end
 
+-- The cut links a hand could regrow, nearest the Heart first: by the fewest
+-- hops to a fed end, then by how far that end is from the Heart.
+function Game:repairable()
+    local list, h = {}, self.heart
+    for _, l in ipairs(self.links) do
+        if l.state == "cut" and not l.hand and not l.salted then
+            local hop = min(l.a.conn and l.a.hop or huge, l.b.conn and l.b.hop or huge)
+            local d = min(dist(l.a, h), dist(l.b, h))
+            list[#list + 1] = { l = l, hop = hop, d = d }
+        end
+    end
+    table.sort(list, function(x, y) if x.hop ~= y.hop then return x.hop < y.hop end return x.d < y.d end)
+    for k, e in ipairs(list) do list[k] = e.l end
+    return list
+end
+
+-- Regrows every cut link it can pay for, nearest the Heart first, stopping at
+-- the first it cannot afford. Returns how many.
+function Game:repairAll()
+    local n = 0
+    for _, l in ipairs(self:repairable()) do
+        if not self:repair(l) then break end
+        n = n + 1
+    end
+    return n
+end
+
 function Game:repair(l)
     if l.state ~= "cut" or l.hand or l.salted then return false end
     local c = self:repairCost(l)

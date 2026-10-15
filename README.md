@@ -48,7 +48,7 @@ chew through any thread they cross.
 | input | what it does |
 | --- | --- |
 | drag from a fed node to a pocket | grow a link (a click on a node only selects what is on it); cost grows with length, the far end glows if it is in reach |
-| `1` | grow hyphae (the default tool) |
+| `1`, or the bottom-left button | regrow every cut link, nearest the sprout first, until the nutrients run out (each at the same 40% a hand regrow costs). The button shows how many are cut and what it all costs |
 | `2`–`9`, `0`, `T`, `G`, `H` then click a linked pocket (the species you brought) | Spore Puffer, Enoki Needle, Lion's Mane, Relay, Inky Cap, Puffball Mortar, Cordyceps Bloom, Stinkhorn, Ghost Lamp, Humongous Fungus; Slime Mat (`4`) and Shelf Fungus (`8`) go on a trail tile |
 | click the species in hand on the toolbar again | open its panel (again to shut it); it stays in hand |
 | click a tower, mat or shelf (pressed and let go on it: pulling a link from it does not select it) | select it: a panel tells about it as it has grown (live numbers, what is wrong with it, both branches), and the upgrades it can grow now are buttons in it. On a wide screen the camera eases it to a third of the way across and half way down, with the panel on the right; upright, the panel goes across the top. Click elsewhere to close it |

@@ -331,12 +331,14 @@ end
 
 --- what the mouse is over ------------------------------------------------------------
 
--- The toolbar: hyphae, the species the run brought (in their usual order,
+-- The toolbar: regrow-all, the species the run brought (in their usual order,
 -- each on its usual key), prune and the pulse. Laid out again for each run.
 local BUTTONS = {}
 local function layTools(g)
     for k = #BUTTONS, 1, -1 do BUTTONS[k] = nil end
-    BUTTONS[1] = { mode = "grow", key = "1", name = "GROW HYPHAE", blurb = "DRAG FROM A FED NODE TO A POCKET. COST GROWS WITH LENGTH" }
+    -- Not a tool: a press regrows every cut link at once (links are grown by
+    -- dragging, with nothing in hand).
+    BUTTONS[1] = { mode = "regrow", key = "1", name = "REGROW ALL", action = true }
     for _, t in ipairs(D.TOWERS) do
         if not g or g:brought(t.id) then
             BUTTONS[#BUTTONS + 1] = { mode = t.id, key = t.key, name = t.name, blurb = t.blurb, cost = t.cost, tower = true }
@@ -942,6 +944,7 @@ local function click(b)
         -- cancel there is without a right button. A species not yet unlocked
         -- stays in its slot, dark.
         local bt = BUTTONS[hover.button]
+        if bt.action then game:repairAll() return end
         if bt.tower and not game:unlocked(bt.mode) then return end
         local m = bt.mode
         drag = nil
@@ -1214,7 +1217,10 @@ function love.keypressed(key)
         if drag or mode ~= "grow" or selected then mode, drag, selected = "grow", nil, nil else paused = not paused end
     end
     for _, b in ipairs(BUTTONS) do
-        if key == b.key:lower() and not (b.tower and not game:unlocked(b.mode)) then mode, drag, selected, peek = b.mode, nil, nil, nil end
+        if key == b.key:lower() then
+            if b.action then game:repairAll()
+            elseif not (b.tower and not game:unlocked(b.mode)) then mode, drag, selected, peek = b.mode, nil, nil, nil end
+        end
     end
     if (key == "z" or key == "c") and selected then
         local ups = game:upgrades(selected)
@@ -2143,6 +2149,13 @@ local function tooltip()
         if b.tower and not game:unlocked(b.mode) then
             return b.name .. ": UNLOCKS AFTER WAVE " .. game:unlockAt(b.mode), "r"
         end
+        if b.action then
+            local list, cost = game:repairable(), 0
+            for _, l in ipairs(list) do cost = cost + game:repairCost(l) end
+            if #list == 0 then return "REGROW ALL: NO CUT LINKS", "s" end
+            return "REGROW " .. #list .. " CUT LINK" .. (#list > 1 and "S" or "") .. ", NEAREST THE SPROUT FIRST: " .. cost,
+                game.nutrients >= cost and "l" or "r"
+        end
         if b.tower and b.mode == mode then return say(b.name .. ": CLICK AGAIN TO READ IT", b.name .. ": TAP AGAIN TO READ IT"), "w" end
         return b.name .. (b.cost and (" (" .. b.cost .. ")") or "") .. ": " .. b.blurb, "w"
     end
@@ -2343,18 +2356,29 @@ local function drawHud()
     -- The toolbar.
     for n, b in ipairs(BUTTONS) do
         local bx, by, bw, bh = buttonRect(n)
-        -- Growing hyphae is what happens with nothing in hand: its button
-        -- only lights while a thread is being pulled.
-        local on = mode == b.mode and (b.mode ~= "grow" or drag ~= nil)
+        local on = mode == b.mode
         box(bx, by, bw, bh, on and "n" or "u", on and "l" or (hover.button == n and "t" or "o"))
         local cx, cy = bx + floor(bw / 2), by + bh - 9
-        if b.mode == "grow" then
-            color("d")
-            for s = 0, 14 do love.graphics.rectangle("fill", bx + 8 + s, by + 15 - floor(s / 2) + 1, 1, 1) end
-            color("c")
-            for s = 0, 14 do love.graphics.rectangle("fill", bx + 8 + s, by + 15 - floor(s / 2), 1, 1) end
-            color("l")
-            love.graphics.rectangle("fill", bx + 8 + floor(game.clock * 10) % 15, by + 15 - floor((floor(game.clock * 10) % 15) / 2), 1, 1)
+        if b.action then
+            -- A thread with a gap in it, the two ends lit while there are cuts
+            -- to mend; how many, and what it all costs.
+            local list, cost = game:repairable(), 0
+            for _, l in ipairs(list) do cost = cost + game:repairCost(l) end
+            local any = #list > 0
+            for s = 0, 14 do
+                if s < 5 or s > 9 then
+                    color("d")
+                    love.graphics.rectangle("fill", bx + 8 + s, by + 15 - floor(s / 2) + 1, 1, 1)
+                    color(any and ((s == 4 or s == 10) and "r" or "c") or "k")
+                    love.graphics.rectangle("fill", bx + 8 + s, by + 15 - floor(s / 2), 1, 1)
+                end
+            end
+            if any then
+                local c = tostring(cost)
+                text(c, bx + bw - Font.width(c) - 1, by + bh - 6, game.nutrients >= cost and "l" or "r")
+                local k = tostring(#list)
+                text(k, bx + bw - Font.width(k) - 1, by + 1, "w")
+            end
         elseif b.mode == "prune" then
             text("X", cx - 1, by + 9, "r")
         elseif b.mode == "pulse" then

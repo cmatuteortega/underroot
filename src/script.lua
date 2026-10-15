@@ -103,7 +103,7 @@ function S.begin(g, api)
         { 2.5, function()
             assert(#g.links == 3, "three links by hand, got " .. #g.links)
             assert(node(12, 6).tower, "a puffer by hand")
-            move(api.button("grow"))
+            move(api.button("regrow"))
             love.keypressed("space")
         end },
         { 6, "shot" },
