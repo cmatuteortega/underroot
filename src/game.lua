@@ -600,6 +600,7 @@ function Game:spawnAt(kind, x, z, c, r)
         hp = hp, maxHp = hp, h = 0, flash = 0, slow = 1, off = (random() - 0.5) * 6,
         walked = 0, anim = random() * 4, state = "walk", boss = d.boss, stun = 0, mark = 0 }
     if d.boss then en.off = 0 end
+    en.y = self.world:groundAt(x, z)
     if d.fly then en.y = 12 end
     if d.ball then en.ballHp, en.ballMax = d.ball, d.ball end
     if d.chargeEvery then en.charge = d.chargeEvery * 0.6 end
@@ -809,7 +810,16 @@ function Game:update(dt)
     self:updateLinks(dt)
     self:updateTowers(dt)
     self:updateMats(dt)
-    for _, e in ipairs(self.enemies) do if not e.dead then self:move(e, dt) end end
+    for _, e in ipairs(self.enemies) do
+        if not e.dead then
+            self:move(e, dt)
+            -- Whatever walks stands on the ground under it (the trail is sunk a
+            -- block, the pond lower still): only fliers and a slider on a
+            -- thread keep their own height.
+            local d = D.ENEMIES[e.kind]
+            if not e.dead and not d.fly and not d.moth and not e.slide then e.y = self.world:groundAt(e.x, e.z) end
+        end
+    end
     for n = #self.enemies, 1, -1 do if self.enemies[n].dead then table.remove(self.enemies, n) end end
     self:updateShots(dt)
     self:updateClouds(dt)
@@ -1215,7 +1225,7 @@ function Game:snuff(n)
                 if stun then e.stun = max(e.stun, stun) end
             end
         end
-        self.fx[#self.fx + 1] = { cloud = true, x = n.x, y = 0, z = n.z, r = r, life = 0.6, max = 0.6, glowing = true }
+        self.fx[#self.fx + 1] = { cloud = true, x = n.x, y = self.world:groundAt(n.x, n.z), z = n.z, r = r, life = 0.6, max = 0.6, glowing = true }
         self:burst(n.x, n.y + 6, n.z, 24, { "l", "w", "c" }, 36)
         self.events.boom = true
     end
@@ -1295,7 +1305,7 @@ function Game:updateShots(dt)
                 for _, e in ipairs(self.enemies) do
                     if not e.dead and (e.x - s.tx) ^ 2 + (e.z - s.tz) ^ 2 <= s.splash ^ 2 then self:hurt(e, s.damage) end
                 end
-                self.fx[#self.fx + 1] = { cloud = true, x = s.tx, y = 0, z = s.tz, r = s.splash, life = 0.4, max = 0.4 }
+                self.fx[#self.fx + 1] = { cloud = true, x = s.tx, y = self.world:groundAt(s.tx, s.tz), z = s.tz, r = s.splash, life = 0.4, max = 0.4 }
                 if s.linger then
                     self.clouds[#self.clouds + 1] = { x = s.tx, z = s.tz, r = s.splash, life = s.linger, max = s.linger, dps = s.toxin }
                 end
@@ -1310,7 +1320,7 @@ function Game:updateShots(dt)
                     end
                 end
                 local big = s.kind == "shell"
-                self.fx[#self.fx + 1] = { cloud = true, x = s.tx, y = 0, z = s.tz, r = s.splash, life = big and 0.6 or 0.35,
+                self.fx[#self.fx + 1] = { cloud = true, x = s.tx, y = self.world:groundAt(s.tx, s.tz), z = s.tz, r = s.splash, life = big and 0.6 or 0.35,
                     max = big and 0.6 or 0.35, smoke = s.smoke }
                 if big then
                     self:burst(s.tx, 3, s.tz, 10, { "t", "n", "w" }, 30)

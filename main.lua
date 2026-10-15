@@ -1340,10 +1340,11 @@ local function drawBoard()
         end)
     end
     for _, c in ipairs(game.corpses) do
-        add(c.x, 0, c.z, function()
+        local g = world:groundAt(c.x, c.z)
+        add(c.x, g, c.z, function()
             local remap = T.DARKER
             if c.absorb then remap = floor(game.clock * 10) % 2 == 0 and T.DARKER2 or T.DARKER end
-            stamp(M.corpse(c.kind, c.h or 0, c.fruit), c.x, c.carried and 2.5 or 0, c.z, remap)
+            stamp(M.corpse(c.kind, c.h or 0, c.fruit), c.x, g + (c.carried and 2.5 or 0), c.z, remap)
         end)
     end
     for _, e in ipairs(game.enemies) do
@@ -1367,9 +1368,10 @@ local function drawBoard()
         end) end
         if e.ballHp and e.ballHp > 0 then
             local bx, bz = game:ballAt(e)
-            add(bx, 0, bz, function()
+            local g = world:groundAt(bx, bz)
+            add(bx, g, bz, function()
                 local cracked = e.ballHp < e.ballMax * 0.4
-                stamp(M.ball(e.h, floor((e.ballRoll or 0) * 3) % 4, cracked), bx, 0, bz, e.ballFlash > 0 and T.FLASH or nil)
+                stamp(M.ball(e.h, floor((e.ballRoll or 0) * 3) % 4, cracked), bx, g, bz, e.ballFlash > 0 and T.FLASH or nil)
             end)
         end
     end
@@ -1411,7 +1413,7 @@ local function drawBoard()
                 local a = s / 22 * 2 * math.pi + game.clock * 0.6
                 local rr = c.r * (0.25 + 0.75 * ((s * 7) % 5) / 4)
                 local x, z = c.x + math.cos(a) * rr, c.z + math.sin(a) * rr
-                local i, j, d = world:toImage(x, 1.5 + (s % 3) + math.sin(game.clock * 2 + s) * 0.8, z)
+                local i, j, d = world:toImage(x, world:groundAt(x, z) + 1.5 + (s % 3) + math.sin(game.clock * 2 + s) * 0.8, z)
                 if visible(floor(i), floor(j), d + 2) then put(s % 3 == 0 and IDX.d or IDX.m, i, j) end
             end
         end
@@ -1427,7 +1429,7 @@ local function drawBoard()
                     local a = s / n * 2 * math.pi + f
                     local rr = r * (0.4 + 0.6 * ((s * 7) % 5) / 4)
                     local x, z = p.x + math.cos(a) * rr, p.z + math.sin(a) * rr
-                    local i, j, d = world:toImage(x, 1 + f * 4 + (s % 3), z)
+                    local i, j, d = world:toImage(x, world:groundAt(x, z) + 1 + f * 4 + (s % 3), z)
                     local k = s % 3 == 0 and IDX.t or IDX.w
                     if p.smoke then k = s % 3 == 0 and IDX.k or IDX.s end
                     if p.glowing then k = s % 3 == 0 and IDX.c or IDX.l end
@@ -1458,7 +1460,7 @@ local function drawBoard()
         elseif p.glow then
             local f = p.t / p.max
             local x, z = p.x + (p.tx - p.x) * f, p.z + (p.tz - p.z) * f
-            local i, j, d = world:toImage(x, 1 + math.sin(f * math.pi) * 4, z)
+            local i, j, d = world:toImage(x, world:groundAt(x, z) + 1 + math.sin(f * math.pi) * 4, z)
             if visible(floor(i), floor(j), d + 2) then put(IDX.l, i, j) end
         else
             local i, j, d = world:toImage(p.x, p.y, p.z)
@@ -1718,7 +1720,7 @@ local function drawHud()
         for gate, n in pairs(per) do
             local e = world.entrances[gate]
             if e then
-                local i, j = world:toImage(e.x - 6, 6, e.z)
+                local i, j = world:toImage(e.x - 6, world:groundAt(e.x, e.z) + 6, e.z)
                 local sx, sy = toHud(i, j)
                 if floor(game.clock * 2) % 2 == 0 then label(n .. " IN", sx - 6, sy - 10, "w", "r") end
             end
