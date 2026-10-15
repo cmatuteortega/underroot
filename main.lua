@@ -11,8 +11,8 @@
 --
 -- The camera goes round the board a quarter turn at a time (the buttons at the
 -- bottom right and left, or E and Q): the board has a picture for each side
--- (see World:toView) and the turn between them is the picture going round,
--- squashed as the ground is, before the next one takes its place.
+-- (see World:toView) and the turn between them is both pictures going round
+-- together, squashed as the ground is, the next dithering in over the last.
 --
 -- This file is the screen: the canvas, the camera, compositing, the HUD and
 -- what the mouse (or a finger) means. The rules are in src/game.lua and the numbers in
@@ -157,9 +157,25 @@ local focus, focused
 local script -- the --shots run
 local shot -- and the whole screen it photographs
 -- The camera going round: the frame it left, the screen point it turns about,
--- how far round and how long it has been at it.
+-- how far round and how long it has been at it, and the turn asked for next.
 local turning
-local TURN_TIME = 0.45
+local TURN_TIME = 0.5
+local drawBoard -- the board's picture, drawn into the canvas (below)
+-- Halfway round, the coming frame shows through the one being left a pixel
+-- at a time: a pixel of the picture drawn is kept where a 4x4 ordered dither,
+-- a board pixel (cell window pixels) to a step, is under `mix`.
+local DITHER
+local DITHER_CODE = [[
+extern number mix;
+extern number cell;
+number bayer2(vec2 a) { return mod(2.0 * a.x + 3.0 * a.y, 4.0); }
+vec4 effect(vec4 colour, Image tex, vec2 uv, vec2 sc) {
+    vec2 p = floor(sc / cell);
+    number v = 4.0 * bayer2(mod(p, 2.0)) + bayer2(mod(floor(p / 2.0), 2.0));
+    if ((v + 0.5) / 16.0 >= mix) discard;
+    return Texel(tex, uv) * colour;
+}
+]]
 
 --- the screen ----------------------------------------------------------------------
 
@@ -877,6 +893,7 @@ end
 function love.load(args)
     love.graphics.setDefaultFilter("nearest", "nearest")
     love.graphics.setLineStyle("rough")
+    DITHER = love.graphics.newShader(DITHER_CODE)
     setWindowIcon()
     fit()
     loadProgress()
@@ -947,10 +964,14 @@ end
 
 -- Takes the camera a quarter turn round the board, d = 1 or -1. The ground
 -- under the middle of the screen stays where it is and the board turns about
--- it; the frame being left is kept to be shown going round.
+-- it. Both frames, the one being left and the one coming, are drawn past the
+-- window's edges for the turn, far enough that the corners swinging into view
+-- going round have board behind them. Asked again mid-turn, the next turn
+-- follows straight on from this one.
 local function turnCamera(d)
-    if turning or pinch or painter or menu or not game then return end
-    local q = (world.turn + d) % World.TURNS
+    if turning then turning.next = d return end
+    if pinch or painter or menu or not game then return end
+    local q0, q = world.turn, (world.turn + d) % World.TURNS
     paintNow(q)
     local mi, mj = floor(cw / 2), floor(ch / 2)
     local x, y, z = world:pick(mi + floor(camx), mj + floor(camy))
@@ -962,13 +983,7 @@ local function turnCamera(d)
     local i1, j1 = world:toImage(x + 10, y, z)
     local px, py = i0 - floor(camx), j0 - floor(camy)
     local a0 = math.atan2((j1 - j0) * 2, i1 - i0)
-
-    local old = love.graphics.newCanvas(cw, ch)
-    old:setFilter("nearest", "nearest")
-    love.graphics.setCanvas(old)
-    love.graphics.setColor(1, 1, 1)
-    love.graphics.draw(canvas)
-    love.graphics.setCanvas()
+    local panx0, pany0 = panx, pany
 
     world:setTurn(q)
     focus = nil
@@ -976,13 +991,43 @@ local function turnCamera(d)
     local n0, m0 = world:toImage(x, y, z)
     panx = panx + (n0 - floor(camx)) - px
     pany = pany + (m0 - floor(camy)) - py
-    centre()
+    local panx1, pany1 = panx, pany
     -- How far the picture goes round on the screen, measured with the ground
     -- unsquashed so a quarter turn of the room is a quarter turn of it.
     local n1, m1 = world:toImage(x + 10, y, z)
     local a = math.atan2((m1 - m0) * 2, n1 - n0) - a0
     a = (a + math.pi) % (2 * math.pi) - math.pi
-    turning = { t = 0, old = old, px = px, py = py, angle = a, d = d }
+
+    -- Going round, a window corner (dx, dy) from the pivot shows the picture
+    -- at most sqrt(dx^2 + 4 dy^2) across from it and half that up or down (the
+    -- ground is unsquashed, turned and squashed again), a little more for the
+    -- lift.
+    local reach = 0
+    for _, c in ipairs({ { -px, -py }, { cw - px, -py }, { -px, ch - py }, { cw - px, ch - py } }) do
+        reach = max(reach, sqrt(c[1] ^ 2 + 4 * c[2] ^ 2))
+    end
+    reach = reach / 0.94 + 2
+    padBoard(ceil(max(0, reach - px)), ceil(max(0, reach / 2 - py)),
+        ceil(max(0, px + reach - cw)), ceil(max(0, py + reach / 2 - ch)))
+
+    -- The frame being left, drawn again with its margins.
+    world:setTurn(q0)
+    panx, pany = panx0, pany0
+    centre()
+    love.graphics.setCanvas(canvas)
+    drawBoard()
+    love.graphics.setCanvas()
+    local old = love.graphics.newCanvas(canvas:getDimensions())
+    old:setFilter("nearest", "nearest")
+    love.graphics.setCanvas(old)
+    love.graphics.setColor(1, 1, 1)
+    love.graphics.draw(canvas)
+    love.graphics.setCanvas()
+
+    world:setTurn(q)
+    panx, pany = panx1, pany1
+    centre()
+    turning = { t = 0, old = old, ol = pad.l, ot = pad.t, px = px, py = py, angle = a, d = d }
     sound("turn", d > 0 and 1 or 0.85)
 end
 
@@ -1569,7 +1614,7 @@ function love.update(dt)
         if not shot or shot:getWidth() ~= cw or shot:getHeight() ~= ch then shot = love.graphics.newCanvas(cw, ch) end
         love.graphics.setCanvas(shot)
         love.graphics.setColor(1, 1, 1)
-        if not menu then love.graphics.draw(canvas) end
+        if not menu then love.graphics.draw(canvas, -pad.l, -pad.t) end
         love.graphics.draw(ui)
         love.graphics.setCanvas()
         script.after(game, shot)
@@ -1597,8 +1642,11 @@ function love.update(dt)
     if turning then
         turning.t = turning.t + dt
         if turning.t >= TURN_TIME then
+            local next = turning.next
             turning.old:release()
             turning = nil
+            if not pinch then padBoard(0, 0, 0, 0) end
+            if next then turnCamera(next) end
         end
     end
 
@@ -2060,7 +2108,7 @@ function flair.splat(p)
     end
 end
 
-local function drawBoard()
+function drawBoard()
     -- A boss charging, a ball bursting: the board jumps.
     -- Drawn over the whole picture, pad and all: for the moment, it is the window.
     local cx0, cy0, cw0, ch0 = camx, camy, cw, ch
@@ -3204,26 +3252,39 @@ function love.draw()
     if painter or menu then
         -- Nothing to stretch: the loading bar or the picker is the whole screen.
     elseif turning and not (pinch and not pinch.done) then
-        -- Going round: the frame that was left turns half way, then the new
-        -- one comes in from the other half, the ground unsquashed for the turn
-        -- (so a square stays a square going round) and the whole board lifting
-        -- a little off the table and back.
+        -- Going round: both frames turn together, the one that was left from
+        -- where it was and the one coming from a quarter turn back, and the
+        -- new one comes through the old in an ordered dither across the middle
+        -- of the turn, a board pixel at a time, so the colours stay the
+        -- board's own. The ground is unsquashed for the turn (so a square stays
+        -- a square going round) and the whole board lifts a little off the
+        -- table and back.
         love.graphics.clear(unpack(T.RGB[IDX.o]))
-        local f = turning.t / TURN_TIME
+        local f = min(1, turning.t / TURN_TIME)
         local e = f * f * (3 - 2 * f)
-        local a, pic
-        if e < 0.5 then a, pic = turning.angle * e, turning.old
-        else a, pic = -turning.angle * (1 - e), canvas end
         local lift = 1 - 0.06 * math.sin(math.pi * e)
-        love.graphics.push()
-        love.graphics.scale(zoom, zoom)
-        love.graphics.translate(turning.px, turning.py)
-        love.graphics.scale(lift, lift * 0.5)
-        love.graphics.rotate(a)
-        love.graphics.scale(1, 2)
-        love.graphics.translate(-turning.px, -turning.py)
-        love.graphics.draw(pic, 0, 0)
-        love.graphics.pop()
+        local function put(pic, a, ox, oy)
+            love.graphics.push()
+            love.graphics.scale(zoom, zoom)
+            love.graphics.translate(turning.px, turning.py)
+            love.graphics.scale(lift, lift * 0.5)
+            love.graphics.rotate(a)
+            love.graphics.scale(1, 2)
+            love.graphics.translate(-turning.px, -turning.py)
+            love.graphics.draw(pic, -ox, -oy)
+            love.graphics.pop()
+        end
+        local m = min(1, max(0, (e - 0.3) / 0.4))
+        if m < 1 then put(turning.old, turning.angle * e, turning.ol, turning.ot) end
+        if m > 0 then
+            if m < 1 then
+                DITHER:send("mix", m)
+                DITHER:send("cell", zoom)
+                love.graphics.setShader(DITHER)
+            end
+            put(canvas, -turning.angle * (1 - e), pad.l, pad.t)
+            love.graphics.setShader()
+        end
     elseif pinch and not pinch.done then
         -- Mid-pinch: the frame stretched about where the fingers started and
         -- moved to where they are (see love.touchpressed).
