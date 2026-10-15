@@ -47,7 +47,7 @@ chew through any thread they cross.
 
 | input | what it does |
 | --- | --- |
-| drag from a fed node to a pocket (or click one, then the other) | grow a link; cost grows with length, the far end glows if it is in reach |
+| drag from a fed node to a pocket | grow a link (a click on a node only selects what is on it); cost grows with length, the far end glows if it is in reach |
 | `1` | grow hyphae (the default tool) |
 | `2`–`9`, `0`, `T`, `G`, `H` then click a linked pocket (the species you brought) | Spore Puffer, Enoki Needle, Lion's Mane, Relay, Inky Cap, Puffball Mortar, Cordyceps Bloom, Stinkhorn, Ghost Lamp, Humongous Fungus; Slime Mat (`4`) and Shelf Fungus (`8`) go on a trail tile |
 | click the species in hand on the toolbar again | open its panel (again to shut it); it stays in hand |
@@ -81,7 +81,7 @@ keeps clear of the notch and home bar:
 
 | touch | what it does |
 | --- | --- |
-| drag from a node to a pocket, or tap one then the other | grow a link; letting go on bare ground cancels the thread. A tap on a tower selects it rather than starting a thread: drag to link from one |
+| drag from a node to a pocket | grow a link; letting go anywhere else cancels it. A tap on a node only selects what is on it |
 | tap a tool, then tap where it goes | build, prune, lay a mat, pulse; tap a species' tool again to open its panel (again to shut it), tap the ground to put it down |
 | tap a tower, mat or shelf, then an upgrade in its panel | upgrade it |
 | drag on open ground | pan |

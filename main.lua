@@ -97,7 +97,6 @@ local function challengeOpen() return won[D.LEVELS[#D.LEVELS].id] end
 local camx, camy, panx, pany = 0, 0, 0, 0
 local mode = "grow"
 local drag -- the node a link is being pulled from
-local dragAt -- where on the screen it was picked up
 local tapped -- the node just pressed: let go of it where it was, and it is selected
 local hover = {}
 -- The pointer in HUD pixels (x, y) and window pixels (wx, wy).
@@ -1037,9 +1036,7 @@ function love.mousepressed(x, y, b, istouch)
         press = { x = mouse.x, y = mouse.y, wx = x, wy = y, px = panx, py = pany }
         return
     end
-    local was = drag
     click(b)
-    if drag and drag ~= was then dragAt = { x = mouse.x, y = mouse.y } end
 end
 
 function love.mousereleased(x, y, b, istouch)
@@ -1060,21 +1057,17 @@ function love.mousereleased(x, y, b, istouch)
     findHover()
     local t = tapped
     tapped = nil
-    -- Pulled from one node and let go over another: that is a link too.
+    -- Pulled from one node and let go over another: a link.
     if b == 1 and mode == "grow" and drag and hover.node and hover.node ~= drag then
         game:grow(drag, hover.node)
-        drag = nil
     elseif b == 1 and t and drag == t and hover.node == t then
-        -- A tap on a tower is a look, not the start of a thread: it is
-        -- selected and nothing is left in hand. Links from it are dragged.
-        -- A tap on a bare pocket or the sprout still starts one.
+        -- Let go where it was picked up: a tap, which selects its tower (or,
+        -- on a bare pocket, puts the selection down).
         selected = t.tower
-        if t.tower then drag = nil end
-    elseif b == 1 and istouch and mode == "grow" and drag and not hover.node and not hover.button then
-        -- A thread pulled out on a phone and dropped on bare ground was not
-        -- meant: with no right button to cancel, letting go cancels.
-        if dragAt and (abs(mouse.x - dragAt.x) > SLOP or abs(mouse.y - dragAt.y) > SLOP) then drag = nil end
     end
+    -- Links are only ever dragged: whatever was let go of, nothing is left in
+    -- hand, so a tap never leaves a thread waiting for the next one.
+    if b == 1 then drag = nil end
 end
 
 function love.mousemoved(x, y)
@@ -2244,7 +2237,7 @@ local function tooltip()
         else s = s .. "  HP " .. math.ceil(m.hp) .. "/" .. game:maxHp(m) end
         return s, "w"
     end
-    if mode == "grow" and drag then return say("LET GO OVER A GLOWING POCKET. RIGHT CLICK CANCELS", "TAP A GLOWING POCKET. TAP THE GROUND TO CANCEL"), "l" end
+    if mode == "grow" and drag then return say("LET GO OVER A GLOWING POCKET", "LET GO OVER A GLOWING POCKET"), "l" end
     if mode == "pulse" then
         if game.pulseCd > 0 then return "PULSE REGROWING: " .. math.ceil(game.pulseCd) .. "S", "r" end
         return say("CLICK A FED NODE TO SEND THE PULSE", "TAP A FED NODE TO SEND THE PULSE"), "l"
@@ -2350,7 +2343,9 @@ local function drawHud()
     -- The toolbar.
     for n, b in ipairs(BUTTONS) do
         local bx, by, bw, bh = buttonRect(n)
-        local on = mode == b.mode
+        -- Growing hyphae is what happens with nothing in hand: its button
+        -- only lights while a thread is being pulled.
+        local on = mode == b.mode and (b.mode ~= "grow" or drag ~= nil)
         box(bx, by, bw, bh, on and "n" or "u", on and "l" or (hover.button == n and "t" or "o"))
         local cx, cy = bx + floor(bw / 2), by + bh - 9
         if b.mode == "grow" then

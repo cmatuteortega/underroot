@@ -93,7 +93,7 @@ function S.begin(g, api)
         -- The first minute, played with the mouse the way a player would.
         { 0.3, function() press(at(H)); move(at(node(12, 6))) end },
         { 0.4, function() release(at(node(12, 6))) end },
-        { 0.6, function() press(at(H)); release(at(H)); press(at(node(12, 3))); release(at(node(12, 3))) end },
+        { 0.6, function() press(at(H)); move(at(node(12, 3))); release(at(node(12, 3))) end },
         { 0.9, function() press(at(H)); local x, y = at(node(11, 8)); move(x - 30, y + 10) end },
         { 1.0, "shot" },
         { 1.1, function() release(at(node(11, 8))) end },
