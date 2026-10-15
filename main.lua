@@ -128,6 +128,9 @@ local ZOOM_STEPS = 4
 local fingers, pinch = {}, nil -- the touches down, and the two being pinched
 local speed, paused = 1, false
 local heartFlash = 0
+-- What the Heart looks like: the big one-eyed mushroom, or (--sprout) the
+-- seedling it was first.
+local heartLook = "shroom"
 local shake = 0 -- seconds of shaking left: a boss charging, a ball breaking
 -- The HUD's own flourishes: the last thing pressed lighting up, the nutrients
 -- going red when they fall short (bright when a lot comes in at once), the
@@ -883,6 +886,7 @@ function love.load(args)
     loadLoadouts()
     for _, a in ipairs(args or {}) do
         if a == "--shots" then script = require("src.script") end
+        if a == "--sprout" then heartLook = "sprout" end
         if a == "--bot" then
             function love.errorhandler(msg) print("ERROR", msg, debug.traceback()) os.exit(1) end
             local rest = {}
@@ -2232,7 +2236,16 @@ local function drawBoard()
     end
     local wilt = 1 - game.heartHp / game.heartMax
     add(game.heart.x, game.heart.y, game.heart.z, function()
-        stamp(M.sprout(wilt), game.heart.x, game.heart.y - 1, game.heart.z, heartFlash > 0 and T.FLASH or nil)
+        local look
+        if heartLook == "sprout" then look = M.sprout(wilt)
+        else
+            -- It blinks every few seconds (half, shut, half), and screws its eye
+            -- shut when it is hit.
+            local b = love.timer.getTime() % 3.7
+            local blink = (heartFlash > 0 or (b > 0.05 and b < 0.13)) and 2 or b < 0.18 and 1 or 0
+            look = M.shroom(wilt, blink)
+        end
+        stamp(look, game.heart.x, game.heart.y - 1, game.heart.z, heartFlash > 0 and T.FLASH or nil)
     end)
     for _, n in ipairs(game.nodes) do
         local t = n.tower

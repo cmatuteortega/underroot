@@ -170,6 +170,91 @@ function M.sprout(wilt)
     end)
 end
 
+-- Another look for the Heart, to try out: the big cartoon mushroom. A fat cream
+-- stalk, a dome of a cap in the sprout's green with cream spots, and one big
+-- eye set into the top of the cap, looking up at you. `wilt` 0..1 tips the cap
+-- over and lowers the lid (it gets sleepy as it is hurt); `blink` 0..2 is open,
+-- half and shut.
+local EYE_LX, EYE_LY, EYE_LZ = 0.42, 0.8, 0.42 -- the eye's gaze: up and at the camera
+do
+    local l = sqrt(EYE_LX ^ 2 + EYE_LY ^ 2 + EYE_LZ ^ 2)
+    EYE_LX, EYE_LY, EYE_LZ = EYE_LX / l, EYE_LY / l, EYE_LZ / l
+end
+-- The eye's own up: world up with the gaze taken out of it.
+local EYE_UX, EYE_UY, EYE_UZ
+do
+    local d = EYE_LY
+    EYE_UX, EYE_UY, EYE_UZ = -d * EYE_LX, 1 - d * EYE_LY, -d * EYE_LZ
+    local l = sqrt(EYE_UX ^ 2 + EYE_UY ^ 2 + EYE_UZ ^ 2)
+    EYE_UX, EYE_UY, EYE_UZ = EYE_UX / l, EYE_UY / l, EYE_UZ / l
+end
+local SCLERA = ramp("w", "w", "w", "t")
+local CAP = RAMP.sprout
+-- Its spots, round the side you see (and two peeking over the back): a way
+-- out from the cap's middle and how wide, as the cosine it ends at.
+local CAP_SPOTS = {}
+for _, d in ipairs({ { 1, 0.25, 0.05, 0.95 }, { 0.05, 0.25, 1, 0.95 }, { 0.72, 0.2, 0.72, 0.975 },
+    { -0.55, 0.65, 0.55, 0.96 }, { 0.55, 0.65, -0.55, 0.96 }, { -0.3, 0.9, -0.3, 0.97 } }) do
+    local l = sqrt(d[1] ^ 2 + d[2] ^ 2 + d[3] ^ 2)
+    CAP_SPOTS[#CAP_SPOTS + 1] = { d[1] / l, d[2] / l, d[3] / l, d[4] }
+end
+
+function M.shroom(wilt, blink)
+    local ws = floor(wilt * 4 + 0.5)
+    blink = blink or 0
+    return kept("shroom" .. ws .. ":" .. blink, function()
+        local w = ws / 4
+        -- How far the lids have come in: the upper one droops as it wilts.
+        local lid = math.max(({ 0, 0.55, 1 })[blink + 1], 0.35 * w)
+        local upper, lower = 1 - 1.15 * lid, -1 + 0.85 * lid
+        local cy, crx, cry = 13, 9, 6
+        -- Where the eye sits: half out of the cap's dome, along its gaze.
+        local er = 4.8
+        local t = 1 / sqrt((EYE_LX / crx) ^ 2 + (EYE_LY / cry) ^ 2 + (EYE_LZ / crx) ^ 2) - er * 0.45
+        local ex, ey, ez = EYE_LX * t, cy + EYE_LY * t, EYE_LZ * t
+        local parts = {
+            -- stalk, fat and a little pinched at the waist
+            { id = 1, ramp = R.flesh, at = ell(0, 3, 0, 4.4, 3.4, 4.4) },
+            { id = 1, ramp = R.flesh, at = ell(0, 7.5, 0, 3.6, 5, 3.6) },
+            -- gills, under the brim
+            { id = 2, ramp = R.crumb, at = ell(0, cy - 0.6, 0, crx * 0.94, 1.8, crx * 0.94),
+                print = function(ux, uy, uz, lev)
+                    if uy < 0 and lev > 1 and abs((atan2(uz, ux) / TAU * 28) % 1 - 0.5) < 0.12 then return IDX.n end
+                end },
+            -- the cap
+            { id = 3, ramp = CAP, at = ell(0, cy, 0, crx, cry, crx),
+                print = function(ux, uy, uz, lev)
+                    if uy < 0.05 then return end
+                    for _, d in ipairs(CAP_SPOTS) do
+                        if ux * d[1] + uy * d[2] + uz * d[3] > d[4] then return lev == 4 and IDX.t or IDX.w end
+                    end
+                end },
+            -- the socket: a lip of cap round the eye
+            { id = 4, ramp = CAP, at = ell(ex - EYE_LX * er * 0.5, ey - EYE_LY * er * 0.5, ez - EYE_LZ * er * 0.5, er * 1.15, er * 1.15, er * 1.15) },
+            -- the eye
+            { id = 5, ramp = SCLERA, at = ell(ex, ey, ez, er, er, er),
+                print = function(ux, uy, uz, lev)
+                    local f = ux * EYE_LX + uy * EYE_LY + uz * EYE_LZ
+                    local v = ux * EYE_UX + uy * EYE_UY + uz * EYE_UZ
+                    if f > -0.2 then
+                        if v > upper or v < lower then
+                            -- lid: cap skin, with a dark line where it meets the eye
+                            if (v > upper and v < upper + 0.13) or (v < lower and v > lower - 0.1) then return IDX.d end
+                            return CAP
+                        end
+                    end
+                    -- a glint up and to the left, then the pupil and the iris
+                    local gx, gy, gz = EYE_LX + 0.2 * EYE_UX - 0.2, EYE_LY + 0.2 * EYE_UY, EYE_LZ + 0.2 * EYE_UZ + 0.2
+                    local gl = sqrt(gx * gx + gy * gy + gz * gz)
+                    if (ux * gx + uy * gy + uz * gz) / gl > 0.98 then return IDX.w end
+                    if f > 0.94 then return IDX.o end
+                    if f > 0.84 then return f > 0.9 and IDX.d or IDX.c end
+                end },
+        }
+        return place(parts, A.scale(1.15, 1.15, 1.15), A.rotZ(-0.3 * w), A.rotX(0.2 * w))
+    end)
+end
+
 --- fruiting bodies ------------------------------------------------------------------
 
 local function breath(idle) return sin(idle / 4 * TAU) end
