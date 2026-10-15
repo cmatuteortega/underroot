@@ -39,7 +39,10 @@ local game
 -- level, kept so a second run of it starts at once), and the level picker.
 local level = D.LEVELS[1]
 local worlds = {}
-local menu -- the level picker is up
+local menu -- the level picker is up (true), or a level's loadout ("loadout")
+local pick -- the loadout being picked: { n = level, set = { id = true }, enemy = kind }
+local chosen -- the species the run brings, a list; nil brings them all (the shots)
+local loadouts = {} -- each level's last loadout, saved between runs: { crack = { "puffer", ... } }
 local challenge = false -- challenge mode chosen in the picker
 local won = {} -- levels won, saved between runs: { crack = true, ... }
 
@@ -54,6 +57,30 @@ local function saveProgress()
     local ids = {}
     for _, l in ipairs(D.LEVELS) do if won[l.id] then ids[#ids + 1] = l.id end end
     love.filesystem.write("progress.txt", table.concat(ids, "\n") .. "\n")
+end
+
+-- Each level's loadout lives in the save directory too, a line a level: its id
+-- and then the species it brings.
+local function loadLoadouts()
+    loadouts = {}
+    local data = love.filesystem.getInfo("loadout.txt") and love.filesystem.read("loadout.txt")
+    if not data then return end
+    for line in data:gmatch("[^\n]+") do
+        local list, id = {}, nil
+        for w in line:gmatch("%S+") do
+            if not id then id = w
+            elseif D.TOWER[w] and #list < D.LOADOUT then list[#list + 1] = w end
+        end
+        if id and D.LEVEL[id] and #list > 0 then loadouts[id] = list end
+    end
+end
+
+local function saveLoadouts()
+    local lines = {}
+    for _, l in ipairs(D.LEVELS) do
+        if loadouts[l.id] then lines[#lines + 1] = l.id .. " " .. table.concat(loadouts[l.id], " ") end
+    end
+    love.filesystem.write("loadout.txt", table.concat(lines, "\n") .. "\n")
 end
 
 -- A level is open once the one before it is won; challenge mode once the last is.
@@ -266,15 +293,22 @@ end
 
 --- what the mouse is over ------------------------------------------------------------
 
-local BUTTONS = {
-    { mode = "grow", key = "1", name = "GROW HYPHAE", blurb = "DRAG FROM A FED NODE TO A POCKET. COST GROWS WITH LENGTH" },
-}
-for _, t in ipairs(D.TOWERS) do
-    BUTTONS[#BUTTONS + 1] = { mode = t.id, key = t.key, name = t.name, blurb = t.blurb, cost = t.cost, tower = true }
+-- The toolbar: hyphae, the species the run brought (in their usual order,
+-- each on its usual key), prune and the pulse. Laid out again for each run.
+local BUTTONS = {}
+local function layTools(g)
+    for k = #BUTTONS, 1, -1 do BUTTONS[k] = nil end
+    BUTTONS[1] = { mode = "grow", key = "1", name = "GROW HYPHAE", blurb = "DRAG FROM A FED NODE TO A POCKET. COST GROWS WITH LENGTH" }
+    for _, t in ipairs(D.TOWERS) do
+        if not g or g:brought(t.id) then
+            BUTTONS[#BUTTONS + 1] = { mode = t.id, key = t.key, name = t.name, blurb = t.blurb, cost = t.cost, tower = true }
+        end
+    end
+    BUTTONS[#BUTTONS + 1] = { mode = "prune", key = "X", name = "PRUNE", blurb = "CUT YOUR OWN LINK (HALF BACK) OR CLEAR A TOWER" }
+    BUTTONS[#BUTTONS + 1] = { mode = "pulse", key = "Q", name = "SPORE PULSE",
+        blurb = "PICK A FED NODE: EVERY TOWER ON THE WAY THERE OVERCHARGES" }
 end
-BUTTONS[#BUTTONS + 1] = { mode = "prune", key = "X", name = "PRUNE", blurb = "CUT YOUR OWN LINK (HALF BACK) OR CLEAR A TOWER" }
-BUTTONS[#BUTTONS + 1] = { mode = "pulse", key = "Q", name = "SPORE PULSE",
-    blurb = "PICK A FED NODE: EVERY TOWER ON THE WAY THERE OVERCHARGES" }
+layTools()
 
 -- The toolbar sits in the safe area along the bottom with the wave button at
 -- its end. A screen too narrow for both (a phone held upright) narrows the
@@ -371,6 +405,75 @@ local function levelCards()
     return cards, switch
 end
 
+-- The loadout picker: what the level sends (a chip an enemy, bosses last),
+-- a card a species under it, and BACK and GO under those, all centred
+-- down the screen. A narrow screen takes fewer cards a row.
+local SW, SH = 62, 26
+local function enemiesOf(lv)
+    local seen = {}
+    for _, w in ipairs(lv.waves) do for _, g in ipairs(w) do seen[g[1]] = true end end
+    if challenge then for _, g in ipairs(D.CHALLENGE) do seen[g[1]] = true end end
+    local list = {}
+    for _, kind in ipairs(D.ENEMY_ORDER) do if seen[kind] then list[#list + 1] = kind end end
+    return list
+end
+
+local function loadoutLayout()
+    local lv = D.LEVELS[pick.n]
+    local avail = vw - inset.l - inset.r - 8
+    local cols = 6
+    while cols > 2 and cols * SW + (cols - 1) * 4 > avail do cols = cols == 6 and 4 or cols - 1 end
+    local rows = ceil(#D.TOWERS / cols)
+
+    -- The chips, flowed into rows as wide as the cards.
+    local width = max(cols * SW + (cols - 1) * 4, min(avail, 300))
+    local chips, lines, x, line = {}, 1, 0, {}
+    local function name(kind) return D.ENEMIES[kind].name end
+    for _, kind in ipairs(enemiesOf(lv)) do
+        local w = Font.width(name(kind)) + 6
+        if x > 0 and x + w > width then lines, x = lines + 1, 0 end
+        chips[#chips + 1] = { kind = kind, line = lines, dx = x, w = w, h = 9, name = name(kind) }
+        x = x + w + 3
+    end
+
+    local height = 22 + 10 + lines * 12 + 6 + rows * (SH + 4) + 6 + 16
+    local y = max(inset.t + 4, floor((vh - inset.b - 12 - height) / 2))
+    local top = y
+    y = y + 32
+    -- Each chip row centred on its own.
+    local ends = {}
+    for _, c in ipairs(chips) do ends[c.line] = c.dx + c.w end
+    for _, c in ipairs(chips) do
+        c.x = floor((vw - ends[c.line]) / 2) + c.dx
+        c.y = y + (c.line - 1) * 12
+    end
+    y = y + lines * 12 + 6
+
+    local cards = {}
+    local x0 = floor((vw - (cols * SW + (cols - 1) * 4)) / 2)
+    for k, t in ipairs(D.TOWERS) do
+        local col, row = (k - 1) % cols, floor((k - 1) / cols)
+        cards[k] = { x = x0 + col * (SW + 4), y = y + row * (SH + 4), w = SW, h = SH, t = t }
+    end
+    y = y + rows * (SH + 4) + 6
+    local back = { x = floor(vw / 2) - 54, y = y, w = 50, h = 16 }
+    local go = { x = floor(vw / 2) + 4, y = y, w = 50, h = 16 }
+    return { top = top, chips = chips, chipsY = top + 32, cards = cards, back = back, go = go }
+end
+
+local function picked()
+    local list = {}
+    for _, t in ipairs(D.TOWERS) do if pick.set[t.id] then list[#list + 1] = t.id end end
+    return list
+end
+
+-- A species in or out of the loadout. Full, it says so rather than drop one.
+local function toggleSpecies(id)
+    if pick.set[id] then pick.set[id] = nil
+    elseif #picked() >= D.LOADOUT then pick.full = 1.5
+    else pick.set[id] = true end
+end
+
 local function nodeScreen(n)
     local i, j = world:toImage(n.x, n.y + (n.heart and 10 or 5), n.z)
     return i, j
@@ -379,6 +482,18 @@ end
 local function findHover()
     hover = {}
     local mx, my = mouse.x, mouse.y
+    if menu == "loadout" then
+        local L = loadoutLayout()
+        for _, c in ipairs(L.chips) do
+            if inside(mx, my, c.x, c.y, c.w, c.h) then hover.enemy = c.kind return end
+        end
+        for _, c in ipairs(L.cards) do
+            if inside(mx, my, c.x, c.y, c.w, c.h) then hover.species = c.t.id return end
+        end
+        if inside(mx, my, L.back.x, L.back.y, L.back.w, L.back.h) then hover.back = true end
+        if inside(mx, my, L.go.x, L.go.y, L.go.w, L.go.h) then hover.go = true end
+        return
+    end
     if menu then
         local cards, switch = levelCards()
         for k, c in ipairs(cards) do
@@ -429,13 +544,15 @@ end
 --- the run ---------------------------------------------------------------------------
 
 local function start()
-    game = Game.new(world, level, { challenge = challenge })
+    game = Game.new(world, level, { challenge = challenge, loadout = chosen })
+    layTools(game)
     mode, drag, panx, pany, selected = "grow", nil, 0, 0, nil
     paused, speed = false, 1
     menu = nil
 end
 
--- Plays level `n`: its board if it is painted already, else paint it first.
+-- Plays level `n` with the species in `chosen`: its board if it is painted
+-- already, else paint it first.
 local function play(n)
     level = D.LEVELS[n]
     menu = nil
@@ -455,11 +572,32 @@ local function openMenu()
     mode, drag, selected = "grow", nil, nil
 end
 
+-- Before level `n`: pick what to bring, starting from what was brought last
+-- time (or the level's own suggestion the first time).
+local function openLoadout(n)
+    local lv = D.LEVELS[n]
+    menu = "loadout"
+    mode, drag, selected = "grow", nil, nil
+    pick = { n = n, set = {}, full = 0 }
+    for _, id in ipairs(loadouts[lv.id] or lv.loadout or {}) do pick.set[id] = true end
+end
+
+-- Off into the level with what was picked, remembered for next time.
+local function setOff()
+    local list = picked()
+    if #list == 0 then return end
+    loadouts[D.LEVELS[pick.n].id] = list
+    saveLoadouts()
+    chosen = list
+    play(pick.n)
+end
+
 function love.load(args)
     love.graphics.setDefaultFilter("nearest", "nearest")
     love.graphics.setLineStyle("rough")
     fit()
     loadProgress()
+    loadLoadouts()
     for _, a in ipairs(args or {}) do
         if a == "--shots" then script = require("src.script") end
         if a == "--bot" then
@@ -491,8 +629,18 @@ function love.load(args)
 end
 
 local function click(b)
+    if menu == "loadout" then
+        if b == 2 or hover.back then openMenu()
+        elseif hover.go then setOff()
+        elseif hover.species then toggleSpecies(hover.species)
+        elseif hover.enemy then
+            -- Pinned, so a finger (which has no hover) can see the answers too.
+            pick.enemy = pick.enemy ~= hover.enemy and hover.enemy or nil
+        end
+        return
+    end
     if menu then
-        if hover.level and levelOpen(hover.level) then play(hover.level)
+        if hover.level and levelOpen(hover.level) then openLoadout(hover.level)
         elseif hover.challenge then challenge = not challenge end
         return
     end
@@ -728,9 +876,17 @@ function love.keypressed(key)
         return
     end
     if painter then return end
+    if menu == "loadout" then
+        if key == "escape" or key == "backspace" then openMenu() return end
+        if key == "return" or key == "kpenter" or key == "space" then setOff() return end
+        for _, t in ipairs(D.TOWERS) do
+            if key == t.key:lower() then toggleSpecies(t.id) end
+        end
+        return
+    end
     if menu then
         local n = tonumber(key)
-        if n and D.LEVELS[n] and levelOpen(n) then play(n) end
+        if n and D.LEVELS[n] and levelOpen(n) then openLoadout(n) end
         if key == "c" and challengeOpen() then challenge = not challenge end
         if key == "escape" and game then menu = nil end
         return
@@ -764,7 +920,7 @@ function love.keypressed(key)
     -- Won: on to the next level.
     if key == "n" and game.phase == "won" then
         for k, l in ipairs(D.LEVELS) do
-            if l == level and D.LEVELS[k + 1] then play(k + 1) return end
+            if l == level and D.LEVELS[k + 1] then openLoadout(k + 1) return end
         end
     end
 end
@@ -791,6 +947,7 @@ function love.update(dt)
                     end,
                     select = function(t) selected = t end,
                     menu = function(on) if on then openMenu() else menu = nil end end,
+                    loadout = function(n) if n then openLoadout(n) else menu, pick = nil, nil end end,
                     button = function(name)
                         for n, b in ipairs(BUTTONS) do
                             if b.mode == name then
@@ -817,6 +974,7 @@ function love.update(dt)
         script.after(game, shot)
     end
     if menu then
+        if pick then pick.full = max(0, (pick.full or 0) - dt) end
         findHover()
         if script then
             script.update(game, 1 / 30)
@@ -1998,6 +2156,93 @@ local function drawMenu()
     centred(say("1 2 3 OR CLICK A LEVEL", "TAP A LEVEL") .. (challengeOpen() and say("   C: CHALLENGE", "") or ""), hintY, "s", "o")
 end
 
+local function drawLoadout()
+    color("o")
+    love.graphics.rectangle("fill", 0, 0, vw, vh)
+    local lv = D.LEVELS[pick.n]
+    local L = loadoutLayout()
+    local list = picked()
+    local clock = love.timer.getTime()
+    centred(lv.name .. (challenge and " (CHALLENGE)" or ""), L.top, "g", "o")
+    local count = #list .. "/" .. D.LOADOUT
+    centred("PICK THE SPECIES TO BRING  " .. count, L.top + 11, #list == D.LOADOUT and "l" or "t", "o")
+    text("COMING", floor((vw - Font.width("COMING")) / 2), L.chipsY - 9, "s")
+
+    -- The enemy pointed at (or pinned) lights up what answers it.
+    local enemy = hover.enemy or pick.enemy
+    local answers = {}
+    for _, id in ipairs(enemy and D.COUNTERS[enemy] or {}) do answers[id] = true end
+    for _, c in ipairs(L.chips) do
+        local boss = D.ENEMIES[c.kind].boss
+        local on = enemy == c.kind
+        box(c.x, c.y, c.w, c.h, on and "n" or "u", on and "w" or (boss and "r" or "k"))
+        text(c.name, c.x + 3, c.y + 2, boss and "r" or "w")
+    end
+
+    for _, c in ipairs(L.cards) do
+        local t = c.t
+        local inn, on, ans = pick.set[t.id], hover.species == t.id, answers[t.id]
+        local edge = inn and "l" or "k"
+        if ans and floor(clock * 4) % 2 == 0 then edge = "w" end
+        if on then edge = inn and "w" or "t" end
+        box(c.x, c.y, c.w, c.h, (inn or on) and "n" or "u", edge)
+        -- The picture kept to its corner of the card: a shelf or the giant is wider.
+        local pic = icon(t.id, nil, 0, inn and (clock * 0.7) % 1 or 0)
+        love.graphics.setScissor(c.x, c.y, 21, c.h)
+        blit(pic, c.x + 11, t.id == "mat" and c.y + c.h - 8 or c.y + c.h - 3, not inn and T.DARKER2 or nil)
+        love.graphics.setScissor()
+        wrap(t.name, c.x + 22, c.y + 3, c.w - 24, inn and "w" or "s")
+        text(tostring(t.cost), c.x + 22, c.y + c.h - 7, inn and "l" or "k")
+        -- On the Crack a species still comes when its wave is cleared.
+        local at = lv.unlock and lv.unlock[t.id] or (not lv.open and t.unlock) or 0
+        if at > 0 then
+            local s = "W" .. at
+            text(s, c.x + c.w - Font.width(s) - 2, c.y + c.h - 7, "k")
+        end
+        if not touch then text(t.key, c.x + 1, c.y + 1, "s") end
+        if ans then text("!", c.x + c.w - 4, c.y + 2, "w") end
+    end
+
+    local b, g = L.back, L.go
+    box(b.x, b.y, b.w, b.h, hover.back and "n" or "u", hover.back and "t" or "k")
+    text("BACK", b.x + floor((b.w - Font.width("BACK")) / 2), b.y + 5, "w")
+    local ready = #list > 0
+    box(g.x, g.y, g.w, g.h, ready and (hover.go and "m" or "d") or "u", ready and "g" or "k")
+    text("GROW", g.x + floor((g.w - Font.width("GROW")) / 2), g.y + 5, ready and "g" or "k")
+
+    -- One line under it all: what is pointed at, or how it works.
+    local tip, k
+    if pick.full > 0 then
+        tip, k = "ONLY " .. D.LOADOUT .. " COME. DROP ONE FIRST", "r"
+    elseif hover.species then
+        local t = D.TOWER[hover.species]
+        tip, k = t.name .. ": " .. t.blurb, "w"
+    elseif enemy then
+        local names = {}
+        for _, id in ipairs(D.COUNTERS[enemy] or {}) do names[#names + 1] = D.TOWER[id].name end
+        tip, k = D.ENEMIES[enemy].name .. ": " .. D.ENEMIES[enemy].blurb:gsub("%.?$", ".") .. " ANSWER: " .. table.concat(names, ", "), "t"
+    elseif not ready then
+        tip, k = "BRING AT LEAST ONE", "r"
+    else
+        tip, k = say("CLICK TO BRING OR LEAVE. POINT AT AN ENEMY FOR ITS ANSWER. ENTER TO GROW",
+            "TAP TO BRING OR LEAVE. TAP AN ENEMY FOR ITS ANSWER"), "s"
+    end
+    local room = vw - inset.l - inset.r - 8
+    local y = g.y + g.h + 6
+    -- Too long for one line: broken at words, as many lines as it takes.
+    local line = ""
+    for word in tip:gmatch("%S+") do
+        local try = line == "" and word or line .. " " .. word
+        if Font.width(try) > room then
+            centred(line, y, k, "o")
+            line, y = word, y + 9
+        else
+            line = try
+        end
+    end
+    centred(line, y, k, "o")
+end
+
 local function drawLoading()
     love.graphics.clear(unpack(T.RGB[IDX.o]))
     local s = "GROWING " .. level.name
@@ -2018,6 +2263,8 @@ function love.draw()
     love.graphics.clear(0, 0, 0, 0)
     if painter then
         drawLoading()
+    elseif menu == "loadout" then
+        drawLoadout()
     elseif menu then
         drawMenu()
     else

@@ -63,7 +63,9 @@ end
 
 --- setting up -------------------------------------------------------------------------
 
--- A run of one level. `opts.challenge` adds the challenge wave at the end.
+-- A run of one level. `opts.challenge` adds the challenge wave at the end;
+-- `opts.loadout`, a list of species ids, is all that can be grown (every
+-- species when it is not given: the bot and the shots bring them all).
 function Game.new(world, level, opts)
     local self = setmetatable({ world = world }, Game)
     level, opts = level or D.LEVELS[1], opts or {}
@@ -75,6 +77,10 @@ function Game.new(world, level, opts)
         self.challenge = true
     end
     self.uniques = {} -- the one-per-run species already grown
+    if opts.loadout then
+        self.loadout = {}
+        for _, id in ipairs(opts.loadout) do self.loadout[id] = true end
+    end
     self.nodes, self.links, self.mats = {}, {}, {}
     self.enemies, self.corpses, self.shots, self.fx, self.texts = {}, {}, {}, {}, {}
     self.clouds, self.inks = {}, {}
@@ -467,6 +473,11 @@ function Game:unlockAt(kind)
     return D.TOWER[kind].unlock or 0
 end
 
+-- Was this species brought on the run?
+function Game:brought(kind)
+    return not self.loadout or self.loadout[kind] == true
+end
+
 -- Has the wave that brings this species been cleared?
 function Game:unlocked(kind)
     return self:unlockAt(kind) <= self.cleared
@@ -475,6 +486,7 @@ end
 function Game:canBuild(kind, node)
     local d = D.TOWER[kind]
     if not node or node.heart or node.tower then return false end
+    if not self:brought(kind) then return false, "LEFT AT HOME" end
     if not self:unlocked(kind) then return false, "UNLOCKS AFTER WAVE " .. self:unlockAt(kind) end
     if d.unique and self.uniques[kind] then return false, "ONE PER RUN" end
     if (node.salted or 0) > 0 then return false, "SALTED" end
@@ -564,6 +576,7 @@ end
 function Game:canLay(kind, c, r)
     local d = D.TOWER[kind]
     if not self.world:distAt(c, r) or self.world.cell(c, r) == "H" then return false end
+    if not self:brought(kind) then return false, "LEFT AT HOME" end
     if not self:unlocked(kind) then return false, "UNLOCKS AFTER WAVE " .. self:unlockAt(kind) end
     if self:matAt(c, r) then return false, "TILE TAKEN" end
     if d.touch then
@@ -879,7 +892,7 @@ function Game:update(dt)
             self.nutrients = self.nutrients + bonus
             self:say("WAVE CLEAR +" .. bonus, self.heart.x, 26, self.heart.z, "g")
             for _, t in ipairs(D.TOWERS) do
-                if self:unlockAt(t.id) == self.cleared then self.events.unlock = t.id; self.newSpecies = t.id end
+                if self:brought(t.id) and self:unlockAt(t.id) == self.cleared then self.events.unlock = t.id; self.newSpecies = t.id end
             end
             if self.level.mutateAfter[self.wave] then self:offerMutations() end
         end

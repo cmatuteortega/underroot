@@ -28,6 +28,14 @@ It opens on the level picker. The Crack is open; winning a level opens the next
 (what is won is kept in the save directory), and winning the Lawn opens challenge
 mode, which adds a last wave with the Bombardier Beetle to any level.
 
+Before a level starts you pick the species to bring: six of the twelve. The rest
+stay home and stay off the toolbar. The picker shows every enemy the level sends,
+with bosses in red. Point at one (tap it on a phone) and the species that answer
+it blink. The first time you play a level it suggests six; after that it starts
+from what you brought last time, which is kept in the save directory. On the
+Crack a species you bring still opens when its wave is cleared (the `W` number on
+its card).
+
 You start with the sprout (the Heart) and 110 nutrients (more on the later
 levels). Grow hyphae out from it to pockets (a leaf, a crumb, a pebble, a dead
 beetle, a lily pad, a stone), grow fruiting bodies on the pockets, and start the
@@ -38,7 +46,7 @@ chew through any thread they cross.
 | --- | --- |
 | drag from a fed node to a pocket (or click one, then the other) | grow a link; cost grows with length, the far end glows if it is in reach |
 | `1` | grow hyphae (the default tool) |
-| `2`–`9`, `0`, `T`, `G`, `H` then click a linked pocket | Spore Puffer, Enoki Needle, Lion's Mane, Relay, Inky Cap, Puffball Mortar, Cordyceps Bloom, Stinkhorn, Ghost Lamp, Humongous Fungus; Slime Mat (`4`) and Shelf Fungus (`8`) go on a trail tile |
+| `2`–`9`, `0`, `T`, `G`, `H` then click a linked pocket (the species you brought) | Spore Puffer, Enoki Needle, Lion's Mane, Relay, Inky Cap, Puffball Mortar, Cordyceps Bloom, Stinkhorn, Ghost Lamp, Humongous Fungus; Slime Mat (`4`) and Shelf Fungus (`8`) go on a trail tile |
 | click a tower, mat or shelf | select it: its upgrade cards show over the toolbar |
 | `Z` / `C`, or click a card | upgrade the selection down the left / right branch (after the fork, either key goes on up it) |
 | `1` `2` `3`, or click a card | pick a Mutation when the network offers them |
@@ -51,9 +59,11 @@ chew through any thread they cross.
 | right click | cancel, back to growing |
 | drag on open ground, middle drag, arrows / WASD | pan |
 | `R` | restart after a win or loss (`Shift+R` any time) |
-| `N` | after a win: on to the next level |
+| `N` | after a win: on to the next level's loadout |
 | `M` | the level picker (`Esc` there goes back to the run) |
-| `1` `2` `3`, `C` in the picker | play a level; challenge mode on or off |
+| `1` `2` `3`, `C` in the picker | pick a level; challenge mode on or off |
+| click a species, or its key, in the loadout | bring it or leave it (six at most) |
+| `Enter` / `Space`, `Esc` in the loadout | grow the level with that loadout; back to the levels |
 | mouse wheel, `+` / `-` | zoom in and out (whole steps) |
 | `F11` / `Alt+Enter` | back to a window (it opens fullscreen) |
 
@@ -322,17 +332,20 @@ What is new for Underfoot:
 
 - **A tower**: a row in `D.TOWERS` (`src/defs.lua`) with its `up` branches, a
   look function in `src/models.lua` (in `TOWER`, with its animation steps in
-  `STEPS`), and its behaviour as a branch in `Game:fire`. It gets a toolbar button
-  by being in the list. Check every tier with `love . --sheet`.
+  `STEPS`), and its behaviour as a branch in `Game:fire`. It gets a card in the
+  loadout picker by being in the list, and a toolbar button when brought. Name it
+  in `D.COUNTERS` for the enemies it answers. Check every tier with `love . --sheet`.
 - **An enemy**: a row in `D.ENEMIES` and `D.ENEMY_ORDER`, a model, a line in
   `enemyPicture` in `main.lua`, and a branch in `Game:move` if it does something to
-  the network nothing else does. Put it in a wave in `D.WAVES`.
+  the network nothing else does. Put it in a wave in `D.WAVES`, and give it its
+  answers in `D.COUNTERS`.
 - **A map**: a row in `MAPS` in `src/world.lua`. `E` gates, `=` trail to `H`,
   `~` flooded trail, `o` water, pocket letters `p L C P S B`, `#` raised patio,
   `"` grass, `Y` long grass, `r` reeds. The trail must reach the Heart from every
   gate (it asserts).
 - **A level**: a row in `D.LEVELS` naming its map, its waves (each can carry a
-  `weather`), its starting nutrients and sprout, and when it mutates. It gets a
+  `weather`), its starting nutrients and sprout, when it mutates, and the
+  `loadout` it suggests the first time. It gets a
   card in the picker by being in the list. Give it a build order in `PLANS`
   (`src/bot.lua`) to balance it with `--bot`.
 - **A weather**: a row in `D.WEATHER`, read through `Game:sky()` where its numbers

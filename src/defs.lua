@@ -230,6 +230,26 @@ D.ENEMIES = {
 D.ENEMY_ORDER = { "ant", "pillbug", "mite", "gnat", "moth", "brine", "slug", "spider", "knight",
     "queen", "stag", "dung", "waterbug", "centipede", "bombardier" }
 
+-- What answers each enemy: the species the loadout picker lights up when the
+-- player points at one coming in the level (the design doc's counterplay).
+D.COUNTERS = {
+    ant = { "puffer", "mortar", "inky" },
+    pillbug = { "mat", "shelf", "needle" },
+    mite = { "puffer", "mane", "mortar" },
+    gnat = { "stink", "lamp" },
+    moth = { "lamp", "stink" },
+    brine = { "needle", "puffer" },
+    slug = { "cordyceps", "mortar", "needle" },
+    spider = { "mane", "shelf" },
+    knight = { "needle", "cordyceps" },
+    queen = { "puffer", "mortar", "mane" },
+    stag = { "mane", "needle", "relay" },
+    dung = { "mortar", "needle" },
+    waterbug = { "mane", "needle" },
+    centipede = { "puffer", "mortar", "mat" },
+    bombardier = { "shelf", "lamp" },
+}
+
 -- Weather, per wave: a wave row's `weather` names one of these, and the
 -- forecast shows it before the wave starts. `flow` scales every link's flow
 -- cap; `wash` is reserve a second rain takes off a tower on a low pocket (a
@@ -314,20 +334,24 @@ local LAWN = {
 -- The levels, in the order they open: each is won to open the next. `map`
 -- names a map in src/world.lua. `open` grows every species from wave one
 -- (the player met them all on the Crack); `unlock` overrides that per
--- species. `growth` is how much tougher each wave's enemies are than the
+-- species. `loadout` is the species brought the first time it is played,
+-- before the player has picked their own. `growth` is how much tougher each wave's enemies are than the
 -- last's, if not HP_GROWTH. The Crack stands in for the design doc's first five levels: it
 -- has their three bosses.
 D.LEVELS = {
     { id = "crack", name = "THE CRACK", map = "crack", waves = CRACK, start = 110, heart = 20,
         mutateAfter = { [3] = true, [5] = true, [8] = true, [10] = true, [12] = true },
+        loadout = { "puffer", "needle", "mat", "mane", "relay", "mortar" },
         idea = "A SIDEWALK CRACK. LEARN THE NETWORK", boss = "QUEEN, STAG, DUNG BEETLE" },
     { id = "pond", name = "THE POND EDGE", map = "pond", waves = POND, start = 150, heart = 20, open = true, growth = 0.08,
         unlock = { giant = 4 },
         mutateAfter = { [2] = true, [4] = true, [7] = true, [9] = true },
+        loadout = { "puffer", "needle", "mat", "mane", "stink", "lamp" },
         idea = "WATER AND REEDS. BUILD ON HIGH GROUND", boss = "GIANT WATER BUG" },
     { id = "lawn", name = "THE LAWN", map = "lawn", waves = LAWN, start = 140, heart = 20, open = true, growth = 0.2,
         unlock = { giant = 5 },
         mutateAfter = { [3] = true, [5] = true, [8] = true, [10] = true, [12] = true },
+        loadout = { "puffer", "needle", "mat", "mane", "mortar", "stink" },
         idea = "OPEN GRASS, THREE GATES. EVERYTHING AT ONCE", boss = "GIANT CENTIPEDE" },
 }
 D.LEVEL = {}
@@ -337,6 +361,11 @@ for _, l in ipairs(D.LEVELS) do D.LEVEL[l.id] = l end
 -- at the end, and the Bombardier Beetle in it.
 D.CHALLENGE = { weather = "night", { "bombardier", 1, 1, 1, 0 }, { "knight", 4, 3, 2, 3 }, { "moth", 8, 1, 2, 5 },
     { "spider", 4, 4, 1, 8 }, { "ant", 20, 0.6, 2, 10 } }
+
+-- The loadout: how many species a run brings, picked before a level from all
+-- of them. The rest stay home, off the toolbar. Hyphae, prune and the pulse
+-- always come.
+D.LOADOUT = 6
 
 D.HP_GROWTH = 0.1 -- each wave's enemies are this much tougher than the last's (bosses aside)
 
