@@ -36,6 +36,9 @@ local TOP, BOTTOM = 12, 32
 -- under the fingers; the HUD's (the strip, the toolbar, the words) never
 -- changes with it, so a button is the same size at any zoom.
 local canvas, cw, ch, zoom -- the board
+-- Board pixels the board's picture runs past each edge of the window: none,
+-- except while a pinch may pull in what is off the screen.
+local pad = { l = 0, t = 0, r = 0, b = 0 }
 local ui, vw, vh, uz -- the HUD, and every screen measure the HUD lays out by
 local overlay, overlayImage, opx
 local world, painter, progress = nil, nil, 0
@@ -95,6 +98,7 @@ local camx, camy, panx, pany = 0, 0, 0, 0
 local mode = "grow"
 local drag -- the node a link is being pulled from
 local dragAt -- where on the screen it was picked up
+local tapped -- the node just pressed: let go of it where it was, and it is selected
 local hover = {}
 -- The pointer in HUD pixels (x, y) and window pixels (wx, wy).
 local mouse = { x = 0, y = 0, wx = 0, wy = 0 }
@@ -115,6 +119,7 @@ local speed, paused = 1, false
 local heartFlash = 0
 local shake = 0 -- seconds of shaking left: a boss charging, a ball breaking
 local selected -- the tower, mat or shelf whose upgrades are showing
+local peek -- the species in hand whose panel the toolbar opened
 -- The camera easing toward a selection: where panx, pany are headed, and what
 -- they were sent there for (a new selection sends them again).
 local focus, focused
@@ -126,6 +131,21 @@ local turning
 local TURN_TIME = 0.45
 
 --- the screen ----------------------------------------------------------------------
+
+-- The board's picture: the window's worth, and pad past each edge of it.
+local function padBoard(l, t, r, b)
+    pad.l, pad.t, pad.r, pad.b = l, t, r, b
+    local w, h = cw + l + r, ch + t + b
+    canvas = love.graphics.newCanvas(w, h)
+    canvas:setFilter("nearest", "nearest")
+    -- The overlay is one byte-for-byte picture of everything laid over the board
+    -- this frame: a pixel is either covered, fully, or not there. Painter's order
+    -- is simply the order things are put.
+    overlay = love.image.newImageData(w, h, "rgba8")
+    opx = ffi.cast("uint8_t*", overlay:getFFIPointer())
+    overlayImage = love.graphics.newImage(overlay)
+    overlayImage:setFilter("nearest", "nearest")
+end
 
 local function fit()
     local w, h = love.graphics.getDimensions()
@@ -140,15 +160,7 @@ local function fit()
 
     zoom = base + zoomStep
     cw, ch = ceil(w / zoom), ceil(h / zoom)
-    canvas = love.graphics.newCanvas(cw, ch)
-    canvas:setFilter("nearest", "nearest")
-    -- The overlay is one byte-for-byte picture of everything laid over the board
-    -- this frame: a pixel is either covered, fully, or not there. Painter's order
-    -- is simply the order things are put.
-    overlay = love.image.newImageData(cw, ch, "rgba8")
-    opx = ffi.cast("uint8_t*", overlay:getFFIPointer())
-    overlayImage = love.graphics.newImage(overlay)
-    overlayImage:setFilter("nearest", "nearest")
+    padBoard(0, 0, 0, 0)
 end
 
 -- HUD pixels to board pixels: what the strip and toolbar cover of the board.
@@ -437,16 +449,17 @@ local function infoLines(kind, t, w)
     -- On the board: what is wrong with it, if anything.
     if t then
         local why
-        if t.hunger == "dormant" then why = "DORMANT: OUT OF NUTRIENTS. LINK IT BACK TO THE SPROUT"
-        elseif t.hunger == "starved" then why = "STARVED: FIRES AT HALF PACE"
-        elseif t.thirsty then why = "THIRSTY: FEED IT A THICKER LINK FROM A RELAY"
+        if t.hunger == "dormant" then why = "DORMANT: LINK IT TO THE SPROUT"
+        elseif t.hunger == "starved" then why = "STARVED: HALF PACE"
+        elseif t.thirsty then why = "THIRSTY: FEED IT FROM A RELAY"
         elseif (t.webbed or 0) > 0 then why = "WEBBED SHUT"
         elseif kind == "mat" and not t.fed then why = "WITHERING: DRAPE A LINK OVER IT" end
         if why then add(why, "r"); gap(2) end
     end
 
-    add(d.about, "w")
-    gap(3)
+    -- A species read about first; one on the board puts its numbers and its
+    -- upgrades first, so a short panel still has them.
+    if not t then add(d.about, "w"); gap(3) end
     local parts = {}
     if get("damage") then parts[#parts + 1] = "DAMAGE " .. number(get("damage")) end
     if get("every") then parts[#parts + 1] = "EVERY " .. number(get("every")) .. "S" end
@@ -468,6 +481,9 @@ local function infoLines(kind, t, w)
     end
     if line ~= "" then add(line, "l") end
 
+    -- On the board, what it can grow into next is a button: the upgrade itself.
+    local open = {}
+    if t then for _, u in ipairs(game:upgrades(t)) do open[u.branch * 10 + u.tier] = u end end
     gap(4)
     add("UPGRADES", "t")
     for b = 1, 2 do
@@ -475,12 +491,22 @@ local function infoLines(kind, t, w)
         local shut = t and t.branch and t.branch ~= b
         for tier = 1, 2 do
             local row = d.up[b][tier]
-            local grown = t and t.branch == b and t.tier >= tier
-            local k = grown and "g" or (shut and "k" or "w")
-            add((tier == 1 and "I  " or "II ") .. row.name .. "  " .. (grown and "GROWN" or row.cost), k)
-            add(row.blurb, shut and "k" or "s", 12)
+            local u = open[b * 10 + tier]
+            if u then
+                local blurb = wrapLines(row.blurb, w - 8)
+                local h = 11 + 7 * #blurb
+                out[#out + 1] = { up = u, row = row, blurb = blurb, h = h + 3 }
+                height = height + h + 3
+            else
+                local grown = t and t.branch == b and t.tier >= tier
+                local k = grown and "g" or (shut and "k" or "w")
+                add((tier == 1 and "I  " or "II ") .. row.name .. "  " .. (grown and "GROWN" or row.cost), k)
+                -- On the board only what it can grow now says what it does.
+                if not t then add(row.blurb, "s", 12) end
+            end
         end
     end
+    if t then gap(4); add(d.about, "s") end
     return out, height
 end
 
@@ -489,8 +515,9 @@ local function info()
     local kind, t
     if menu == "loadout" then
         kind = pick and pick.info
-    elseif not menu and game and selected and (game.phase == "build" or game.phase == "wave") then
-        kind, t = selected.kind, selected
+    elseif not menu and game and (game.phase == "build" or game.phase == "wave") then
+        if selected then kind, t = selected.kind, selected
+        elseif peek and peek == mode then kind = peek end
     end
     if not kind then return end
     local w = infoWidth()
@@ -511,8 +538,16 @@ local function info()
             local _, ty = turnRect()
             P.x, P.y, P.h = vw - inset.r - w - 3, top, ty - 4 - top
         else
-            P.x, P.y, P.h = inset.l + 3, top, min(h + 8, floor((barTop() - top) * 0.5))
+            P.x, P.y, P.h = inset.l + 3, top, min(h + 8, floor((barTop() - top) * 0.6))
         end
+    end
+    -- Where each line sits, so an upgrade's button can be hit; one cut off by
+    -- the bottom of the panel cannot.
+    local y = P.y + 4
+    for _, l in ipairs(lines) do
+        l.y = y
+        y = y + l.h
+        if l.up and y > P.y + P.h then l.up = nil end
     end
     return P
 end
@@ -522,22 +557,6 @@ local function freeSpan()
     local P = info()
     if P and wide() then return inset.l, P.x - 3 end
     return inset.l, vw - inset.r
-end
-
--- The upgrade panel over the toolbar: a card for each upgrade open to
--- whatever is selected (two at the fork, one after, none at the top).
-local CW, CH = 100, 24
-local function panelCards()
-    if not selected then return {} end
-    local ups = game:upgrades(selected)
-    local n = max(1, #ups)
-    local total = n * CW + (n - 1) * 4
-    local l, r = freeSpan()
-    local x0 = floor((l + r - total) / 2)
-    local y = barTop() - 5 - CH
-    local cards = {}
-    for k = 1, n do cards[k] = { x = x0 + (k - 1) * (CW + 4), y = y, w = CW, h = CH, up = ups[k] } end
-    return cards
 end
 
 -- The mutation picker: three cards across the middle, or down it on a narrow screen.
@@ -692,9 +711,12 @@ local function findHover()
         end
     end
     local P = info()
-    if P and inside(mx, my, P.x, P.y, P.w, P.h) then hover.info = true return end
-    for k, c in ipairs(panelCards()) do
-        if inside(mx, my, c.x, c.y, c.w, c.h) then hover.card = k return end
+    if P and inside(mx, my, P.x, P.y, P.w, P.h) then
+        hover.info = true
+        for _, l in ipairs(P.lines) do
+            if l.up and inside(mx, my, P.x + 3, l.y, P.w - 6, l.h - 3) then hover.up = l.up end
+        end
+        return
     end
     for n = 1, #BUTTONS do
         if inside(mx, my, buttonRect(n)) then hover.button = n return end
@@ -819,7 +841,7 @@ end
 -- A tap on nothing (no pocket, no plant, no thread, off the board) puts
 -- everything down: the tool in hand, a thread being pulled, the selection.
 local function letGo()
-    mode, drag, selected = "grow", nil, nil
+    mode, drag, selected, peek = "grow", nil, nil, nil
 end
 
 -- Finishes painting view q of the board now, if the background has not got
@@ -843,7 +865,7 @@ end
 -- under the middle of the screen stays where it is and the board turns about
 -- it; the frame being left is kept to be shown going round.
 local function turnCamera(d)
-    if turning or painter or menu or not game then return end
+    if turning or pinch or painter or menu or not game then return end
     local q = (world.turn + d) % World.TURNS
     paintNow(q)
     local mi, mj = floor(cw / 2), floor(ch / 2)
@@ -914,12 +936,8 @@ local function click(b)
         if hover.mutation then game:mutate(hover.mutation) end
         return
     end
+    if hover.up then game:upgrade(selected, hover.up.branch) return end
     if hover.info then return end
-    if hover.card then
-        local c = panelCards()[hover.card]
-        if c and c.up then game:upgrade(selected, c.up.branch) end
-        return
-    end
     if hover.button then
         -- The tool already in hand, picked again, is put down: the one way to
         -- cancel there is without a right button. A species not yet unlocked
@@ -927,7 +945,14 @@ local function click(b)
         local bt = BUTTONS[hover.button]
         if bt.tower and not game:unlocked(bt.mode) then return end
         local m = bt.mode
-        mode, drag = (m == mode and m ~= "grow") and "grow" or m, nil
+        drag = nil
+        if bt.tower and m == mode then
+            -- The species in hand, picked again: its panel opens, or shuts. It
+            -- stays in hand; a tap on the ground puts it down.
+            peek, selected = peek ~= m and m or nil, nil
+            return
+        end
+        mode, peek = (m == mode and m ~= "grow") and "grow" or m, nil
         if mode ~= "grow" then selected = nil end
         return
     end
@@ -948,8 +973,10 @@ local function click(b)
                 game:grow(drag, hover.node)
                 drag, selected = nil, nil
             else
-                -- A tower is picked up as the end of a thread and shows its upgrades.
-                drag, selected = hover.node, hover.node.tower
+                -- A node is picked up as the end of a thread. Its tower is only
+                -- selected (and the camera only goes to it) once it is let go
+                -- where it was: pulled on to another node, it was a link.
+                drag, tapped = hover.node, hover.node
             end
         elseif hover.link and hover.link.state == "cut" then
             game:repair(hover.link)
@@ -972,7 +999,7 @@ local function click(b)
         -- Off the trail (or off the board) there is nowhere to lay it.
         if hover.c and world:distAt(hover.c, hover.r) then
             local m = game:lay(mode, hover.c, hover.r)
-            if m then selected = m end
+            if m then selected, peek = m, nil end
         else
             letGo()
         end
@@ -982,7 +1009,7 @@ local function click(b)
     else
         if hover.node then
             local t = game:build(mode, hover.node)
-            if t then selected = t end
+            if t then selected, peek = t, nil end
         else
             letGo()
         end
@@ -1006,7 +1033,7 @@ function love.mousepressed(x, y, b, istouch)
     point(x, y)
     findHover()
     if b == 3 then mouse.pan = { wx = x, wy = y, px = panx, py = pany } return end
-    if b == 1 and not (hover.button or hover.wave or hover.turn or hover.node or hover.card or hover.mutation or hover.info) and not (mode == "grow" and drag) then
+    if b == 1 and not (hover.button or hover.wave or hover.turn or hover.node or hover.mutation or hover.info) and not (mode == "grow" and drag) then
         press = { x = mouse.x, y = mouse.y, wx = x, wy = y, px = panx, py = pany }
         return
     end
@@ -1031,10 +1058,14 @@ function love.mousereleased(x, y, b, istouch)
         return
     end
     findHover()
+    local t = tapped
+    tapped = nil
     -- Pulled from one node and let go over another: that is a link too.
     if b == 1 and mode == "grow" and drag and hover.node and hover.node ~= drag then
         game:grow(drag, hover.node)
         drag = nil
+    elseif b == 1 and t and drag == t and hover.node == t then
+        selected = t.tower
     elseif b == 1 and istouch and mode == "grow" and drag and not hover.node and not hover.button then
         -- A thread pulled out on a phone and dropped on bare ground was not
         -- meant: with no right button to cancel, letting go cancels.
@@ -1114,7 +1145,14 @@ function love.touchpressed(id, x, y)
         local d, mx, my = spread()
         pinch.d0, pinch.x0, pinch.y0, pinch.x, pinch.y = max(d, 1), mx, my, mx, my
         if press then panx, pany = press.px, press.py; centre() end
-        press, drag = nil, nil
+        press, drag, tapped = nil, nil, nil
+        -- Spread or pinched in, the frame shows past the window's edges: the
+        -- whole board is drawn while the fingers are down, not just what was on
+        -- the screen, so nothing is cut off until they let go.
+        if world and game and not menu then
+            local fx, fy, m = floor(camx), floor(camy), 8
+            padBoard(max(0, fx + m), max(0, fy + m), max(0, world.w - fx - cw + m), max(0, world.h - fy - ch + m))
+        end
     end
 end
 
@@ -1179,12 +1217,12 @@ function love.keypressed(key)
         if drag or mode ~= "grow" or selected then mode, drag, selected = "grow", nil, nil else paused = not paused end
     end
     for _, b in ipairs(BUTTONS) do
-        if key == b.key:lower() and not (b.tower and not game:unlocked(b.mode)) then mode, drag, selected = b.mode, nil, nil end
+        if key == b.key:lower() and not (b.tower and not game:unlocked(b.mode)) then mode, drag, selected, peek = b.mode, nil, nil, nil end
     end
     if (key == "z" or key == "c") and selected then
-        local cards = panelCards()
-        local c = cards[key == "z" and 1 or #cards]
-        if c and c.up then game:upgrade(selected, c.up.branch) end
+        local ups = game:upgrades(selected)
+        local u = ups[key == "z" and 1 or #ups]
+        if u then game:upgrade(selected, u.branch) end
     end
     if key == "space" then
         if game.phase == "build" then game:startWave() end
@@ -1660,7 +1698,10 @@ end
 
 local function drawBoard()
     -- A boss charging, a ball bursting: the board jumps.
-    local cx0, cy0 = camx, camy
+    -- Drawn over the whole picture, pad and all: for the moment, it is the window.
+    local cx0, cy0, cw0, ch0 = camx, camy, cw, ch
+    camx, camy = floor(camx) - pad.l, floor(camy) - pad.t
+    cw, ch = cw + pad.l + pad.r, ch + pad.t + pad.b
     if shake > 0 then
         camx = camx + love.math.random(-2, 2)
         camy = camy + love.math.random(-1, 1)
@@ -1992,7 +2033,7 @@ local function drawBoard()
     overlayImage:replacePixels(overlay)
     love.graphics.setColor(1, 1, 1)
     love.graphics.draw(overlayImage, 0, 0)
-    camx, camy = cx0, cy0
+    camx, camy, cw, ch = cx0, cy0, cw0, ch0
 end
 
 --- lettering and the HUD -----------------------------------------------------------------
@@ -2085,7 +2126,7 @@ local function hint()
         end
     end
     if selected and game:upgrades(selected)[1] and game.wave <= 2 then
-        return say("UPGRADES: CLICK A CARD ABOVE, OR Z / C", "UPGRADES: TAP A CARD ABOVE"), "l"
+        return say("UPGRADES: CLICK ONE IN THE PANEL, OR Z / C", "UPGRADES: TAP ONE IN THE PANEL"), "l"
     end
     if game.wave == 0 then return say("SPACE TO START THE FIRST WAVE", "TAP START FOR THE FIRST WAVE"), "g" end
 end
@@ -2096,17 +2137,16 @@ local function tooltip()
         return m.name .. ": " .. m.blurb, "l"
     end
     if game.phase == "mutate" then return say("THE NETWORK MUTATES. PICK ONE (1 2 3)", "THE NETWORK MUTATES. PICK ONE"), "l" end
-    if hover.card then
-        local c = panelCards()[hover.card]
-        if not c.up then return towerName(selected) .. ": FULLY GROWN", "w" end
-        local ok, why = game:canUpgrade(selected, c.up.branch)
-        return c.up.row.name .. ": " .. c.up.row.blurb .. (ok and "" or ("  (" .. why .. ")")), ok and "l" or "r"
+    if hover.up then
+        local ok, why = game:canUpgrade(selected, hover.up.branch)
+        return "GROW " .. hover.up.row.name .. ": " .. hover.up.row.cost .. (ok and "" or ("  (" .. why .. ")")), ok and "l" or "r"
     end
     if hover.button then
         local b = BUTTONS[hover.button]
         if b.tower and not game:unlocked(b.mode) then
             return b.name .. ": UNLOCKS AFTER WAVE " .. game:unlockAt(b.mode), "r"
         end
+        if b.tower and b.mode == mode then return say(b.name .. ": CLICK AGAIN TO READ IT", b.name .. ": TAP AGAIN TO READ IT"), "w" end
         return b.name .. (b.cost and (" (" .. b.cost .. ")") or "") .. ": " .. b.blurb, "w"
     end
     if hover.turn then return say("TURN THE BOARD (E, SHIFT+E BACK)", "TURN THE BOARD"), "w" end
@@ -2358,36 +2398,7 @@ local function drawHud()
     end
     drawTurnButton()
 
-    -- The upgrade panel: what the selected thing can become.
-    local cards = panelCards()
-    for k, c in ipairs(cards) do
-        local u = c.up
-        local can = u and game:canUpgrade(selected, u.branch)
-        box(c.x, c.y, c.w, c.h, hover.card == k and "n" or "u", u and (can and "l" or "k") or "t")
-        if u then
-            local pic = icon(selected.kind, u.branch, u.tier, (game.clock * 0.7) % 1)
-            blit(pic, c.x + 11, c.y + c.h - (selected.kind == "mat" and 8 or 3), can and nil or T.DARKER)
-            text(u.row.name, c.x + 23, c.y + 3, "w")
-            local tag = (u.tier == 1 and "I" or "II") .. "  " .. u.row.cost
-            text(tag, c.x + 23, c.y + 11, can and "l" or "r")
-            if not touch then
-                local key = (#cards == 1 or k == 1) and "Z" or "C"
-                if #cards == 1 then key = "Z/C" end
-                text(key, c.x + c.w - Font.width(key) - 2, c.y + 11, "s")
-            end
-            -- Two pips: how far up its branch it has grown.
-            for p = 1, 2 do
-                color(p <= (selected.tier or 0) and "l" or "k")
-                love.graphics.rectangle("fill", c.x + 23 + (p - 1) * 4, c.y + 18, 3, 2)
-            end
-        else
-            local pic = icon(selected.kind, selected.branch, selected.tier, (game.clock * 0.7) % 1)
-            blit(pic, c.x + 11, c.y + c.h - (selected.kind == "mat" and 8 or 3))
-            text(towerName(selected), c.x + 23, c.y + 3, "w")
-            text("FULLY GROWN", c.x + 23, c.y + 11, "t")
-        end
-    end
-    local tipBase = cards[1] and cards[1].y - 4 or barTop()
+    local tipBase = barTop()
 
     -- A boss on the board: its name and its health across the top.
     local boss
@@ -2542,10 +2553,25 @@ function drawInfo(P)
     love.graphics.setScissor(P.x, P.y, 22, 24)
     blit(pic, P.x + 12, P.kind == "mat" and P.y + 16 or P.y + 22)
     love.graphics.setScissor(P.x, P.y, P.w, P.h - (P.button and 20 or 0))
-    local y = P.y + 4
     for _, l in ipairs(P.lines) do
-        if l.s then text(l.s, P.x + 4 + l.x, y, l.k) end
-        y = y + l.h
+        local y = l.y
+        if l.up then
+            -- An upgrade it can grow now: a button, its key beside the cost.
+            local can = game:canUpgrade(P.t, l.up.branch)
+            local on = hover.up and hover.up.branch == l.up.branch
+            local bx, bw = P.x + 3, P.w - 6
+            box(bx, y, bw, l.h - 3, on and "n" or (can and "d" or "o"), can and "l" or "k")
+            text((l.up.tier == 1 and "I  " or "II ") .. l.row.name, bx + 2, y + 2, "w")
+            local cost = tostring(l.row.cost)
+            if not touch then
+                local ups = game:upgrades(P.t)
+                cost = (#ups == 1 and "Z/C" or (l.up.branch == ups[1].branch and "Z" or "C")) .. " " .. cost
+            end
+            text(cost, bx + bw - Font.width(cost) - 2, y + 2, can and "l" or "r")
+            for n, s in ipairs(l.blurb) do text(s, bx + 2, y + 2 + 2 + 7 * n, can and "s" or "k") end
+        elseif l.s then
+            text(l.s, P.x + 4 + l.x, y, l.k)
+        end
     end
     love.graphics.setScissor()
     local b = P.button
@@ -2711,9 +2737,10 @@ function love.draw()
         -- moved to where they are (see love.touchpressed).
         love.graphics.clear(unpack(T.RGB[IDX.o]))
         local z = zoom * pinch.s
-        love.graphics.draw(canvas, pinch.x - pinch.x0 * pinch.s, pinch.y - pinch.y0 * pinch.s, 0, z, z)
+        love.graphics.draw(canvas, pinch.x - (pinch.x0 + pad.l * zoom) * pinch.s,
+            pinch.y - (pinch.y0 + pad.t * zoom) * pinch.s, 0, z, z)
     else
-        love.graphics.draw(canvas, 0, 0, 0, zoom, zoom)
+        love.graphics.draw(canvas, -pad.l * zoom, -pad.t * zoom, 0, zoom, zoom)
     end
     love.graphics.setColor(1, 1, 1)
     love.graphics.draw(ui, 0, 0, 0, uz, uz)

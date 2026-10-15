@@ -50,9 +50,10 @@ chew through any thread they cross.
 | drag from a fed node to a pocket (or click one, then the other) | grow a link; cost grows with length, the far end glows if it is in reach |
 | `1` | grow hyphae (the default tool) |
 | `2`–`9`, `0`, `T`, `G`, `H` then click a linked pocket (the species you brought) | Spore Puffer, Enoki Needle, Lion's Mane, Relay, Inky Cap, Puffball Mortar, Cordyceps Bloom, Stinkhorn, Ghost Lamp, Humongous Fungus; Slime Mat (`4`) and Shelf Fungus (`8`) go on a trail tile |
-| click a tower, mat or shelf | select it: its upgrade cards show over the toolbar, and a panel tells all about it as it has grown (live numbers, what is wrong with it, both branches). On a wide screen the camera eases it to a third of the way across and half way down, with the panel on the right; upright, the panel goes across the top. Click elsewhere to close it |
+| click the species in hand on the toolbar again | open its panel (again to shut it); it stays in hand |
+| click a tower, mat or shelf (pressed and let go on it: pulling a link from it does not select it) | select it: a panel tells about it as it has grown (live numbers, what is wrong with it, both branches), and the upgrades it can grow now are buttons in it. On a wide screen the camera eases it to a third of the way across and half way down, with the panel on the right; upright, the panel goes across the top. Click elsewhere to close it |
 | click on nothing (no pocket, plant or thread, or off the board) | put everything down: the tool in hand, a thread being pulled, the selection |
-| `Z` / `C`, or click a card | upgrade the selection down the left / right branch (after the fork, either key goes on up it) |
+| `Z` / `C`, or click an upgrade in the panel | upgrade the selection down the left / right branch (after the fork, either key goes on up it) |
 | `1` `2` `3`, or click a card | pick a Mutation when the network offers them |
 | `X` then click | prune a link (half back), clear a tower (60% back), lift a mat |
 | click a cut link | regrow it by hand for 40% of its cost |
@@ -81,10 +82,10 @@ keeps clear of the notch and home bar:
 | touch | what it does |
 | --- | --- |
 | drag from a node to a pocket, or tap one then the other | grow a link; letting go on bare ground cancels the thread |
-| tap a tool, then tap where it goes | build, prune, lay a mat, pulse; tap the tool again to put it down |
-| tap a tower, mat or shelf, then a card | upgrade it |
+| tap a tool, then tap where it goes | build, prune, lay a mat, pulse; tap a species' tool again to open its panel (again to shut it), tap the ground to put it down |
+| tap a tower, mat or shelf, then an upgrade in its panel | upgrade it |
 | drag on open ground | pan |
-| pinch | zoom: the board follows the fingers, then settles on the nearest sharp (whole-pixel) zoom when they lift; it starts one step in, and the toolbar keeps its size at any zoom |
+| pinch | zoom: the board follows the fingers, with the whole board drawn so nothing is cut off at the edges, then settles on the nearest sharp (whole-pixel) zoom when they lift; it starts one step in, and the toolbar keeps its size at any zoom |
 | tap START / SPEED | start the next wave / game speed |
 | tap the top bar | pause and resume (the game also pauses when it is sent to the background) |
 | tap a level card, or the challenge switch | play it / challenge on or off |
