@@ -17,6 +17,7 @@ love . --shots         # dev: a scripted game that clicks like a player, writes
 love . --shots pond    # dev: the same for another level (pond, lawn), the bot playing;
                        # add `challenge` for the challenge wave
 love . --sheet         # dev: every look of every model on one sheet (sheet.png)
+love . --sounds        # dev: every sound and loop written as a .wav (sounds/), to listen to
 love . --bot 10        # dev: plays the Crack headless 10 times, prints how it went
 love . --bot 10 lawn   # dev: another level; add `challenge`, or `generic` for the
                        # map-agnostic player instead of the level's build order
@@ -72,6 +73,7 @@ chew through any thread they cross.
 | a species' key in the loadout | bring it or leave it at once |
 | `Enter` / `Space`, `Esc` in the loadout | grow the level with that loadout; back to the levels |
 | mouse wheel, `+` / `-` | zoom in and out (whole steps) |
+| `V` | sound loud / quiet / off (kept between runs; the level picker has a switch for it too) |
 | `F11` / `Alt+Enter` | back to a window (it opens fullscreen) |
 
 On a phone or tablet it plays with one finger, fullscreen, either way up (a
@@ -269,8 +271,54 @@ before they have a build order, not for tuning.
 
 Springtail, Mole Cricket, Centipede (the small one) and Green Mold; elite
 modifiers, props, the Spore Bank, sprout seeds, the Flowerpot, Shed Floor, Rotting
-Log and Compost Heap as levels of their own, and sound. Each of those is a row and
+Log and Compost Heap as levels of their own. Each of those is a row and
 a model more, below.
+
+## How it sounds
+
+There are no sound files. `src/sfx.lua` makes every sound when the game starts,
+a few a frame (or the moment one is first wanted): each is a handful of
+voices (sine, triangle, square, saw, white noise, or noise held at a pitch),
+each swept from one pitch to another through a swept low or high pass, with
+vibrato or FM, under an envelope, mixed and sometimes echoed. Chimes are tuned
+to notes; thumps and crunches are pitched noise falling away.
+
+- **The rules cue, the screen plays.** `Game:cue(name, x, z)` notes what
+  happened and where (a build, a cut, a shot, a kill, a boss); `main.lua` plays it
+  panned to where it is on the screen and quieter off it. One of a name a frame,
+  so a dozen ants chewing is one chew.
+- **Each sound has a shortest gap and a most-at-once**, and a little pitch wobble
+  each time, so a barrage of puffers is a patter and not a wall.
+- **The HUD has its own**: a tick on hover, a click, a buzz (and the nutrients
+  flash red and shiver) for what cannot be done, a chime for a level setting off.
+- **Underneath, loops**: the soil always; the network's hum, as loud as the
+  living links make it and higher the more there are (and higher still during
+  a Spore Pulse); and the weather's own: rain, the drought's wind, crickets at
+  night, frost's high wind and a tinkle now and then.
+- **A low sprout beats**: under 30% in a wave, a heartbeat, and the screen's edge
+  pulses rust with it.
+
+## How it moves
+
+Every effect is drawn the way everything else is, a pixel at a time in the
+palette and depth-tested against the board, from `Game.fx` (looks only: they
+roll their own dice, so a run's rules come out the same with or without them):
+
+- **Sparks** off every hit (grey ones, and a clink, when a shell turns most of it),
+  **stains** on the ground where a bug died or a shell landed that wear away from
+  the edge in, and **shock rings** running out over the ground from a build, an
+  upgrade, a blast, a cut, a pulse, a boss arriving or falling.
+- **Motes** drifting up: glow off a new tower or a mended thread, dust off a
+  boss's footfalls and a gate a wave comes in at, sparkle round the sprout when a
+  wave is cleared or a level won, caps springing up along a Fairy Ring as it
+  closes.
+- **Shots leave**: a puff over a puffer, a cross of light at a needle's tip,
+  smoke from a mortar, a heave of soil round the Humongous Fungus.
+- **Threads**: a new or regrown link flashes white and glow from the middle out,
+  a cut one white then rust, and a pruned one drops to the soil and goes.
+- **The HUD**: whatever was pressed lights up for a moment; a word across the
+  screen when a wave comes (with its weather), is cleared, a species opens or a
+  Fairy Ring closes; the screen's edge goes red when the sprout is hit.
 
 ## How it is drawn
 
@@ -334,6 +382,7 @@ What is new for Underfoot:
 | `src/tracer.lua` | the isometric camera, lamp, ramps, crease and ink passes, affine maps, the ellipsoid painter |
 | `src/palette.lua` | the thirteen colours and the one-step-darker column |
 | `src/font.lua` | Survive School's 3x5 face |
+| `src/sfx.lua` | every sound and loop, synthesised at load; pools, gaps, panning |
 | `src/script.lua` | dev only: the `--shots` run |
 | `src/sheet.lua` | dev only: the `--sheet` model sheet |
 | `src/bot.lua` | dev only: the `--bot` balance runs, a build order a level and the generic player |

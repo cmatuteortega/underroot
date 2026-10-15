@@ -62,7 +62,8 @@ first five levels and has their three bosses. Still to come as levels of their o
 - [ ] 5. The Compost Heap (boss: Dung Beetle)
 
 ### Feel
-- [ ] Audio: soil, rustles, the network's hum rising and falling with links
+- [x] Audio: synthesised at load (`src/sfx.lua`), a sound for every action and bug, the soil, the network's hum rising and falling with links, a loop a weather
+- [x] Effects: hit sparks, stains, shock rings, motes, shot flashes, thread flashes, HUD flashes and banners
 - [ ] Balance by hand: the bot wins the Crack and the Pond Edge 8 in 10 and the Lawn 7; the Stag Beetle usually gets through, and challenge mode on the Pond Edge is never won
 
 ## Open questions (as answered so far)

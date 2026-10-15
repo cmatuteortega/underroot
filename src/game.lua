@@ -37,6 +37,10 @@ local World = require "src.world"
 local sqrt, max, min, abs, floor, huge = math.sqrt, math.max, math.min, math.abs, math.floor, math.huge
 local cos, sin, atan2 = math.cos, math.sin, math.atan2
 local random = love.math.random
+-- Looks only (sparks, dust, motes): their own dice, so what the rules roll
+-- (and a bot's run) is the same with or without them.
+local looks = love.math.newRandomGenerator(7)
+local function fr() return looks:random() end
 
 local Game = {}
 Game.__index = Game
@@ -92,6 +96,7 @@ function Game.new(world, level, opts)
     self.queue = {}
     self.seen = {}
     self.events = {}
+    self.cues = {}
     self.stats = { kills = 0, drunk = 0, stolen = 0, cuts = 0, bosses = 0, leaked = {} }
     self.rings, self.ringKey = {}, ""
     self.pulseCd = 0
@@ -111,6 +116,16 @@ end
 
 function Game:say(text, x, y, z, k)
     self.texts[#self.texts + 1] = { text = text, x = x, y = y, z = z, k = k or "l", life = 1.1 }
+end
+
+-- A sound, and where it happened, for main.lua to play (src/sfx.lua). One of
+-- a name at a time: a frame of a dozen ants chewing is one chew. A run no one
+-- listens to (the bot) stops keeping them once there are a few.
+function Game:cue(name, x, z, vol)
+    local list = self.cues
+    if #list >= 48 then return end
+    for _, c in ipairs(list) do if c.name == name then return end end
+    list[#list + 1] = { name = name, x = x, z = z, vol = vol }
 end
 
 --- numbers a mutation can change --------------------------------------------------------
@@ -255,6 +270,7 @@ function Game:grow(a, b)
     self.links[#self.links + 1] = l
     a.links[#a.links + 1] = l
     b.links[#b.links + 1] = l
+    self:cue("grow", a.x, a.z)
     return l
 end
 
@@ -272,6 +288,9 @@ function Game:prune(l)
     self.nutrients = self.nutrients + refund
     local mx, mz = (l.a.x + l.b.x) / 2, (l.a.z + l.b.z) / 2
     self:say("+" .. refund, mx, 4, mz)
+    self.fx[#self.fx + 1] = { thread = true, ax = l.a.x, ay = l.a.y, az = l.a.z, bx = l.b.x, by = l.b.y, bz = l.b.z,
+        life = 0.5, max = 0.5 }
+    self:cue("prune", mx, mz)
     self:removeLink(l)
     self:recompute()
 end
@@ -283,6 +302,9 @@ function Game:cut(l)
     self.events.cut = true
     local mx, mz = (l.a.x + l.b.x) / 2, (l.a.z + l.b.z) / 2
     self:burst(mx, 1, mz, 8, { "c", "l", "r" }, 18)
+    l.flash = 0.3
+    self:shock(mx, mz, 7, 0.25, "r", "w")
+    self:cue("cut", mx, mz)
     self:recompute()
 end
 
@@ -349,6 +371,9 @@ function Game:repair(l)
     if self.nutrients < c then return false end
     self.nutrients = self.nutrients - c
     l.hand = true
+    local mx, mz = (l.a.x + l.b.x) / 2, (l.a.z + l.b.z) / 2
+    self:motes(mx, 1, mz, 5, { "l", "c" }, 4, 10, 0.5)
+    self:cue("mend", mx, mz)
     return true
 end
 
@@ -374,6 +399,8 @@ function Game:findRings()
     end
     local key = table.concat(live, ",")
     if key == self.ringKey then return end
+    local before = {}
+    for _, r in ipairs(self.rings) do before[r.key] = true end
     self.ringKey, self.rings = key, {}
     local seen = {}
     for _, l in ipairs(self.links) do
@@ -405,9 +432,19 @@ function Game:findRings()
                     end
                     if not seen[k] and abs(area) > 1500 then -- a sliver is not a ring
                         seen[k] = true
-                        self.rings[#self.rings + 1] = { nodes = loop, set = {} }
+                        self.rings[#self.rings + 1] = { nodes = loop, set = {}, key = k }
                         for _, m in ipairs(loop) do self.rings[#self.rings].set[m] = true end
                         self.events.ring = true
+                        if not before[k] then
+                            -- Closed (or back): caps spring up along it, and the
+                            -- first time a ring is made, it chimes.
+                            for _, m in ipairs(loop) do self:motes(m.x, 1, m.z, 4, { "w", "l", "g" }, 4, 14, 0.9) end
+                            self.ringsMade = self.ringsMade or {}
+                            if not self.ringsMade[k] then
+                                self.ringsMade[k] = true
+                                self:cue("ring", loop[1].x, loop[1].z)
+                            end
+                        end
                     end
                 end
             end
@@ -467,6 +504,9 @@ function Game:pulse(node)
         n = n.parent
     end
     self:burst(node.x, node.y + 4, node.z, 12, { "l", "w", "c" }, 26)
+    self:shock(node.x, node.z, 30, 0.5, "l", "w")
+    self:shock(self.heart.x, self.heart.z, 16, 0.4, "l", "c")
+    self:cue("pulse", node.x, node.z)
     return true
 end
 
@@ -535,6 +575,9 @@ function Game:build(kind, node)
     node.tower = t
     if d.unique then self.uniques[kind] = true end
     self:burst(node.x, node.y + 2, node.z, 8, { "l", "c", "w" }, 14)
+    self:shock(node.x, node.z, 12, 0.35, "l", "c")
+    self:motes(node.x, node.y + 2, node.z, 8, { "l", "c" }, 6, 16, 0.7)
+    self:cue("build", node.x, node.z)
     self:recompute()
     return t
 end
@@ -572,6 +615,9 @@ function Game:upgrade(t, branch)
     t.hp = (t.hp or before) + (self:maxHp(t) - before)
     local x, y, z = t.node and t.node.x or t.x, t.node and t.node.y or 0, t.node and t.node.z or t.z
     self:burst(x, y + 6, z, 16, { "l", "w", "c" }, 22)
+    self:shock(x, z, 16, 0.45, "w", "l")
+    self:motes(x, y + 2, z, 16, { "l", "w", "w" }, 7, 22, 0.9)
+    self:cue("upgrade", x, z)
     self:say(u.row.name, x, y + 18, z, "l")
     self:recompute()
     return true
@@ -583,6 +629,9 @@ function Game:sell(node)
     local back = floor(t.spent * D.SELL)
     self.nutrients = self.nutrients + back
     self:say("+" .. back, node.x, node.y + 10, node.z)
+    self:burst(node.x, node.y + 4, node.z, 8, { "t", "n", "w" }, 16)
+    self:motes(node.x, node.y + 2, node.z, 6, { "l" }, 5, 18, 0.5)
+    self:cue("sell", node.x, node.z)
     node.tower = nil
     self:recompute()
 end
@@ -590,6 +639,9 @@ end
 function Game:destroyTower(node, why)
     if not node.tower then return end
     self:burst(node.x, node.y + 6, node.z, 14, { "t", "w", "r" }, 24)
+    self:shock(node.x, node.z, 12, 0.35, "r", "t")
+    self:splat(node.x, node.z, 7, "u", 4)
+    self:cue("die", node.x, node.z)
     self:say(why, node.x, node.y + 14, node.z, "r")
     node.tower = nil
     self:recompute()
@@ -628,6 +680,8 @@ function Game:lay(kind, c, r)
     m.life, m.hp = d.life, d.hp
     self.mats[#self.mats + 1] = m
     self:burst(m.x, 2, m.z, 8, { "l", "c", "w" }, 14)
+    self:shock(m.x, m.z, 11, 0.3, kind == "shelf" and "t" or "c", "l")
+    self:cue("lay", m.x, m.z)
     return m
 end
 
@@ -641,12 +695,16 @@ function Game:liftMat(m)
     local back = self:liftValue(m)
     self.nutrients = self.nutrients + back
     self:say("+" .. back, m.x, 8, m.z)
+    self:burst(m.x, 2, m.z, 6, m.kind == "shelf" and { "t", "n" } or { "c", "l" }, 12)
+    self:cue("lift", m.x, m.z)
     unlist(self.mats, m)
 end
 
 function Game:breakMat(m)
     unlist(self.mats, m)
     self:burst(m.x, 3, m.z, 12, m.kind == "shelf" and { "t", "n", "w" } or { "l", "c" }, 22)
+    self:splat(m.x, m.z, 6, m.kind == "shelf" and "n" or "d", 3)
+    self:cue("smash", m.x, m.z)
 end
 
 --- waves ---------------------------------------------------------------------------------
@@ -667,6 +725,17 @@ function Game:startWave()
         end
     end
     table.sort(self.queue, function(a, b) return a.t < b.t end)
+    -- Each gate the wave comes in at shakes a little dust loose.
+    local gates = {}
+    for _, g in ipairs(self.waves[self.wave]) do gates[g[4]] = true end
+    for g in pairs(gates) do
+        local e = self.world.entrances[g]
+        if e then
+            self:shock(e.x, e.z, 14, 0.6, "r", "t")
+            self:motes(e.x, 1, e.z, 8, { "t", "n" }, 8, 10, 0.8)
+        end
+    end
+    self:cue("wave", self.heart.x, self.heart.z)
 end
 
 function Game:spawnAt(kind, x, z, c, r)
@@ -715,6 +784,8 @@ function Game:spawn(kind, gate)
         if d.boss then
             self.events.boss = kind
             self.bossIntro = { kind = kind, t = 3.5 }
+            self:cue("boss", x, z)
+            self:shock(x, z, 30, 0.8, "r", "t")
         end
         return en
     end
@@ -733,6 +804,42 @@ function Game:burst(x, y, z, n, keys, speed)
     end
 end
 
+-- The same, for looks alone: thrown off a hit, not rolled by the rules.
+function Game:sparks(x, y, z, n, keys, speed)
+    if #self.fx > 500 then return end
+    for _ = 1, n do
+        local a, u = fr() * 2 * math.pi, fr()
+        self.fx[#self.fx + 1] = {
+            x = x, y = y, z = z,
+            vx = cos(a) * speed * u, vy = speed * (0.3 + fr()), vz = sin(a) * speed * u,
+            life = 0.15 + fr() * 0.2, k = keys[floor(fr() * #keys) + 1],
+        }
+    end
+end
+
+-- Specks drifting up and away round (x, y, z): sparkle off a new tower, dust
+-- off a footfall, glow off a mended thread.
+function Game:motes(x, y, z, n, keys, spread, speed, life)
+    if #self.fx > 500 then return end
+    for _ = 1, n do
+        local a, u = fr() * 2 * math.pi, fr() * spread
+        self.fx[#self.fx + 1] = { x = x + cos(a) * u, y = y + fr() * 3, z = z + sin(a) * u, vx = 0, vz = 0,
+            vy = speed * (0.5 + fr()), life = life * (0.5 + 0.5 * fr()), k = keys[floor(fr() * #keys) + 1], rise = true }
+    end
+end
+
+-- A ring running out over the ground from (x, z) to `r`: a landing, a blast,
+-- something grown. `k` its leading edge, `k2` behind it.
+function Game:shock(x, z, r, life, k, k2)
+    self.fx[#self.fx + 1] = { shock = true, x = x, z = z, r = r, life = life, max = life, k = k, k2 = k2 }
+end
+
+-- A stain on the ground that wears away: what a kill or a blast leaves.
+function Game:splat(x, z, r, k, life)
+    life = life or 3
+    self.fx[#self.fx + 1] = { splat = true, x = x, z = z, r = r, k = k, life = life, max = life, seed = floor(fr() * 997) }
+end
+
 function Game:armor(e)
     local d = D.ENEMIES[e.kind]
     if e.rolling then return d.rolledArmor end
@@ -746,6 +853,13 @@ function Game:hurt(e, amount, pierce, quiet)
     if e.mark > 0 then amount = amount * (e.markMul or 1) end
     local a = pierce and 0 or self:armor(e)
     local dmg = quiet and amount or max(amount * 0.15, amount - a)
+    if not quiet then
+        -- Most of it turned by a shell: it rings, and the sparks are grey.
+        local glance = a > 0 and dmg < amount * 0.5
+        local size = D.ENEMIES[e.kind].size or 1
+        self:sparks(e.x, e.y + 3 * size, e.z, glance and 3 or 2, glance and { "s", "w" } or { "w", "t" }, glance and 22 or 14)
+        self:cue(glance and "clink" or "hit", e.x, e.z)
+    end
     if e.ballHp and e.ballHp > 0 then
         -- The ball takes it. When it breaks, the beetle is in a hurry.
         e.ballHp = e.ballHp - dmg
@@ -770,6 +884,9 @@ function Game:breakBall(e)
     e.ballHp = 0
     self:burst(bx, 8, bz, 30, { "n", "u", "t" }, 34)
     self:say("THE BALL BREAKS", bx, 22, bz, "t")
+    self:shock(bx, bz, 26, 0.6, "t", "n")
+    self:splat(bx, bz, 12, "n", 6)
+    self:cue("ball", bx, bz)
     self.corpses[#self.corpses + 1] = { kind = "ball", x = bx, z = bz, h = e.h, value = d.ballCorpse, life = 40 }
     self.events.shake = 0.4
 end
@@ -782,6 +899,8 @@ function Game:kill(e)
     if e.kind == "brine" then
         -- Salt water: nothing to drink, and a splash.
         self:burst(e.x, e.y + 2, e.z, 10, { "w", "s" }, 22)
+        self:splat(e.x, e.z, 5, "s", 2)
+        self:cue("splash", e.x, e.z)
         return
     end
     -- A train's boss is down only when its last segment is.
@@ -791,6 +910,20 @@ function Game:kill(e)
         boss = e.train.n <= 0
     end
     self:burst(e.x, 2 + e.y, e.z, e.kind == "mite" and 2 or (boss and 30 or 6), { "r", "n", "t" }, boss and 30 or 16)
+    local size = d.size or 1
+    if boss then
+        self:cue("fell", e.x, e.z)
+        self:shock(e.x, e.z, 40, 0.9, "r", "t")
+        self:shock(e.x, e.z, 24, 0.6, "w", "t")
+        self:splat(e.x, e.z, 16, "u", 10)
+    elseif e.kind == "mite" then
+        self:cue("squish", e.x, e.z, 0.5)
+        self:splat(e.x, e.z, 2, "r", 1.5)
+    else
+        self:cue((size > 1.2 or (d.armor or 0) >= 3) and "crunch" or "squish", e.x, e.z)
+        self:splat(e.x, e.z, 3 + 2 * size, "r", 2.5)
+        self:sparks(e.x, e.y + 3, e.z, 4, { "r", "u" }, 20)
+    end
     if boss then
         self.stats.bosses = self.stats.bosses + 1
         self.events.shake = 0.5
@@ -838,6 +971,8 @@ function Game:infect(e, s)
     local c, r = floor(e.x / TILE), floor(e.z / TILE)
     if self.world:distAt(c, r) then e.tc, e.tr = c, r end
     self:burst(e.x, 4, e.z, 8, { "t", "r" }, 14)
+    self:shock(e.x, e.z, 8, 0.3, "t", "r")
+    self:cue("infect", e.x, e.z)
     self:say("INFECTED", e.x, 12, e.z, "t")
 end
 
@@ -895,6 +1030,15 @@ function Game:update(dt)
             -- thread keep their own height.
             local d = D.ENEMIES[e.kind]
             if not e.dead and not d.fly and not d.moth and not e.slide then e.y = self.world:groundAt(e.x, e.z) end
+            -- A boss's footfalls kick up the soil; a charge, a cloud of it.
+            if d.boss and not e.dead and not d.fly and not e.under and not e.hidden then
+                e.stepT = (e.stepT or 0) + dt * (e.charging and 3 or 1)
+                if e.stepT >= 0.55 then
+                    e.stepT = 0
+                    self:motes(e.x, e.y + 1, e.z, e.charging and 6 or 3, { "t", "n" }, 9, 7, 0.6)
+                    self:cue("stomp", e.x, e.z)
+                end
+            end
         end
     end
     for n = #self.enemies, 1, -1 do if self.enemies[n].dead then table.remove(self.enemies, n) end end
@@ -907,19 +1051,31 @@ function Game:update(dt)
     if self.heartHp <= 0 then
         self.heartHp = 0
         self.phase = "lost"
+        self:cue("lost")
+        self:burst(self.heart.x, 8, self.heart.z, 30, { "g", "m", "d" }, 26)
+        self:shock(self.heart.x, self.heart.z, 30, 1, "r", "d")
     elseif self.phase == "wave" and not self.queue[1] and not self.enemies[1] then
         self.cleared = self.wave
         self.inks, self.clouds = {}, {}
         self.weather = nil
         if self.wave >= #self.waves then
             self.phase = "won"
+            self:cue("won")
+            self:shock(self.heart.x, self.heart.z, 50, 1.2, "g", "l")
+            self:motes(self.heart.x, 4, self.heart.z, 40, { "g", "l", "w" }, 26, 26, 1.6)
         else
             self.phase = "build"
             local bonus = D.WAVE_BONUS + 4 * self.wave
             self.nutrients = self.nutrients + bonus
             self:say("WAVE CLEAR +" .. bonus, self.heart.x, 26, self.heart.z, "g")
+            self:cue("clear")
+            self:shock(self.heart.x, self.heart.z, 36, 0.8, "g", "l")
+            self:motes(self.heart.x, 4, self.heart.z, 18, { "g", "l" }, 12, 22, 1.1)
             for _, t in ipairs(D.TOWERS) do
-                if self:brought(t.id) and self:unlockAt(t.id) == self.cleared then self.events.unlock = t.id; self.newSpecies = t.id end
+                if self:brought(t.id) and self:unlockAt(t.id) == self.cleared then
+                    self.events.unlock = t.id; self.newSpecies = t.id
+                    self:cue("unlock")
+                end
             end
             if self.level.mutateAfter[self.wave] then self:offerMutations() end
         end
@@ -937,7 +1093,10 @@ function Game:offerMutations()
     for _ = 1, min(3, #pool) do
         self.choices[#self.choices + 1] = table.remove(pool, random(#pool))
     end
-    if self.choices[1] then self.phase = "mutate" end
+    if self.choices[1] then
+        self.phase = "mutate"
+        self:cue("offer")
+    end
 end
 
 function Game:mutate(n)
@@ -955,6 +1114,9 @@ function Game:mutate(n)
     self.phase = "build"
     self:say(m.name, self.heart.x, 30, self.heart.z, "l")
     self:burst(self.heart.x, 10, self.heart.z, 20, { "l", "c", "w" }, 26)
+    self:shock(self.heart.x, self.heart.z, 40, 0.8, "l", "c")
+    self:motes(self.heart.x, 4, self.heart.z, 24, { "l", "c", "w" }, 16, 24, 1.2)
+    self:cue("mutate")
     return true
 end
 
@@ -965,9 +1127,18 @@ function Game:updateLinks(dt)
     local quick = (self.mods.quick and 2 or 1) * (self:sky().grow or 1)
     local full = self:linkHp()
     for _, l in ipairs(self.links) do
+        if l.flash then
+            l.flash = l.flash - dt
+            if l.flash <= 0 then l.flash = nil end
+        end
         if l.state == "grow" then
             l.grow = l.grow + quick * dt * 16 / (D.LINK.grow * max(16, l.len))
-            if l.grow >= 1 then l.state, l.grow, changed = "alive", 1, true end
+            if l.grow >= 1 then
+                l.state, l.grow, changed = "alive", 1, true
+                l.flash = 0.35
+                self:motes(l.b.x, l.b.y, l.b.z, 5, { "l", "c" }, 3, 12, 0.5)
+                self:cue("linked", l.b.x, l.b.z)
+            end
         elseif l.state == "alive" then
             if l.hp <= 0 then self:cut(l) end
         elseif l.state == "cut" then
@@ -977,6 +1148,10 @@ function Game:updateLinks(dt)
             if l.regrow >= 1 then
                 l.state, l.hp, l.hand, changed = "alive", full * 0.6, false, true
                 l.bitten = {}
+                l.flash = 0.35
+                local mx, mz = (l.a.x + l.b.x) / 2, (l.a.z + l.b.z) / 2
+                self:motes(mx, 1, mz, 4, { "l", "c" }, 3, 12, 0.5)
+                self:cue("regrow", mx, mz)
             end
         end
     end
@@ -1089,6 +1264,7 @@ function Game:fire(n, t, d, dt)
     t.fired = 0
     local e = list[1]
     t.aim = atan2(e.z - n.z, e.x - n.x)
+    self:muzzle(n, t, d)
     if t.kind == "puffer" then
         local puffs = max(1, min(4, self:degree(n))) + (S("extraPuff") or 0)
         for k = 1, puffs do
@@ -1144,6 +1320,28 @@ function Game:fire(n, t, d, dt)
     end
 end
 
+-- What a shot sounds and looks like as it leaves.
+function Game:muzzle(n, t, d)
+    local k = t.kind
+    if k == "puffer" then
+        self:motes(n.x, n.y + 8, n.z, 4, { "w", "t" }, 3, 8, 0.4)
+        self:cue("puff", n.x, n.z)
+    elseif k == "needle" then
+        local big = self:degree(n) == 1 or (self:stat(t, "pierce") or 1) > 1
+        self.fx[#self.fx + 1] = { star = true, x = n.x, y = n.y + 12, z = n.z, k = big and "l" or "w", life = 0.08, max = 0.08 }
+        self:cue(big and "lance" or "zip", n.x, n.z)
+    elseif k == "mortar" then
+        self:motes(n.x, n.y + 9, n.z, 7, { "s", "k", "t" }, 4, 12, 0.7)
+        self:cue("thump", n.x, n.z)
+    elseif k == "cordyceps" then
+        self:motes(n.x, n.y + 9, n.z, 3, { "t", "r" }, 2, 8, 0.4)
+        self:cue("spit", n.x, n.z)
+    elseif k == "giant" then
+        self:motes(n.x, n.y + 2, n.z, 10, { "n", "t" }, 14, 10, 0.6)
+        self:cue("quake", n.x, n.z)
+    end
+end
+
 -- A cordyceps holds its host longer the further out along the network it
 -- grows: one hop from the Heart is the plain hold.
 function Game:deepHold(t)
@@ -1163,6 +1361,10 @@ function Game:mane(n, t, S, power, boost, dt)
             if l.state == "alive" and l.hp < full then
                 l.hp = min(full, l.hp + S("heal") * power * boost * dt)
                 busy = true
+                if fr() < dt * 3 then
+                    local f = fr()
+                    self:motes(l.a.x + (l.b.x - l.a.x) * f, 1, l.a.z + (l.b.z - l.a.z) * f, 1, { "l", "w" }, 1, 10, 0.5)
+                end
             elseif l.state == "cut" and not l.salted then
                 l.regrow = l.regrow + S("regrow") * power * boost * dt
                 busy = true
@@ -1201,6 +1403,7 @@ function Game:inky(n, t, S, power, boost, dt)
     local r = S("inkR") * power
     self.inks[#self.inks + 1] = { x = e.x, z = e.z, r = r, life = S("inkLife"), max = S("inkLife"), slow = S("inkSlow") }
     self.shots[#self.shots + 1] = { kind = "ink", x0 = n.x, y0 = n.y + 12, z0 = n.z, tx = e.x, tz = e.z, t = 0, flight = 0.35 }
+    self:cue("ink", n.x, n.z)
 end
 
 -- How far a tower reaches: its stat, the pocket's power, the night's glow. The
@@ -1265,6 +1468,7 @@ function Game:stink(n, t, S, power, boost, dt)
                 if random() < S("stumble") * boost * dt then
                     e.stun = max(e.stun, S("trip"))
                     self:burst(e.x, 3, e.z, 2, { "m", "d" }, 8)
+                    self:cue("trip", e.x, e.z)
                 end
                 if panic then e.panic, fled = S("panic"), true end
             end
@@ -1275,6 +1479,8 @@ function Game:stink(n, t, S, power, boost, dt)
     if fled then
         t.panicT, t.squash, t.fired = S("panicEvery"), 1, 0
         self:burst(n.x, n.y + 10, n.z, 10, { "m", "d", "r" }, 20)
+        self:shock(n.x, n.z, 20, 0.5, "m", "d")
+        self:cue("panic", n.x, n.z)
     end
     t.busy = busy
     if busy then
@@ -1329,7 +1535,12 @@ function Game:snuff(n)
         end
         self.fx[#self.fx + 1] = { cloud = true, x = n.x, y = self.world:groundAt(n.x, n.z), z = n.z, r = r, life = 0.6, max = 0.6, glowing = true }
         self:burst(n.x, n.y + 6, n.z, 24, { "l", "w", "c" }, 36)
+        self:shock(n.x, n.z, r, 0.5, "w", "l")
         self.events.boom = true
+        self:cue("flare", n.x, n.z)
+    else
+        self:motes(n.x, n.y + 6, n.z, 8, { "l", "c" }, 3, 10, 0.8)
+        self:cue("snuff", n.x, n.z)
     end
     self:destroyTower(n, blast and "FLARED" or "SNUFFED")
 end
@@ -1465,6 +1676,7 @@ function Game:updateShots(dt)
                     if not e.dead and (e.x - s.tx) ^ 2 + (e.z - s.tz) ^ 2 <= s.splash ^ 2 then self:hurt(e, s.damage) end
                 end
                 self.fx[#self.fx + 1] = { cloud = true, x = s.tx, y = self.world:groundAt(s.tx, s.tz), z = s.tz, r = s.splash, life = 0.4, max = 0.4 }
+                self:cue("pop", s.tx, s.tz)
                 if s.linger then
                     self.clouds[#self.clouds + 1] = { x = s.tx, z = s.tz, r = s.splash, life = s.linger, max = s.linger, dps = s.toxin }
                 end
@@ -1483,7 +1695,13 @@ function Game:updateShots(dt)
                     max = big and 0.6 or 0.35, smoke = s.smoke }
                 if big then
                     self:burst(s.tx, 3, s.tz, 10, { "t", "n", "w" }, 30)
+                    self:shock(s.tx, s.tz, s.splash * 1.2, 0.4, "w", "t")
+                    self:splat(s.tx, s.tz, s.splash * 0.6, "u", 3)
                     self.events.boom = true
+                    self:cue("boom", s.tx, s.tz)
+                else
+                    self:shock(s.tx, s.tz, s.splash, 0.25, "t", "n")
+                    self:cue("bomblet", s.tx, s.tz)
                 end
                 if s.cluster then
                     for c = 1, s.cluster do
@@ -1493,6 +1711,8 @@ function Game:updateShots(dt)
                             damage = s.clusterDamage, splash = 9 }
                     end
                 end
+            elseif s.kind == "ink" then
+                self:splat(s.tx, s.tz, 2, "o", 0.6)
             elseif s.kind == "cordy" then
                 local e = s.target
                 if e and not e.dead and not (e.infected and e.infected > 0) then self:infect(e, s) end
@@ -1593,6 +1813,7 @@ function Game:updateCorpses(dt)
             if c.absorb then
                 c.value = c.value * mult
                 c.full = c.value
+                self:cue("drink", c.x, c.z)
                 self:say("+" .. floor(c.value + 0.5), c.x, 8, c.z, inky and "w" or "l")
             elseif c.life <= 0 then
                 table.remove(self.corpses, k)
@@ -1609,7 +1830,7 @@ function Game:updateFx(dt)
             p.t = p.t + dt
         elseif p.rise then
             p.y = p.y + p.vy * dt
-        elseif not p.cloud and not p.wave then
+        elseif p.vx then
             p.vy = p.vy - 200 * dt
             p.x, p.y, p.z = p.x + p.vx * dt, p.y + p.vy * dt, p.z + p.vz * dt
             if p.y < 0 then p.y, p.vy, p.vx, p.vz = 0, 0, p.vx * 0.5, p.vz * 0.5 end
@@ -1711,6 +1932,16 @@ function Game:reachHeart(e)
         self.stats.bossLeft = (self.stats.bossLeft or "") .. (" %s %d%%"):format(e.kind, e.hp / e.maxHp * 100)
     end
     self:burst(self.heart.x, 10, self.heart.z, d.boss and 20 or 6, { "g", "m" }, 20)
+    self:shock(self.heart.x, self.heart.z, d.boss and 28 or 14, 0.4, "r", "g")
+    self:cue("heart", self.heart.x, self.heart.z)
+end
+
+-- Jaws at a thread: chips of it fly, and it can be heard.
+function Game:chewing(e)
+    if fr() < 0.06 then
+        self:sparks(e.x, e.y + 2, e.z, 1, { "c", "d" }, 10)
+        self:cue("chew", e.x, e.z)
+    end
 end
 
 function Game:move(e, dt)
@@ -1788,6 +2019,7 @@ function Game:move(e, dt)
             e.state = "walk"
         else
             self:biteLink(l, d.chew * dt)
+            self:chewing(e)
             e.chewT = e.chewT - dt
             if e.chewT <= 0 then e.state = "walk" end
             return
@@ -1805,6 +2037,10 @@ function Game:move(e, dt)
         e.state = "gnawShelf"
         shelf.hp = shelf.hp - (d.bite or 5) * dt
         shelf.chewed = true
+        if fr() < 0.05 then
+            self:sparks(e.x, e.y + 2, e.z, 1, { "t", "n" }, 10)
+            self:cue("chew", e.x, e.z)
+        end
         local th = self:stat(shelf, "thorns")
         if th then self:hurt(e, th * dt, true, true) end
         e.anim = e.anim + dt
@@ -1833,6 +2069,7 @@ function Game:move(e, dt)
             -- The mat catches the roll: it uncurls, stuck, and is soft again.
             e.rolling, e.walked, e.stuck = false, 0, 1.0
             self:burst(e.x, 2, e.z, 6, { "l", "c" }, 14)
+            self:cue("lay", e.x, e.z, 0.7)
         end
         if e.stuck then
             e.stuck = e.stuck - dt
@@ -2063,6 +2300,7 @@ function Game:waterbug(e, d, slow, dt)
         e.holdT = e.holdT - dt
         if not n.tower then
             self:burst(n.x, 2, n.z, 16, { "s", "w", "d" }, 26)
+            self:cue("splash", n.x, n.z)
             e.state, e.prey = "back", nil
         elseif e.holdT <= 0 then
             self:say("IT LETS GO", n.x, n.y + 16, n.z, "l")
@@ -2083,6 +2321,8 @@ function Game:waterbug(e, d, slow, dt)
             e.state, e.prey, e.under, e.grabCd = "lunge", best, false, d.grabEvery
             self:burst(e.x, 2, e.z, 14, { "s", "w", "d" }, 24)
             self:say("IT SURFACES", e.x, 20, e.z, "r")
+            self:shock(e.x, e.z, 22, 0.6, "w", "s")
+            self:cue("surface", e.x, e.z)
             self.events.shake = 0.25
             return true
         end
@@ -2101,6 +2341,7 @@ function Game:bombardier(e, d, slow, dt)
         if e.state ~= "siege" then
             e.state = "siege"
             self:say("IT TURNS", e.x, 24, e.z, "r")
+            self:shock(e.x, e.z, 20, 0.5, "r", "t")
         end
         e.h = atan2(e.z - h.z, e.x - h.x) -- its back to the sprout: the spray comes out behind
         e.togo = 0
@@ -2164,6 +2405,8 @@ function Game:scald(e, d, tx, tz, target)
             tz = ez + (random() - 0.5) * 8 * f, t = -f * 0.25, life = 0.55, max = 0.3, k = k % 3 == 0 and "t" or "w" }
     end
     self:burst(ex, 4, ez, 10, { "w", "t", "s" }, 20)
+    self:splat(ex, ez, 5, "w", 1.5)
+    self:cue("spray", e.x, e.z)
 end
 
 function Game:mite(e, d, slow, dt)
@@ -2180,6 +2423,7 @@ function Game:mite(e, d, slow, dt)
         local tx, tz = l.a.x + (l.b.x - l.a.x) * e.gt, l.a.z + (l.b.z - l.a.z) * e.gt
         if toward(e, tx, tz, d.speed * slow, dt) then
             self:biteLink(l, d.chew * dt)
+            self:chewing(e)
             e.gnawed = (e.gnawed or 0) + dt
             if e.gnawed > 6 then e.full, e.gnaw = true, nil end -- had enough; back to the march
         end
@@ -2230,6 +2474,7 @@ function Game:spider(e, d, slow, dt)
         if arrived or dd < 5 then
             if not n.tower.warded then n.tower.webbed = d.web end
             self:burst(n.x, n.y + 8, n.z, 6, { "w", "s" }, 10)
+            self:cue("web", n.x, n.z)
             e.webCd, e.state = d.webCd, "back"
         end
         return true
@@ -2252,6 +2497,7 @@ function Game:queen(e, d, dt)
             o.hp, o.maxHp = D.ENEMIES.ant.hp, D.ENEMIES.ant.hp
         end
         self:burst(e.x, 4, e.z, 8, { "w", "t" }, 12)
+        self:cue("brood", e.x, e.z)
     end
     for _, l in ipairs(self:linksNear(e.x, e.z, d.gnawR)) do self:biteLink(l, d.gnaw * dt) end
 end
@@ -2268,7 +2514,10 @@ function Game:stag(e, d, slow, dt)
         for _, l in ipairs(self:linksNear(jx, jz, d.shear)) do self:crush(l) end
         for _, n in ipairs(self.nodes) do
             if n.tower and not n.tower.warded and (n.x - e.x) ^ 2 + (n.z - e.z) ^ 2 <= d.stunR * d.stunR then
-                if n.tower.stun <= 0 then self:burst(n.x, n.y + 8, n.z, 4, { "w", "t" }, 10) end
+                if n.tower.stun <= 0 then
+                    self:burst(n.x, n.y + 8, n.z, 4, { "w", "t" }, 10)
+                    self:cue("stun", n.x, n.z)
+                end
                 n.tower.stun = d.stun
             end
         end
@@ -2279,6 +2528,8 @@ function Game:stag(e, d, slow, dt)
         e.charging = d.chargeFor
         self:say("CHARGE!", e.x, 26, e.z, "r")
         self:burst(e.x, 2, e.z, 10, { "t", "n" }, 20)
+        self:shock(e.x, e.z, 18, 0.4, "t", "n")
+        self:cue("charge", e.x, e.z)
     end
 end
 
@@ -2310,6 +2561,7 @@ function Game:attach(e, l)
     local _, t = segDist(e.x, e.z, from.x, from.z, to.x, to.z)
     e.slide, e.from, e.to, e.st = l, from, to, t
     self.events.brine = true
+    self:cue("splash", e.x, e.z, 0.7)
 end
 
 function Game:slide(e, d, dt)
@@ -2319,6 +2571,7 @@ function Game:slide(e, d, dt)
         e.dead = true
         self:burst(e.x, 2, e.z, 10, { "w", "s" }, 20)
         self:say("FIZZLED", e.x, 8, e.z, "w")
+        self:cue("fizzle", e.x, e.z)
         return
     end
     e.st = e.st + d.slide * dt / max(1, l.len)
@@ -2344,6 +2597,8 @@ function Game:slide(e, d, dt)
             self:say("STERILISED", node.x, node.y + 14, node.z, "r")
             node.tower = nil
         end
+        self:shock(node.x, node.z, 10, 0.4, "w", "s")
+        self:cue("salt", node.x, node.z)
         node.salted = 12
         if nextLink then
             local other = nextLink.a == node and nextLink.b or nextLink.a

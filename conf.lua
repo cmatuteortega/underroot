@@ -15,6 +15,7 @@ function love.conf(t)
     t.window.highdpi = true
     t.window.usedpiscale = false
     t.window.vsync = 1
-    t.modules.audio = false
-    t.modules.sound = false
+    -- Sound is made at load (src/sfx.lua): no files, just these two modules.
+    t.modules.audio = true
+    t.modules.sound = true
 end

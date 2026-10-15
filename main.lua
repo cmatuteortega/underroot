@@ -25,6 +25,9 @@ local Game = require "src.game"
 local D = require "src.defs"
 local M = require "src.models"
 local Font = require "src.font"
+local Sfx = require "src.sfx"
+-- The sound's glue to the screen (the sounds themselves are src/sfx.lua).
+local audio = {}
 
 local floor, ceil, max, min, abs, sqrt = math.floor, math.ceil, math.max, math.min, math.abs, math.sqrt
 local IDX = T.IDX
@@ -55,6 +58,15 @@ local challenge = false -- challenge mode chosen in the picker
 local won = {} -- levels won, saved between runs: { crack = true, ... }
 
 -- What has been won lives in the save directory, one level id a line.
+-- How loud: 1, 0.5 or 0 (the V key goes round them), kept between runs.
+function audio.load()
+    local data = love.filesystem.getInfo("sound.txt") and love.filesystem.read("sound.txt")
+    local v = data and tonumber(data:match("[%d%.]+"))
+    if v then Sfx.level = v end
+end
+
+function audio.save() love.filesystem.write("sound.txt", tostring(Sfx.level) .. "\n") end
+
 local function loadProgress()
     won = {}
     local data = love.filesystem.getInfo("progress.txt") and love.filesystem.read("progress.txt")
@@ -97,7 +109,7 @@ local function challengeOpen() return won[D.LEVELS[#D.LEVELS].id] end
 local camx, camy, panx, pany = 0, 0, 0, 0
 local mode = "grow"
 local drag -- the node a link is being pulled from
-local tapped -- the node just pressed: let go of it where it was, and it is selected
+local tapped -- the node just flair.pressed: let go of it where it was, and it is selected
 local hover = {}
 -- The pointer in HUD pixels (x, y) and window pixels (wx, wy).
 local mouse = { x = 0, y = 0, wx = 0, wy = 0 }
@@ -117,6 +129,26 @@ local fingers, pinch = {}, nil -- the touches down, and the two being pinched
 local speed, paused = 1, false
 local heartFlash = 0
 local shake = 0 -- seconds of shaking left: a boss charging, a ball breaking
+-- The HUD's own flourishes: the last thing pressed lighting up, the nutrients
+-- going red when they fall short (bright when a lot comes in at once), the
+-- edge of the screen going red when the sprout is hit, and a word across the
+-- screen when a wave comes or goes.
+--   pressed  { t, rect }: the thing just pressed, and how to find its box
+--   nut      { t, k }: the nutrients' flash
+--   hurt     seconds of red edge left
+--   banner   { text, sub, k, t, max }
+--   note     seconds left of the word saying how loud the sound is now
+--   beat     the sprout's heartbeat, when it is low
+local flair = { nut = { t = 0, k = "l" }, hurt = 0, note = 0, lastNut = 0 }
+
+-- A sound of the HUD's: not anywhere on the board, so dead centre.
+local function sound(name, pitch) Sfx.play(name, 0, 1, pitch) end
+
+-- Not allowed, or not enough: a buzz, and the nutrients flash red.
+local function deny()
+    sound("deny")
+    flair.nut = { t = 0.4, k = "r" }
+end
 local selected -- the tower, mat or shelf whose upgrades are showing
 local peek -- the species in hand whose panel the toolbar opened
 -- The camera easing toward a selection: where panx, pany are headed, and what
@@ -620,6 +652,9 @@ local function levelCards()
     return cards, switch
 end
 
+-- The level picker's sound switch, top right: a finger has no V key.
+function audio.switch() return { x = vw - inset.r - 62, y = inset.t + 4, w = 58, h = 12 } end
+
 -- The loadout picker: what the level sends (a chip an enemy, bosses last),
 -- a card a species under it, and BACK and GO under those, all centred
 -- down the screen. A narrow screen takes fewer cards a row.
@@ -691,9 +726,9 @@ end
 
 -- A species in or out of the loadout. Full, it says so rather than drop one.
 local function toggleSpecies(id)
-    if pick.set[id] then pick.set[id] = nil
-    elseif #picked() >= D.LOADOUT then pick.full = 1.5
-    else pick.set[id] = true end
+    if pick.set[id] then pick.set[id] = nil; sound("off")
+    elseif #picked() >= D.LOADOUT then pick.full = 1.5; sound("deny")
+    else pick.set[id] = true; sound("on") end
 end
 
 local function nodeScreen(n)
@@ -727,6 +762,8 @@ local function findHover()
             if inside(mx, my, c.x, c.y, c.w, c.h) then hover.level = k return end
         end
         if challengeOpen() and inside(mx, my, switch.x, switch.y, switch.w, switch.h) then hover.challenge = true end
+        local sw = audio.switch()
+        if inside(mx, my, sw.x, sw.y, sw.w, sw.h) then hover.sound = true end
         return
     end
     if game.phase == "mutate" then
@@ -820,7 +857,8 @@ end
 -- Off into the level with what was picked, remembered for next time.
 local function setOff()
     local list = picked()
-    if #list == 0 then return end
+    if #list == 0 then sound("deny") return end
+    sound("go")
     loadouts[D.LEVELS[pick.n].id] = list
     saveLoadouts()
     chosen = list
@@ -846,6 +884,17 @@ function love.load(args)
             -- No one is watching: an error should say so and stop.
             function love.errorhandler(msg) print("ERROR", msg, debug.traceback()) os.exit(1) end
             require("src.sheet").run()
+            return
+        end
+    end
+    audio.load()
+    Sfx.init()
+    for _, a in ipairs(args or {}) do
+        if a == "--sounds" then
+            -- Dev: every sound written out as a .wav, to listen to one by one.
+            Sfx.dump()
+            print("sounds written to " .. love.filesystem.getSaveDirectory() .. "/sounds")
+            love.event.quit()
             return
         end
     end
@@ -924,35 +973,89 @@ local function turnCamera(d)
     local a = math.atan2((m1 - m0) * 2, n1 - n0) - a0
     a = (a + math.pi) % (2 * math.pi) - math.pi
     turning = { t = 0, old = old, px = px, py = py, angle = a, d = d }
+    sound("turn", d > 0 and 1 or 0.85)
+end
+
+-- Whatever is under the pointer that lights up when pressed: how to find its
+-- box again (the layout can move under it while it is lit).
+function flair.under()
+    if menu == "loadout" then
+        local L = loadoutLayout()
+        if hover.back then return function() return L.back.x, L.back.y, L.back.w, L.back.h end end
+        if hover.go then return function() return L.go.x, L.go.y, L.go.w, L.go.h end end
+        if hover.species then
+            for _, c in ipairs(L.cards) do
+                if c.t.id == hover.species then return function() return c.x, c.y, c.w, c.h end end
+            end
+        end
+        return
+    end
+    if menu then
+        if hover.level then
+            local c = levelCards()[hover.level]
+            return function() return c.x, c.y, c.w, c.h end
+        end
+        if hover.challenge then
+            local _, c = levelCards()
+            return function() return c.x, c.y, c.w, c.h end
+        end
+        if hover.sound then
+            local c = audio.switch()
+            return function() return c.x, c.y, c.w, c.h end
+        end
+        return
+    end
+    if hover.mutation then
+        local c = mutationCards()[hover.mutation]
+        return function() return c.x, c.y, c.w, c.h end
+    end
+    if hover.button then
+        local n = hover.button
+        return function() return buttonRect(n) end
+    end
+    if hover.wave then return waveRect end
+    if hover.turn then
+        local d = hover.turn
+        return function() return turnRect(d) end
+    end
 end
 
 local function click(b)
+    local r = b == 1 and flair.under()
+    if r then flair.pressed = { t = 0.18, rect = r } end
     if menu == "loadout" then
         -- A card opens its panel; the same card again (or the panel's button)
         -- brings it or leaves it. Anywhere else shuts the panel.
         if hover.bring then toggleSpecies(pick.info) return end
         if hover.info then return end
         if b == 2 then
+            sound("back")
             if pick.info then pick.info = nil else openMenu() end
             return
         elseif hover.species then
-            if pick.info == hover.species then toggleSpecies(hover.species) else pick.info = hover.species end
+            if pick.info == hover.species then toggleSpecies(hover.species) else pick.info = hover.species; sound("panel") end
             return
-        elseif hover.back then openMenu()
+        elseif hover.back then sound("back"); openMenu()
         elseif hover.go then setOff()
         elseif hover.enemy then
             -- Pinned, so a finger (which has no hover) can see the answers too.
             pick.enemy = pick.enemy ~= hover.enemy and hover.enemy or nil
+            sound(pick.enemy and "select" or "back")
+        elseif pick and pick.info then
+            sound("back")
         end
         if pick then pick.info = nil end
         return
     end
     if menu then
-        if hover.level and levelOpen(hover.level) then openLoadout(hover.level)
-        elseif hover.challenge then challenge = not challenge end
+        if hover.level and levelOpen(hover.level) then sound("select"); openLoadout(hover.level)
+        elseif hover.level then deny()
+        elseif hover.challenge then challenge = not challenge; sound(challenge and "on" or "off")
+        elseif hover.sound then Sfx.cycle(); audio.save(); sound("on") end
         return
     end
     if b == 2 then
+        if mode ~= "grow" or drag or selected then sound("back") end
         mode, drag, selected = "grow", nil, nil
         return
     end
@@ -961,42 +1064,50 @@ local function click(b)
         if hover.mutation then game:mutate(hover.mutation) end
         return
     end
-    if hover.up then game:upgrade(selected, hover.up.branch) return end
+    if hover.up then
+        if not game:upgrade(selected, hover.up.branch) then deny() end
+        return
+    end
     if hover.info then return end
     if hover.button then
         -- The tool already in hand, picked again, is put down: the one way to
         -- cancel there is without a right button. A species not yet unlocked
         -- stays in its slot, dark.
         local bt = BUTTONS[hover.button]
-        if bt.action then game:repairAll() return end
-        if bt.tower and not game:unlocked(bt.mode) then return end
+        if bt.action then
+            if game:repairAll() == 0 then deny() end
+            return
+        end
+        if bt.tower and not game:unlocked(bt.mode) then deny() return end
         local m = bt.mode
         drag = nil
         if bt.tower and m == mode then
             -- The species in hand, picked again: its panel opens, or shuts. It
             -- stays in hand; a tap on the ground puts it down.
             peek, selected = peek ~= m and m or nil, nil
+            sound(peek and "panel" or "back")
             return
         end
         mode, peek = (m == mode and m ~= "grow") and "grow" or m, nil
         if mode ~= "grow" then selected = nil end
+        sound(mode == "grow" and "back" or "select")
         return
     end
     if hover.wave then
-        if game.phase == "build" then game:startWave() else speed = speed % 3 + 1 end
+        if game.phase == "build" then game:startWave() else speed = speed % 3 + 1; sound("speed", 0.8 + 0.2 * speed) end
         return
     end
     if hover.turn then turnCamera(hover.turn) return end
-    if game.phase == "won" or game.phase == "lost" then openMenu() return end
+    if game.phase == "won" or game.phase == "lost" then sound("click"); openMenu() return end
     if hover.strip then
         -- No P key on a phone: the top strip is the pause button.
-        if touch then paused = not paused end
+        if touch then paused = not paused; sound(paused and "pause" or "unpause") end
         return
     end
     if mode == "grow" then
         if hover.node then
             if drag and drag ~= hover.node then
-                game:grow(drag, hover.node)
+                if not game:grow(drag, hover.node) then deny() end
                 drag, selected = nil, nil
             else
                 -- A node is picked up as the end of a thread. Its tower is only
@@ -1005,10 +1116,12 @@ local function click(b)
                 drag, tapped = hover.node, hover.node
             end
         elseif hover.link and hover.link.state == "cut" then
-            game:repair(hover.link)
+            if not game:repair(hover.link) then deny() end
         elseif hover.mat then
             drag, selected = nil, hover.mat
+            sound("panel")
         else
+            if selected then sound("back") end
             drag, selected = nil, nil
         end
     elseif mode == "prune" then
@@ -1019,24 +1132,28 @@ local function click(b)
         elseif hover.mat then
             game:liftMat(hover.mat)
         else
+            sound("back")
             letGo()
         end
     elseif D.TOWER[mode] and D.TOWER[mode].onTrail then
         -- Off the trail (or off the board) there is nowhere to lay it.
         if hover.c and world:distAt(hover.c, hover.r) then
             local m = game:lay(mode, hover.c, hover.r)
-            if m then selected, peek = m, nil end
+            if m then selected, peek = m, nil else deny() end
         else
+            sound("back")
             letGo()
         end
     elseif mode == "pulse" then
-        if not hover.node then letGo()
-        elseif game:pulse(hover.node) then mode = "grow" end
+        if not hover.node then sound("back"); letGo()
+        elseif game:pulse(hover.node) then mode = "grow"
+        else deny() end
     else
         if hover.node then
             local t = game:build(mode, hover.node)
-            if t then selected, peek = t, nil end
+            if t then selected, peek = t, nil else deny() end
         else
+            sound("back")
             letGo()
         end
     end
@@ -1086,10 +1203,11 @@ function love.mousereleased(x, y, b, istouch)
     tapped = nil
     -- Pulled from one node and let go over another: a link.
     if b == 1 and mode == "grow" and drag and hover.node and hover.node ~= drag then
-        game:grow(drag, hover.node)
+        if not game:grow(drag, hover.node) then deny() end
     elseif b == 1 and t and drag == t and hover.node == t then
         -- Let go where it was picked up: a tap, which selects its tower (or,
         -- on a bare pocket, puts the selection down).
+        if t.tower then sound("panel") elseif selected then sound("back") end
         selected = t.tower
     end
     -- Links are only ever dragged: whatever was let go of, nothing is left in
@@ -1138,6 +1256,7 @@ end
 local function zoomBy(d, sx, sy)
     local lo, hi = stepRange()
     if painter or zoomStep + d < lo or zoomStep + d > hi then return end
+    sound("zoom", d > 0 and 1.2 or 0.85)
     sx, sy = sx or love.graphics.getWidth() / 2, sy or love.graphics.getHeight() / 2
     zoomTo(zoomStep + d, sx / zoom + camx, sy / zoom + camy, sx, sy)
 end
@@ -1210,6 +1329,13 @@ function love.keypressed(key)
         fit()
         return
     end
+    if key == "v" then
+        Sfx.cycle()
+        audio.save()
+        flair.note = 1.5
+        sound("on")
+        return
+    end
     if painter then return end
     if menu == "loadout" then
         if key == "escape" or key == "backspace" then
@@ -1224,9 +1350,11 @@ function love.keypressed(key)
     end
     if menu then
         local n = tonumber(key)
-        if n and D.LEVELS[n] and levelOpen(n) then openLoadout(n) end
-        if key == "c" and challengeOpen() then challenge = not challenge end
-        if key == "escape" and game then menu = nil end
+        if n and D.LEVELS[n] then
+            if levelOpen(n) then sound("select"); openLoadout(n) else deny() end
+        end
+        if key == "c" and challengeOpen() then challenge = not challenge; sound(challenge and "on" or "off") end
+        if key == "escape" and game then sound("back"); menu = nil end
         return
     end
     if key == "=" or key == "+" or key == "kp+" then zoomBy(1) end
@@ -1238,28 +1366,44 @@ function love.keypressed(key)
     end
     if key == "escape" then
         -- Never quits: one key too many and a run is gone. The window's close does that.
-        if drag or mode ~= "grow" or selected then mode, drag, selected = "grow", nil, nil else paused = not paused end
+        if drag or mode ~= "grow" or selected then
+            mode, drag, selected = "grow", nil, nil
+            sound("back")
+        else
+            paused = not paused
+            sound(paused and "pause" or "unpause")
+        end
     end
-    for _, b in ipairs(BUTTONS) do
+    for n, b in ipairs(BUTTONS) do
         if key == b.key:lower() then
-            if b.action then game:repairAll()
-            elseif not (b.tower and not game:unlocked(b.mode)) then mode, drag, selected, peek = b.mode, nil, nil, nil end
+            flair.pressed = { t = 0.18, rect = function() return buttonRect(n) end }
+            if b.action then
+                if game:repairAll() == 0 then deny() end
+            elseif not (b.tower and not game:unlocked(b.mode)) then
+                mode, drag, selected, peek = b.mode, nil, nil, nil
+                sound("select")
+            else
+                deny()
+            end
         end
     end
     if (key == "z" or key == "c") and selected then
         local ups = game:upgrades(selected)
         local u = ups[key == "z" and 1 or #ups]
-        if u then game:upgrade(selected, u.branch) end
+        if not (u and game:upgrade(selected, u.branch)) then deny() end
     end
     if key == "space" then
-        if game.phase == "build" then game:startWave() end
+        if game.phase == "build" then
+            flair.pressed = { t = 0.18, rect = waveRect }
+            game:startWave()
+        end
     end
-    if key == "f" then speed = speed % 3 + 1 end
+    if key == "f" then speed = speed % 3 + 1; sound("speed", 0.8 + 0.2 * speed) end
     if key == "e" then turnCamera(love.keyboard.isDown("lshift", "rshift") and -1 or 1) end
     if key == "q" then turnCamera(-1) end
-    if key == "p" then paused = not paused end
-    if key == "r" and (game.phase == "won" or game.phase == "lost" or love.keyboard.isDown("lshift")) then start() end
-    if key == "m" then openMenu() end
+    if key == "p" then paused = not paused; sound(paused and "pause" or "unpause") end
+    if key == "r" and (game.phase == "won" or game.phase == "lost" or love.keyboard.isDown("lshift")) then sound("go"); start() end
+    if key == "m" then sound("back"); openMenu() end
     -- Won: on to the next level.
     if key == "n" and game.phase == "won" then
         for k, l in ipairs(D.LEVELS) do
@@ -1288,7 +1432,80 @@ local function focusOn(s)
     return { x = panx + toBoard(hx - wx), y = pany + toBoard(hy - wy) }
 end
 
+-- A tick when the pointer comes onto something that can be pressed (never
+-- for a finger, which has no hover).
+function audio.hover()
+    local k = hover.button or hover.wave or hover.turn or (hover.up and hover.up.branch + 100) or hover.mutation
+        or hover.level or hover.challenge or hover.sound or hover.species or hover.back or hover.go or hover.enemy
+        or hover.bring
+    if k ~= nil then k = tostring(k) .. (hover.up and "u" or hover.mutation and "m" or hover.level and "l" or "") end
+    if k and k ~= flair.lastHover and not touch then sound("hover") end
+    flair.lastHover = k
+end
+
+-- What the game cued this frame, played from where on the screen it happened:
+-- panned across, and quieter off the edge.
+function audio.hear()
+    for _, c in ipairs(game.cues) do
+        local pan, vol = 0, c.vol or 1
+        if c.x then
+            local i, j = world:toImage(c.x, world:groundAt(c.x, c.z), c.z)
+            local sx, sy = (i - floor(camx)) / cw, (j - floor(camy)) / ch
+            pan = sx * 2 - 1
+            if sx < -0.05 or sx > 1.05 or sy < -0.05 or sy > 1.05 then vol = vol * 0.35 end
+        end
+        Sfx.play(c.name, pan, vol)
+        -- Some say so in words too.
+        local n = c.name
+        if n == "wave" then
+            local w = game.weather and D.WEATHER[game.weather]
+            flair.banner = { text = "WAVE " .. game.wave, sub = w and w.name .. ": " .. w.blurb, k = "r", t = 2.2, max = 2.2 }
+        elseif n == "clear" then
+            flair.banner = { text = "WAVE " .. game.cleared .. " CLEARED", k = "g", t = 1.8, max = 1.8 }
+        elseif n == "unlock" and game.newSpecies then
+            flair.banner = { text = "NEW SPECIES: " .. D.TOWER[game.newSpecies].name, k = "l", t = 2.4, max = 2.4 }
+        elseif n == "ring" then
+            flair.banner = { text = "A FAIRY RING CLOSES", sub = "TOWERS IN IT HIT HARDER. ENEMIES IN IT WADE", k = "l", t = 2.2, max = 2.2 }
+        end
+    end
+    game.cues = {}
+end
+
+-- The loops under it all: the soil always, the network's hum as loud as it is
+-- alive (and higher the more it carries), the weather's own.
+function audio.ambience(dt)
+    local want = { soil = 0.35 }
+    local pitch
+    if game and not menu and not painter then
+        local living, surge = 0, false
+        for _, l in ipairs(game.links) do
+            if l.state == "alive" and l.a.conn then living = living + 1 end
+            if l.surge then surge = true end
+        end
+        want.hum = min(0.5, living * 0.035) * (game.phase == "wave" and 1 or 0.6)
+        pitch = 0.9 + 0.2 * min(1, living / 24) + (surge and 0.15 or 0)
+        local w = game.weather
+        if w == "rain" then want.rain = 0.5
+        elseif w == "drought" then want.wind = 0.5
+        elseif w == "night" then want.night = 0.4
+        elseif w == "frost" then want.frost = 0.45; want.wind = 0.2 end
+        if paused then for k, v in pairs(want) do want[k] = v * 0.4 end end
+    end
+    Sfx.update(dt, want, pitch)
+end
+
 function love.update(dt)
+    Sfx.warm(0.004)
+    audio.ambience(dt)
+    flair.pressed = flair.pressed and flair.pressed.t > 0 and flair.pressed or nil
+    if flair.pressed then flair.pressed.t = flair.pressed.t - dt end
+    flair.nut.t = max(0, flair.nut.t - dt)
+    flair.hurt = max(0, flair.hurt - dt)
+    flair.note = max(0, flair.note - dt)
+    if flair.banner then
+        flair.banner.t = flair.banner.t - dt
+        if flair.banner.t <= 0 then flair.banner = nil end
+    end
     if painter then
         local t0 = love.timer.getTime()
         -- Paint in slices, so the window keeps answering while the board goes down.
@@ -1350,6 +1567,7 @@ function love.update(dt)
     if menu then
         if pick then pick.full = max(0, (pick.full or 0) - dt) end
         findHover()
+        audio.hover()
         if script then
             script.update(game, 1 / 30)
             photograph()
@@ -1407,13 +1625,23 @@ function love.update(dt)
 
     if script then script.update(game, dt) end
     findHover()
+    audio.hover()
     if not paused then
         for _ = 1, speed do
             game:update(dt)
-            if game.events.heart then heartFlash = 0.15 end
+            if game.events.heart then heartFlash, flair.hurt = 0.15, 0.45 end
             if game.events.shake then shake = max(shake, game.events.shake) end
         end
     end
+    audio.hear()
+    -- A lot coming in at once (a body drunk, a wave's bonus): the count glows.
+    if game.nutrients - flair.lastNut >= 3 and (flair.nut.t <= 0 or flair.nut.k ~= "r") then flair.nut = { t = 0.35, k = "w" } end
+    flair.lastNut = game.nutrients
+    -- The sprout low: a heartbeat, heard and seen at the screen's edge.
+    local low = game.phase == "wave" and game.heartHp > 0 and game.heartHp < game.heartMax * 0.3
+    local b = low and not paused and (game.clock % 1.2) < 0.15
+    if b and not flair.beat then Sfx.play("stomp", 0, 0.6, 0.6) end
+    flair.beat = b
     heartFlash = max(0, heartFlash - dt)
     shake = max(0, shake - dt)
     if game.phase == "won" and not game.recorded then
@@ -1505,6 +1733,13 @@ local function drawLink(l, highlight)
                     end
                 end
                 if hurt and s % 5 == 0 and floor(t * 6) % 2 == 0 then k = IDX.r end
+                -- Just cut, it flashes white then rust; just grown or regrown,
+                -- white then glow, running out from the middle.
+                if l.flash and not highlight then
+                    local hot = l.flash > 0.15
+                    if l.state == "cut" then k = hot and IDX.w or IDX.r
+                    elseif abs(f - 0.5) < (0.35 - l.flash) * 1.6 + 0.1 then k = hot and IDX.w or IDX.l end
+                end
                 put(u, i, j + 1)
                 if l.thick then put(u, i, j + 2) end
                 put(k, i, j)
@@ -1769,6 +2004,52 @@ local function dot(x, y, z, k, k2)
     end
 end
 
+-- A ring running out over the ground: a landing, a blast, a thing grown. It
+-- thins as it goes, a pixel at a time, rather than fading.
+function flair.shock(p)
+    local f = 1 - p.life / p.max
+    local e = 1 - (1 - f) ^ 2
+    local r = max(1, p.r * e)
+    local n = max(12, floor(r * 1.5))
+    local k, k2 = IDX[p.k], IDX[p.k2 or p.k]
+    for s = 0, n - 1 do
+        if ((s * 7) % 10) / 10 >= f * 0.85 then
+            local a = s / n * 2 * math.pi
+            local c, sn = math.cos(a), math.sin(a)
+            local x, z = p.x + c * r, p.z + sn * r
+            local i, j, d = world:toImage(x, world:groundAt(x, z) + 0.4, z)
+            if visible(floor(i), floor(j), d + 1) then put(k, i, j) end
+            if r > 3 and s % 2 == 0 then
+                x, z = p.x + c * (r - 1.5), p.z + sn * (r - 1.5)
+                i, j, d = world:toImage(x, world:groundAt(x, z) + 0.4, z)
+                if visible(floor(i), floor(j), d + 1) then put(k2, i, j) end
+            end
+        end
+    end
+end
+
+-- What a kill or a blast leaves on the ground, wearing away from the edge in.
+function flair.splat(p)
+    local r = p.r
+    local fade = min(1, p.life / p.max * 1.5)
+    local g = world:groundAt(p.x, p.z)
+    local i0, i1, j0, j1 = screenBox(p.x - r, p.x + r, g - 1, g + 4, p.z - r, p.z + r)
+    local k = IDX[p.k]
+    local dk = T.DARKER[k]
+    for j = max(0, j0), min(world.h - 1, j1) do
+        for i = max(0, i0), min(world.w - 1, i1) do
+            local n = j * world.w + i
+            if world.up[n] == 1 then
+                local q = ((world.wx[n] - p.x) ^ 2 + (world.wz[n] - p.z) ^ 2) / (r * r)
+                if q <= 1 then
+                    local h = ((i * 73 + j * 151 + p.seed * 17) % 97) / 97
+                    if h < fade * (1 - q * 0.7) then put(q < 0.25 and dk or k, i, j) end
+                end
+            end
+        end
+    end
+end
+
 local function drawBoard()
     -- A boss charging, a ball bursting: the board jumps.
     -- Drawn over the whole picture, pad and all: for the moment, it is the window.
@@ -1807,6 +2088,8 @@ local function drawBoard()
         local r = p.r * min(1, (p.max - p.life) * 6) * min(1, p.life * 2)
         stain(p.x, p.z, r)
     end
+    for _, p in ipairs(game.fx) do if p.splat then flair.splat(p) end end
+    for _, p in ipairs(game.fx) do if p.shock then flair.shock(p) end end
     for _, e in ipairs(game.enemies) do
         if e.under then ripples(e.x, e.z, game.clock)
         elseif SHADOW[e.kind] and not e.hidden then shadow(e.x, e.z, SHADOW[e.kind]) end
@@ -2106,6 +2389,32 @@ local function drawBoard()
                 local i, j, d = world:toImage(x, p.y + math.sin(f * math.pi) * 6, z)
                 if visible(floor(i), floor(j), d + 2) then put(IDX[p.k], i, j); put(IDX[p.k], i + 1, j) end
             end
+        elseif p.shock or p.splat then
+            -- On the ground, drawn with it.
+        elseif p.star then
+            -- A needle's shot leaving: a cross of light at its tip.
+            local i, j, d = world:toImage(p.x, p.y, p.z)
+            i, j = floor(i), floor(j)
+            if visible(i, j, d + 3) then
+                local k = IDX[p.k]
+                put(IDX.w, i, j)
+                put(k, i - 1, j); put(k, i + 1, j); put(k, i, j - 1); put(k, i, j + 1)
+                if p.life > p.max * 0.5 then put(k, i - 2, j); put(k, i + 2, j) end
+            end
+        elseif p.thread then
+            -- A pruned thread: it drops to the soil and goes, from the middle out.
+            local f = 1 - p.life / p.max
+            local len = sqrt((p.bx - p.ax) ^ 2 + (p.bz - p.az) ^ 2)
+            local steps = max(2, ceil(len / 0.8))
+            for s = 0, steps do
+                local u = s / steps
+                if abs(u - 0.5) > f * 0.55 and (s * 7) % 10 >= f * 6 then
+                    local x, z = p.ax + (p.bx - p.ax) * u, p.az + (p.bz - p.az) * u
+                    local y = max(world:groundAt(x, z) + 0.3, p.ay + (p.by - p.ay) * u - f * 3)
+                    local i, j, d = world:toImage(x, y, z)
+                    if visible(floor(i), floor(j), d + 1.5) then put(f < 0.3 and IDX.t or IDX.n, i, j) end
+                end
+            end
         elseif p.glow then
             local f = p.t / p.max
             local x, z = p.x + (p.tx - p.x) * f, p.z + (p.tz - p.z) * f
@@ -2389,7 +2698,13 @@ local function drawHud()
     local ty = inset.t + 3
     local inc = game.income or 0
     local s = "NUTRIENTS " .. floor(game.nutrients)
-    text(s, inset.l + 3, ty, "l")
+    -- Short of them: red, and a shiver. A lot just in: bright.
+    local nk, nx = "l", 0
+    if flair.nut.t > 0 then
+        nk = flair.nut.k
+        if nk == "r" then nx = floor(flair.nut.t * 30) % 2 == 0 and 1 or -1 end
+    end
+    text(s, inset.l + 3 + nx, ty, nk)
     local x = inset.l + 3 + Font.width(s) + 2
     if game.phase == "wave" then
         local i = (inc >= 0 and "+" or "") .. string.format("%.1f", inc)
@@ -2652,6 +2967,11 @@ local function drawMenu()
             centred("A LAST WAVE ON ANY LEVEL: THE BOMBARDIER BEETLE", c.y + c.h + 6, "r", "o")
         end
     end
+    local sw = audio.switch()
+    local lv = Sfx.level >= 1 and "LOUD" or (Sfx.level > 0 and "QUIET" or "OFF")
+    box(sw.x, sw.y, sw.w, sw.h, hover.sound and "n" or "u", Sfx.level > 0 and "c" or "k")
+    local st = "SOUND " .. lv
+    text(st, sw.x + floor((sw.w - Font.width(st)) / 2), sw.y + 3, Sfx.level > 0 and "l" or "k")
     local hintY = vh - inset.b - 12
     centred(say("1 2 3 OR CLICK A LEVEL", "TAP A LEVEL") .. (challengeOpen() and say("   C: CHALLENGE", "") or ""), hintY, "s", "o")
 end
@@ -2803,6 +3123,53 @@ local function drawLoading()
     love.graphics.rectangle("fill", x, y, floor(w * progress), 4)
 end
 
+-- Over whatever screen is up: the thing just pressed lit, the screen's edge
+-- red when the sprout is hit (and on each heartbeat when it is low), a word
+-- when a wave comes or goes, and how loud the sound is when V changes it.
+function flair.draw()
+    if painter then return end
+    local function px(x, y, w, h) love.graphics.rectangle("fill", x, y, w or 1, h or 1) end
+    if not menu and game and (flair.hurt > 0 or flair.beat) then
+        local deep = flair.hurt > 0.2 and 4 or 2
+        color("r")
+        for d = 0, deep - 1 do
+            local step = d + 1
+            for x = (d % step), vw - 1, step do px(x, d); px(x, vh - 1 - d) end
+            for y = (d % step), vh - 1, step do px(d, y); px(vw - 1 - d, y) end
+        end
+    end
+    if flair.banner and not menu then
+        local age = flair.banner.max - flair.banner.t
+        if flair.banner.t > 0.3 or floor(flair.banner.t * 12) % 2 == 0 then
+            local y = floor(vh * 0.28) - floor(max(0, 0.15 - age) / 0.15 * 8)
+            centred(flair.banner.text, y, flair.banner.k, "o")
+            local w = floor(min(1, age / 0.3) * (Font.width(flair.banner.text) + 4))
+            color(flair.banner.k)
+            px(floor(vw / 2 - w / 2), y + 8, w, 1)
+            local sub = flair.banner.sub
+            if sub and Font.width(sub) > vw - inset.l - inset.r - 12 then sub = sub:match("^[^:]+") end
+            if sub then centred(sub, y + 12, "w", "o") end
+        end
+    end
+    if flair.note > 0 then
+        local lv = Sfx.level >= 1 and "LOUD" or (Sfx.level > 0 and "QUIET" or "OFF")
+        centred("SOUND " .. lv .. "  (V)", inset.t + TOP + 46, Sfx.level > 0 and "l" or "k", "o")
+    end
+    if flair.pressed and flair.pressed.t > 0 then
+        local ok, x, y, w, h = pcall(flair.pressed.rect)
+        if ok and x then
+            local hot = flair.pressed.t > 0.09
+            color(hot and "w" or "l")
+            px(x - 2, y - 2, w + 4, 1); px(x - 2, y + h + 1, w + 4, 1)
+            px(x - 2, y - 2, 1, h + 4); px(x + w + 1, y - 2, 1, h + 4)
+            if hot then
+                px(x - 1, y - 1, w + 2, 1); px(x - 1, y + h, w + 2, 1)
+                px(x - 1, y - 1, 1, h + 2); px(x + w, y - 1, 1, h + 2)
+            end
+        end
+    end
+end
+
 function love.draw()
     -- The HUD's picture starts empty each frame (nothing where the board shows
     -- through) and everything on it is drawn solid, so laying it over the board
@@ -2820,6 +3187,8 @@ function love.draw()
         love.graphics.setCanvas(canvas)
         drawBoard()
     end
+    love.graphics.setCanvas(ui)
+    flair.draw()
     love.graphics.setCanvas()
     love.graphics.setColor(1, 1, 1)
     if painter or menu then
