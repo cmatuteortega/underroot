@@ -171,39 +171,65 @@ function M.sprout(wilt)
 end
 
 -- Another look for the Heart, to try out: the big cartoon mushroom. A fat cream
--- stalk, a dome of a cap in the sprout's green with cream spots, and one big
--- eye set into the top of the cap, looking up at you. `wilt` 0..1 tips the cap
--- over and lowers the lid (it gets sleepy as it is hurt); `blink` 0..2 is open,
--- half and shut.
-local EYE_LX, EYE_LY, EYE_LZ = 0.42, 0.8, 0.42 -- the eye's gaze: up and at the camera
+-- stalk on a foot of branching roots, a dome of a cap in the sprout's green
+-- with cream spots, worn cocked over like a hat, and one big eye on the front
+-- of the cap. It has a front, so it is painted at a heading like a bug: from
+-- two of the four views you see the eye, from the other two the back of its
+-- head. `wilt` 0..1 tips it forward and lowers the lid (it gets sleepy as it
+-- is hurt); `blink` 0..2 is open, half and shut.
+local FRONT_X, FRONT_Y = 0.85, 0.5 -- where the eye sits: out of the front (+x), a little up
 do
-    local l = sqrt(EYE_LX ^ 2 + EYE_LY ^ 2 + EYE_LZ ^ 2)
-    EYE_LX, EYE_LY, EYE_LZ = EYE_LX / l, EYE_LY / l, EYE_LZ / l
+    local l = sqrt(FRONT_X ^ 2 + FRONT_Y ^ 2)
+    FRONT_X, FRONT_Y = FRONT_X / l, FRONT_Y / l
 end
--- The eye's own up: world up with the gaze taken out of it.
-local EYE_UX, EYE_UY, EYE_UZ
-do
-    local d = EYE_LY
-    EYE_UX, EYE_UY, EYE_UZ = -d * EYE_LX, 1 - d * EYE_LY, -d * EYE_LZ
-    local l = sqrt(EYE_UX ^ 2 + EYE_UY ^ 2 + EYE_UZ ^ 2)
-    EYE_UX, EYE_UY, EYE_UZ = EYE_UX / l, EYE_UY / l, EYE_UZ / l
-end
-local HAT_TILT = -0.4 -- how far the cap is cocked over, like a hat
+local HAT_TILT = 0.4 -- how far the cap is cocked over to one side, like a hat
 local SCLERA = ramp("w", "w", "w", "t")
 local CAP = RAMP.sprout
--- Its spots, round the side you see (and two peeking over the back): a way
--- out from the cap's middle and how wide, as the cosine it ends at.
+-- Its spots, all the way round: a way out from the cap's middle and how wide,
+-- as the cosine it ends at. None where the eye sits.
 local CAP_SPOTS = {}
-for _, d in ipairs({ { 1, 0.25, 0.05, 0.95 }, { 0.05, 0.25, 1, 0.95 }, { 0.72, 0.2, 0.72, 0.975 },
-    { -0.55, 0.65, 0.55, 0.96 }, { 0.55, 0.65, -0.55, 0.96 }, { -0.3, 0.9, -0.3, 0.97 } }) do
+for n = 0, 6 do
+    local a = (n + 0.5) / 7 * TAU
+    if cos(a) < 0.7 then CAP_SPOTS[#CAP_SPOTS + 1] = { cos(a), 0.3, sin(a), 0.955 } end
+end
+for n = 0, 2 do
+    local a = (n + 0.25) / 3 * TAU + math.pi
+    CAP_SPOTS[#CAP_SPOTS + 1] = { 0.55 * cos(a), 0.85, 0.55 * sin(a), 0.97 }
+end
+for _, d in ipairs(CAP_SPOTS) do
     local l = sqrt(d[1] ^ 2 + d[2] ^ 2 + d[3] ^ 2)
-    CAP_SPOTS[#CAP_SPOTS + 1] = { d[1] / l, d[2] / l, d[3] / l, d[4] }
+    d[1], d[2], d[3] = d[1] / l, d[2] / l, d[3] / l
 end
 
-function M.shroom(wilt, blink)
+-- The foot: roots arching out of the stalk's base into the ground, each with a
+-- twig or two forking off it.
+local function roots(parts, id)
+    for n = 0, 3 do
+        local a = (n + 0.15) / 4 * TAU + (n % 2) * 0.3
+        local c, s = cos(a), sin(a)
+        local len = 8 + (n % 2) * 1.5
+        -- thick where it leaves the stalk, thinning out to a point in the soil
+        local px, py, pz = c * 2.4, 2.6, s * 2.4
+        for k, r in ipairs({ 1.9, 1.35, 0.85 }) do
+            local f = k / 3
+            local bend = sin(f * math.pi) * 0.25 * (n % 2 == 0 and 1 or -1)
+            local x, y, z = cos(a + bend) * len * f, 2.6 * (1 - f) ^ 1.6, sin(a + bend) * len * f
+            parts[#parts + 1] = seg(px, py, pz, x, y, z, r, R.flesh, id)
+            if k == 2 then
+                -- a twig off the middle, bent to one side
+                local ta = a + (n % 2 == 0 and 0.9 or -0.9)
+                parts[#parts + 1] = seg(px, py, pz, px + cos(ta) * 3.6, 0.2, pz + sin(ta) * 3.6, 0.8, R.flesh, id)
+            end
+            px, py, pz = x, y, z
+        end
+    end
+end
+
+function M.shroom(wilt, blink, h)
     local ws = floor(wilt * 4 + 0.5)
+    local hs = step(h or 0, 8)
     blink = blink or 0
-    return kept("shroom" .. ws .. ":" .. blink, function()
+    return kept("shroom" .. ws .. ":" .. blink .. ":" .. hs, function()
         local w = ws / 4
         -- How far the lids have come in: the upper one droops as it wilts.
         local lid = math.max(({ 0, 0.55, 1 })[blink + 1], 0.35 * w)
@@ -211,8 +237,25 @@ function M.shroom(wilt, blink)
         local cy, crx, cry = 13, 9, 6
         -- Where the eye sits: half out of the cap's dome, along its gaze.
         local er = 4.8
-        local t = 1 / sqrt((EYE_LX / crx) ^ 2 + (EYE_LY / cry) ^ 2 + (EYE_LZ / crx) ^ 2) - er * 0.45
-        local ex, ey, ez = EYE_LX * t, cy + EYE_LY * t, EYE_LZ * t
+        local t = 1 / sqrt((FRONT_X / crx) ^ 2 + (FRONT_Y / cry) ^ 2) - er * 0.25
+        local ex, ey, ez = FRONT_X * t, cy + FRONT_Y * t, 0
+        -- Where it looks: ahead, but turned half way round to you when it can
+        -- see you at all (from behind, it just looks ahead).
+        local th = hs / 8 * TAU
+        local cx, cyy, cz = -T.DX, -T.DY, -T.DZ
+        cx, cz = cos(th) * cx + sin(th) * cz, -sin(th) * cx + cos(th) * cz
+        local EYE_LX, EYE_LY, EYE_LZ = FRONT_X, FRONT_Y, 0
+        if cx > 0 then EYE_LX, EYE_LY, EYE_LZ = EYE_LX + 0.8 * cx, EYE_LY + 0.3 * cyy, 0.8 * cz end
+        do
+            local l = sqrt(EYE_LX ^ 2 + EYE_LY ^ 2 + EYE_LZ ^ 2)
+            EYE_LX, EYE_LY, EYE_LZ = EYE_LX / l, EYE_LY / l, EYE_LZ / l
+        end
+        -- The eye's own up: world up with the gaze taken out of it.
+        local EYE_UX, EYE_UY, EYE_UZ = -EYE_LY * EYE_LX, 1 - EYE_LY * EYE_LY, -EYE_LY * EYE_LZ
+        do
+            local l = sqrt(EYE_UX ^ 2 + EYE_UY ^ 2 + EYE_UZ ^ 2)
+            EYE_UX, EYE_UY, EYE_UZ = EYE_UX / l, EYE_UY / l, EYE_UZ / l
+        end
         local parts = {
             -- stalk, fat and a little pinched at the waist
             { id = 1, ramp = R.flesh, at = ell(0, 3, 0, 4.4, 3.4, 4.4) },
@@ -231,7 +274,7 @@ function M.shroom(wilt, blink)
                     end
                 end },
             -- the socket: a lip of cap round the eye
-            { id = 4, ramp = CAP, at = ell(ex - EYE_LX * er * 0.5, ey - EYE_LY * er * 0.5, ez - EYE_LZ * er * 0.5, er * 1.15, er * 1.15, er * 1.15) },
+            { id = 4, ramp = CAP, at = ell(ex - FRONT_X * er * 0.5, ey - FRONT_Y * er * 0.5, ez, er * 1.15, er * 1.15, er * 1.15) },
             -- the eye
             { id = 5, ramp = SCLERA, at = ell(ex, ey, ez, er, er, er),
                 print = function(ux, uy, uz, lev)
@@ -244,21 +287,20 @@ function M.shroom(wilt, blink)
                             return CAP
                         end
                     end
-                    -- a glint up and to the left, then the pupil and the iris
-                    local gx, gy, gz = EYE_LX + 0.2 * EYE_UX - 0.2, EYE_LY + 0.2 * EYE_UY, EYE_LZ + 0.2 * EYE_UZ + 0.2
+                    -- a glint up and off to one side, then the pupil and the iris
+                    local gx, gy, gz = EYE_LX + 0.22 * EYE_UX, EYE_LY + 0.22 * EYE_UY, EYE_LZ + 0.22 * EYE_UZ + 0.22
                     local gl = sqrt(gx * gx + gy * gy + gz * gz)
                     if (ux * gx + uy * gy + uz * gz) / gl > 0.98 then return IDX.w end
-                    if f > 0.94 then return IDX.o end
-                    if f > 0.84 then return f > 0.9 and IDX.d or IDX.c end
+                    if f > 0.92 then return IDX.o end
+                    if f > 0.78 then return f > 0.86 and IDX.d or IDX.c end
                 end },
         }
         -- The cap is worn like a hat: tipped over to one side of the stalk and
         -- slid a little down it, eye and all.
-        local hat = A.mul(A.move(0, 11.5, 0), A.rotY(-math.pi / 4), A.rotX(HAT_TILT), A.rotY(math.pi / 4),
-            A.move(0, -12.3, 0))
+        local hat = A.mul(A.move(0, 11.5, 0), A.rotX(HAT_TILT), A.move(0, -12.3, 0))
         for k = 3, #parts do
             local m = A.mul(hat, parts[k].at)
-            -- The socket and the eye ride on the cap, but the eye keeps looking at you.
+            -- The socket and the eye ride on the cap, but the eye keeps looking ahead.
             if k >= 5 then
                 m = parts[k].at
                 m[4], m[8], m[12] = hat[1] * m[4] + hat[2] * m[8] + hat[3] * m[12] + hat[4],
@@ -267,7 +309,10 @@ function M.shroom(wilt, blink)
             end
             parts[k].at = m
         end
-        return place(parts, A.scale(1.15, 1.15, 1.15), A.rotZ(-0.3 * w), A.rotX(0.2 * w))
+        -- Wilting bows the whole of it forward; the roots stay in the ground.
+        place(parts, A.rotZ(-0.3 * w))
+        roots(parts, 6)
+        return place(parts, heading(hs / 8 * TAU), A.scale(1.15, 1.15, 1.15))
     end)
 end
 

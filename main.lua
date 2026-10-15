@@ -2243,7 +2243,8 @@ local function drawBoard()
             -- shut when it is hit.
             local b = love.timer.getTime() % 3.7
             local blink = (heartFlash > 0 or (b > 0.05 and b < 0.13)) and 2 or b < 0.18 and 1 or 0
-            look = M.shroom(wilt, blink)
+            -- It faces the room's +x, so from two of the four views you see its eye.
+            look = M.shroom(wilt, blink, turned(0))
         end
         stamp(look, game.heart.x, game.heart.y - 1, game.heart.z, heartFlash > 0 and T.FLASH or nil)
     end)
