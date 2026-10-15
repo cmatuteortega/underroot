@@ -1,4 +1,4 @@
--- Underfoot: a tower defense where you are the mycelium under a sprout.
+-- Groute: a tower defense where you are the mycelium under a sprout.
 --
 -- Everything renders into a low-res canvas scaled up by a whole number, in the
 -- thirteen colours of src/palette.lua and nothing else. The board is traced
@@ -176,6 +176,18 @@ local function padBoard(l, t, r, b)
     opx = ffi.cast("uint8_t*", overlay:getFFIPointer())
     overlayImage = love.graphics.newImage(overlay)
     overlayImage:setFilter("nearest", "nearest")
+end
+
+-- The title-bar / taskbar icon, the same picture the packaged .exe, .app,
+-- AppImage and APK carry (assets/icon/, see desktop/icon.py), four times up so
+-- the window system shrinks it rather than smears it.
+local function setWindowIcon()
+    local ok, small = pcall(love.image.newImageData, "assets/icon/icon.png")
+    if not ok then return end
+    local w, h = small:getDimensions()
+    local icon = love.image.newImageData(w * 4, h * 4)
+    icon:mapPixel(function(x, y) return small:getPixel(floor(x / 4), floor(y / 4)) end)
+    love.window.setIcon(icon)
 end
 
 local function fit()
@@ -868,6 +880,7 @@ end
 function love.load(args)
     love.graphics.setDefaultFilter("nearest", "nearest")
     love.graphics.setLineStyle("rough")
+    setWindowIcon()
     fit()
     loadProgress()
     loadLoadouts()
@@ -2941,7 +2954,7 @@ local function drawMenu()
     color("o")
     love.graphics.rectangle("fill", 0, 0, vw, vh)
     local cards, switch = levelCards()
-    centred("UNDERFOOT", cards[1].y - 30, "g", "o")
+    centred("GROUTE", cards[1].y - 30, "g", "o")
     centred("WHERE DOES THE SPROUT COME UP?", cards[1].y - 18, "t", "o")
     for k, c in ipairs(cards) do
         local l = D.LEVELS[k]

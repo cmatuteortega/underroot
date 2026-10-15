@@ -1,4 +1,7 @@
-# Underfoot
+# Groute
+
+(Called Underfoot until the builds went up; the design doc and the save
+directory keep that name.)
 
 A tower defense where you are the mycelium under a sprout, built from the design
 doc (`DESIGN.md`, 13 oct 2026). Three levels, each its own map and waves (The
@@ -386,6 +389,26 @@ What is new for Underfoot:
 | `src/script.lua` | dev only: the `--shots` run |
 | `src/sheet.lua` | dev only: the `--sheet` model sheet |
 | `src/bot.lua` | dev only: the `--bot` balance runs, a build order a level and the generic player |
+| `assets/icon/` | the app icon at 40px, in two layers (background, foreground) and put together (`icon.png`, the window's) |
+| `android/icon.py` | bakes the Android launcher icon (legacy and adaptive) out of `assets/icon/` |
+| `desktop/icon.py` | bakes the `.ico`, `.icns` and AppImage icon out of `assets/icon/` |
+
+## Builds
+
+Two GitHub Actions workflows, the same as Survive School's, build every push
+that touches more than docs; a `v*` tag also puts the files on a GitHub Release.
+
+- `.github/workflows/android.yml`: the APK (LÖVE for Android 12.0, the game as
+  `game.love`), signed with the `ANDROID_KEYSTORE_*` secrets when they are set
+  (and then a Play bundle too), or a throwaway key when they are not.
+- `.github/workflows/desktop.yml`: Windows (`Groute.exe`), macOS (`Groute.app`),
+  Linux (`Groute.AppImage`) and the bare `game.love`, each fused onto stock
+  LÖVE 11.5.
+
+The icon is the Shelf Fungus (second tier down its first branch) on a grass
+block from the tileset, ringed by a hypha, in a dusk glow. To change it, edit
+the two 40px layers in `assets/icon/` and run `python3 desktop/icon.py <dir>`
+to see every size.
 
 ## Extending
 
