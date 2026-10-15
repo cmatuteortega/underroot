@@ -92,7 +92,7 @@ local MAPS = {
 World.MAPS = MAPS
 
 -- The boards built from the painted tileset (src/tiled.lua) rather than traced.
-local TILED = { pond = true }
+local TILED = { crack = true, pond = true, lawn = true }
 
 local POCKET = {
     p = { kind = "pebble", quality = "poor" },

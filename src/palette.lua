@@ -18,21 +18,26 @@ end
 
 local Palette = {}
 
--- key, colour, the key one step darker
+-- key, colour, the key one step darker. The colours are the Apollo palette's
+-- (the one the board's tileset is painted in, assets/tiles/isometric.png), one
+-- per role, so a mushroom or a beetle sits in the same world as the tiles.
+-- Three keep their own: the network's teal and glow (nothing in Apollo is that
+-- colour, and the threads must never be mistaken for the pond), and cream,
+-- which Apollo has only as a cold near-white.
 Palette.list = {
-    { "o", "1c1216", "o" }, -- ink: outlines, the darkest thing there is
-    { "u", "47301f", "o" }, -- umber: deep soil, shadow
-    { "n", "7b5536", "u" }, -- brown: soil
-    { "t", "b98f5e", "n" }, -- tan: lit soil, the trail, mushroom flesh in shade
-    { "w", "eee3c4", "t" }, -- cream: glints, mushroom caps, salt
-    { "s", "9a958a", "k" }, -- stone: the patio
-    { "k", "625d58", "u" }, -- ash: stone in shade
-    { "d", "3b5530", "u" }, -- dark moss
-    { "m", "6c8c3e", "d" }, -- moss
-    { "g", "a8ec3a", "m" }, -- sprout: the most saturated thing on screen, always
+    { "o", "241527", "o" }, -- ink: outlines, the darkest thing there is
+    { "u", "4d2b32", "o" }, -- umber: deep soil, shadow
+    { "n", "7a4841", "u" }, -- brown: soil
+    { "t", "c09473", "n" }, -- tan: lit soil, the trail, mushroom flesh in shade
+    { "w", "e8d6b0", "t" }, -- cream: glints, mushroom caps, salt
+    { "s", "a8b5b2", "k" }, -- stone: the patio
+    { "k", "577277", "u" }, -- ash: stone in shade
+    { "d", "25562e", "u" }, -- dark moss
+    { "m", "468232", "d" }, -- moss
+    { "g", "a8ca58", "m" }, -- sprout: the most saturated thing on screen, always
     { "c", "23a69a", "d" }, -- teal: the network
     { "l", "a3f5e3", "c" }, -- glow: nutrients moving, the network lit
-    { "r", "c8452c", "u" }, -- rust: enemies, damage, anything that went wrong
+    { "r", "cf573c", "u" }, -- rust: enemies, damage, anything that went wrong
 }
 
 Palette.key, Palette.darker = {}, {}

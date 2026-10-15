@@ -41,12 +41,37 @@ local BACK = 2000
 -- Which tiles. Indices count along the sheet's rows from 0.
 local SET = {
     dirt = { 0, 1, 2, 4, 5, 6, 8, 9, 10 },
+    soil = { 0, 1, 2, 4, 5, 6, 8, 9, 10, 19, 20 },
     under = { 11, 12, 13, 0, 1 },
     trail = { 21, 21, 17, 18, 3 },
     grass = { 40 },
+    lawn = { 38, 39, 37, 38 },
+    bush = { 33, 34, 35, 36, 32, 31 },
+    slab = { 63, 63, 61 },
     water = { 110, 111, 112, 113, 114, 115, 116, 117, 118, 119 },
+    shallow = { 120 },
     rimProp = { 45, 44, 52, 57, 53, 54, 64, 65, 49, 51, 45, 56 },
     fieldProp = { 43, 46, 58, 56 },
+    pebbles = { 62, 53, 43 },
+    flowers = { 41, 42, 47, 43 },
+}
+
+-- Each level's look: which characters stand a block up (`raised`, with the
+-- tiles for their top and sides), the tiles for the rest of the field, and
+-- what grows on the raised ground and in the field, how often.
+local THEMES = {
+    pond = {
+        raised = { r = true }, raisedTop = SET.dirt, raisedSide = SET.dirt, tall = true,
+        field = SET.grass, raisedProp = { SET.rimProp, 0.45 }, fieldProp = { ["."] = { SET.fieldProp, 0.2 } },
+    },
+    crack = {
+        raised = { ["#"] = true }, raisedTop = SET.slab, raisedSide = SET.slab,
+        field = SET.soil, fieldProp = { ["."] = { SET.pebbles, 0.15 } },
+    },
+    lawn = {
+        raised = { Y = true }, raisedTop = SET.bush, raisedSide = SET.dirt,
+        field = SET.lawn, fieldProp = { ['"'] = { SET.flowers, 0.12 } },
+    },
 }
 
 -- A cheap hash, the same as the world's grain.
@@ -57,27 +82,29 @@ end
 local function pick(list, c, r, k) return list[floor(grain(c, r, k) * #list) + 1] end
 
 -- The map's characters as heights, in blocks: the top block of the column.
-local RIM = { r = true }
 local TRAIL = { ["="] = true, E = true }
 local WATER = { o = true, ["~"] = true, P = true }
+local DEEP = { o = true, P = true } -- open water, half a block down in its block
 
--- The rim stands up at the back and comes down to the field's height along the
--- two near edges, so it never hides what walks in front of it.
+-- Raised ground stands a block up (two, now and then, along the back of a
+-- `tall` level) and comes down to the field's height along the two near
+-- edges, so it never hides what walks in front of it.
 function Tiled.level(world, ch, c, r)
-    if RIM[ch] then
+    local theme = THEMES[world.id]
+    if theme.raised[ch] then
         if r == world.rows - 1 or c == world.cols - 1 then return 0 end
-        if (r == 0 or c == 0) and grain(c, r, 81) > 0.6 then return 2 end
+        if theme.tall and (r == 0 or c == 0) and grain(c, r, 81) > 0.6 then return 2 end
         return 1
     end
     if TRAIL[ch] or WATER[ch] then return -1 end
     return 0
 end
 
--- The height of what stands on (c, r): water's surface is half a block down
--- inside its block.
+-- The height of what stands on (c, r): open water's surface is half a block
+-- down inside its block; the flooded trail is shallow, level with the trail.
 function Tiled.ground(world, ch, c, r)
     local top = Tiled.level(world, ch, c, r) * L
-    if WATER[ch] then return top - L / 2 end
+    if DEEP[ch] then return top - L / 2 end
     return top
 end
 
@@ -129,9 +156,7 @@ function Tiled.paint(world)
     -- as a block of cell (c, r), or (`prop`) as a thing standing in it.
     -- `calm`: a water tile's top, whose bright rim is only kept along a shore,
     -- so open water reads as one sheet rather than a grid of tiles.
-    -- `ford`: a trail tile seen through the water's top, half and half, for a
-    -- flooded stretch of trail: shallow water with the trodden path under it.
-    local function stamp(t, c, r, top, drop, prop, calm, ford)
+    local function stamp(t, c, r, top, drop, prop, calm)
         local cx, cz = c * TILE + TILE / 2, r * TILE + TILE / 2
         local si, sj = world:toImage(cx, top, cz)
         local bi, bj = floor(si + 0.5) - PX / 2, floor(sj + 0.5) - PX / 2
@@ -175,16 +200,8 @@ function Tiled.paint(world)
                             elseif du > 0 and dv < 0 then nr = r - 1
                             elseif du > 0 then nc = c + 1
                             else nr = r + 1 end
-                            if WATER[world.cell(nc, nr)] then
+                            if DEEP[world.cell(nc, nr)] then
                                 rgb[p * 3], rgb[p * 3 + 1], rgb[p * 3 + 2] = still[1], still[2], still[3]
-                            end
-                        end
-                        if ford and isUp then
-                            local q = (((floor(ford / COLS) * PX) + v - drop) * sw + (ford % COLS) * PX + u) * 4
-                            if spx[q + 3] > 127 then
-                                rgb[p * 3] = (rgb[p * 3] + spx[q]) / 2
-                                rgb[p * 3 + 1] = (rgb[p * 3 + 1] + spx[q + 1]) / 2
-                                rgb[p * 3 + 2] = (rgb[p * 3 + 2] + spx[q + 2]) / 2
                             end
                         end
                         dep[p] = BACK - tt
@@ -198,30 +215,30 @@ function Tiled.paint(world)
 
     -- Back to front: by the diagonal a cell is on, and up each column.
     local cell = world.cell
+    local theme = THEMES[world.id]
     for s = 0, world.cols + world.rows - 2 do
         for c = max(0, s - world.rows + 1), min(world.cols - 1, s) do
             local r = s - c
             local ch = cell(c, r)
             local top = Tiled.level(world, ch, c, r)
+            local raised = theme.raised[ch]
             for k = BASE, top do
-                local t, drop, calm, ford = pick(SET.under, c, r, k + 90), 0, false, nil
+                local t, drop, calm = pick(SET.under, c, r, k + 90), 0, false
                 if k == top then
-                    if RIM[ch] then t = pick(SET.dirt, c, r, 82)
+                    if raised then t = pick(theme.raisedTop, c, r, 82)
                     elseif TRAIL[ch] then t = pick(SET.trail, c, r, 83)
-                    elseif WATER[ch] then
-                        t, drop, calm = pick(SET.water, c, r, 84), 4, true
-                        if ch == "~" then ford = pick(SET.trail, c, r, 83) end
-                    else t = pick(SET.grass, c, r, 85) end
-                elseif RIM[ch] then
-                    t = pick(SET.dirt, c, r, k + 86)
+                    elseif ch == "~" then t = pick(SET.shallow, c, r, 84)
+                    elseif WATER[ch] then t, drop, calm = pick(SET.water, c, r, 84), 4, true
+                    else t = pick(theme.field, c, r, 85) end
+                elseif raised and k > 0 then
+                    t = pick(theme.raisedSide, c, r, k + 86)
                 end
-                stamp(t, c, r, k * L, drop, false, calm, ford)
+                stamp(t, c, r, k * L, drop, false, calm)
             end
-            -- Something growing on the rim, or now and then in the field.
-            if RIM[ch] and grain(c, r, 87) > 0.55 then
-                stamp(pick(SET.rimProp, c, r, 88), c, r, (top + 1) * L, 0, true)
-            elseif ch == "." and grain(c, r, 89) > 0.8 then
-                stamp(pick(SET.fieldProp, c, r, 91), c, r, (top + 1) * L, 0, true)
+            -- Something growing on the raised ground, or now and then in the field.
+            local grow = raised and theme.raisedProp or theme.fieldProp[ch]
+            if grow and grain(c, r, 87) < grow[2] then
+                stamp(pick(grow[1], c, r, 88), c, r, (top + 1) * L, 0, true)
             end
         end
         coroutine.yield(0.5 * s / (world.cols + world.rows))
