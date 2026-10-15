@@ -18,6 +18,10 @@
 --
 -- What grows and what the game asks about (pockets, the Heart's mound) is
 -- still traced, over the tiles, wherever it is nearer than them.
+--
+-- Each of the board's four views (see World:toView) is stamped the same way,
+-- in view space, with the tiles still picked by the room cell they are on, so
+-- a bush is the same bush from every side.
 
 local ffi = require "ffi"
 local T = require "src.tracer"
@@ -87,12 +91,14 @@ local DEEP = { o = true, P = true, ["~"] = true } -- water, half a block down in
 
 -- Raised ground stands a block up (two, now and then, along the back of a
 -- `tall` level) and comes down to the field's height along the two near
--- edges, so it never hides what walks in front of it.
-function Tiled.level(world, ch, c, r)
+-- edges, so it never hides what walks in front of it. Near and back are the
+-- view's (q, the first by default).
+function Tiled.level(world, ch, c, r, q)
     local theme = THEMES[world.id]
     if theme.raised[ch] then
-        if r == world.rows - 1 or c == world.cols - 1 then return 0 end
-        if theme.tall and (r == 0 or c == 0) and grain(c, r, 81) > 0.6 then return 2 end
+        local vc, vr, cols, rows = world:viewCell(c, r, q or 0)
+        if vr == rows - 1 or vc == cols - 1 then return 0 end
+        if theme.tall and (vr == 0 or vc == 0) and grain(c, r, 81) > 0.6 then return 2 end
         return 1
     end
     if TRAIL[ch] or WATER[ch] then return -1 end
@@ -101,8 +107,8 @@ end
 
 -- The height of what stands on (c, r): water's surface is half a block down
 -- inside its block.
-function Tiled.ground(world, ch, c, r)
-    local top = Tiled.level(world, ch, c, r) * L
+function Tiled.ground(world, ch, c, r, q)
+    local top = Tiled.level(world, ch, c, r, q) * L
     if DEEP[ch] then return top - L / 2 end
     return top
 end
@@ -139,16 +145,17 @@ do
     UNX, UNZ = nx / n, nz / n
 end
 
-function Tiled.paint(world)
+-- Paints `view` (from World:frame) of the board into it.
+function Tiled.paint(world, view)
     load()
-    local w, h = world.w, world.h
+    local w, h, q = view.w, view.h, view.q
     local n = w * h
     local rgb = ffi.new("uint8_t[?]", n * 3)
     local dep = ffi.new("float[?]", n)
     local wx, wy, wz = ffi.new("float[?]", n), ffi.new("float[?]", n), ffi.new("float[?]", n)
     local up = ffi.new("uint8_t[?]", n)
     for p = 0, n - 1 do dep[p], wy[p] = -1e9, -1e9 end
-    world.rgb, world.dep, world.wx, world.wy, world.wz, world.up = rgb, dep, wx, wy, wz, up
+    view.rgb, view.dep, view.wx, view.wy, view.wz, view.up = rgb, dep, wx, wy, wz, up
 
     -- Lays tile `t` with its top-face centre over room point (cx, top, cz) --
     -- `drop` pixels lower for a tile whose face sits down inside its block --
@@ -157,9 +164,11 @@ function Tiled.paint(world)
     -- so open water reads as one sheet rather than a grid of tiles.
     -- `ford`: a trail tile seen through the water's top, half and half, for a
     -- flooded stretch of trail: the trodden path under the water.
+    -- (c, r) is the cell in the view; what is kept of each pixel is the room.
     local function stamp(t, c, r, top, drop, prop, calm, ford)
         local cx, cz = c * TILE + TILE / 2, r * TILE + TILE / 2
-        local si, sj = world:toImage(cx, top, cz)
+        local si, sj = T.project(cx, top, cz)
+        si, sj = si - view.i0, sj - view.j0
         local bi, bj = floor(si + 0.5) - PX / 2, floor(sj + 0.5) - PX / 2
         local tx, ty = (t % COLS) * PX, floor(t / COLS) * PX
         local x1, z1 = (c + 1) * TILE - 0.001, (r + 1) * TILE - 0.001
@@ -180,7 +189,7 @@ function Tiled.paint(world)
                     -- surface: the water behind shows there instead.
                     local lip = calm and dv < 0 and abs(du) / 16 + abs(dv) / 8 > 1
                     if i >= 0 and i < w and spx[s + 3] > 127 and not lip then
-                        local ox, oy, oz = T.origin(world.i0 + i + 0.5, world.j0 + j + 0.5, BACK)
+                        local ox, oy, oz = T.origin(view.i0 + i + 0.5, view.j0 + j + 0.5, BACK)
                         local tt, isUp
                         if prop or (dv < 0 and abs(du) / 16 + abs(dv) / 8 > 1) then
                             tt = ((cx - ox) * UNX + (cz - oz) * UNZ) / (DX * UNX + DZ * UNZ)
@@ -192,6 +201,7 @@ function Tiled.paint(world)
                             tt = (z1 - oz) / DZ
                         end
                         local x, y, z = ox + DX * tt, oy + DY * tt, oz + DZ * tt
+                        x, z = world:toRoom(x, z, q)
                         local p = j * w + i
                         rgb[p * 3], rgb[p * 3 + 1], rgb[p * 3 + 2] = spx[s], spx[s + 1], spx[s + 2]
                         if calm and isUp and abs(du) / 16 + abs(dv) / 8 > 0.7 then
@@ -201,7 +211,7 @@ function Tiled.paint(world)
                             elseif du > 0 and dv < 0 then nr = r - 1
                             elseif du > 0 then nc = c + 1
                             else nr = r + 1 end
-                            if DEEP[world.cell(nc, nr)] then
+                            if DEEP[world.cell(world:roomCell(nc, nr, q))] then
                                 rgb[p * 3], rgb[p * 3 + 1], rgb[p * 3 + 2] = still[1], still[2], still[3]
                             end
                         end
@@ -222,14 +232,16 @@ function Tiled.paint(world)
         end
     end
 
-    -- Back to front: by the diagonal a cell is on, and up each column.
+    -- Back to front: by the diagonal a cell is on in the view, and up each column.
     local cell = world.cell
     local theme = THEMES[world.id]
-    for s = 0, world.cols + world.rows - 2 do
-        for c = max(0, s - world.rows + 1), min(world.cols - 1, s) do
-            local r = s - c
+    local _, _, vcols, vrows = world:viewCell(0, 0, q)
+    for s = 0, vcols + vrows - 2 do
+        for vc = max(0, s - vrows + 1), min(vcols - 1, s) do
+            local vr = s - vc
+            local c, r = world:roomCell(vc, vr, q)
             local ch = cell(c, r)
-            local top = Tiled.level(world, ch, c, r)
+            local top = Tiled.level(world, ch, c, r, q)
             local raised = theme.raised[ch]
             for k = BASE, top do
                 local t, drop, calm, ford = pick(SET.under, c, r, k + 90), 0, false, nil
@@ -243,20 +255,20 @@ function Tiled.paint(world)
                 elseif raised and k > 0 then
                     t = pick(theme.raisedSide, c, r, k + 86)
                 end
-                stamp(t, c, r, k * L, drop, false, calm, ford)
+                stamp(t, vc, vr, k * L, drop, false, calm, ford)
             end
             -- Something growing on the raised ground, or now and then in the field.
             local grow = raised and theme.raisedProp or theme.fieldProp[ch]
             if grow and grain(c, r, 87) < grow[2] then
-                stamp(pick(grow[1], c, r, 88), c, r, (top + 1) * L, 0, true)
+                stamp(pick(grow[1], c, r, 88), vc, vr, (top + 1) * L, 0, true)
             end
         end
-        coroutine.yield(0.5 * s / (world.cols + world.rows))
+        coroutine.yield(0.5 * s / (vcols + vrows))
     end
 
     -- What is still traced (the pockets, the Heart's mound) goes over the tiles
     -- wherever it is nearer.
-    local props = world:traceProps(function(pj) coroutine.yield(0.5 + 0.5 * pj / h) end)
+    local props = world:traceProps(view, function(pj) coroutine.yield(0.5 + 0.5 * pj / h) end)
     for p = 0, n - 1 do
         local k = props.key[p]
         if k ~= 0 and props.dep[p] > dep[p] - 0.5 then
@@ -271,11 +283,12 @@ function Tiled.paint(world)
     for p = 0, n - 1 do
         if dep[p] > -1e8 then key[p] = keyOf(rgb[p * 3], rgb[p * 3 + 1], rgb[p * 3 + 2]) end
     end
-    world.key = key
-    world.image = Tiled.image(world, function(p, r, g, b) return r, g, b end)
+    view.key = key
+    view.image = Tiled.image(view, function(p, r, g, b) return r, g, b end)
 end
 
--- The board's picture, each pixel's colour passed through `f` (p, r, g, b).
+-- The board's picture (a view of it, or the one shown), each pixel's colour
+-- passed through `f` (p, r, g, b).
 local BG = T.RGB[IDX.o]
 function Tiled.image(world, f)
     local w, h, rgb = world.w, world.h, world.rgb

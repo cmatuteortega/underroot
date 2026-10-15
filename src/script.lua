@@ -212,7 +212,22 @@ function S.begin(g, api)
         { 89, function() g:offerMutations() end },
         { 89.5, "shot" },
         { 90, function() assert(g:mutate(2)) end },
-        { 90.5, "quit" },
+        -- The camera round the board, a side at a time, and a click in a turned
+        -- view still landing on the pocket it is over.
+        { 90.2, function() api.select(nil); love.keypressed("e") end },
+        { 90.9, "shot" },
+        { 91, function()
+            local x, y = at(node(10, 6))
+            press(x, y); release(x, y)
+            assert(api.selection() == node(10, 6).tower, "a click in a turned view")
+            api.select(nil)
+            love.keypressed("e")
+        end },
+        { 91.7, "shot" },
+        { 91.8, function() love.keypressed("e") end },
+        { 92.5, "shot" },
+        { 92.6, function() love.keypressed("e") end },
+        { 93.3, "quit" },
     }
 end
 

@@ -58,6 +58,7 @@ chew through any thread they cross.
 | click a cut link | regrow it by hand for 40% of its cost |
 | `Q` then click a fed node | Spore Pulse: every tower on the way from the sprout overcharges for 6 s (45 s cooldown, counts down during waves) |
 | `Space` | start the next wave |
+| `E` (`Shift`+`E` back), or the button at the bottom right | turn the camera a quarter turn round the board, to see it from each of its four sides |
 | `F` | game speed ×1 / ×2 / ×3 |
 | `P` / `Esc` | pause (`Esc` cancels a tool first) |
 | right click | cancel, back to growing |

@@ -9,6 +9,11 @@
 -- painter's order. So an ant goes behind a slab of the patio and a thread of
 -- hypha dips out of sight past a crumb with nothing traced but the ant.
 --
+-- The camera goes round the board a quarter turn at a time (the button at the
+-- bottom right, or E): the board has a picture for each side (see World:toView)
+-- and the turn between them is the picture going round, squashed as the ground
+-- is, before the next one takes its place.
+--
 -- This file is the screen: the canvas, the camera, compositing, the HUD and
 -- what the mouse (or a finger) means. The rules are in src/game.lua and the numbers in
 -- src/defs.lua.
@@ -115,6 +120,10 @@ local selected -- the tower, mat or shelf whose upgrades are showing
 local focus, focused
 local script -- the --shots run
 local shot -- and the whole screen it photographs
+-- The camera going round: the frame it left, the screen point it turns about,
+-- how far round and how long it has been at it.
+local turning
+local TURN_TIME = 0.45
 
 --- the screen ----------------------------------------------------------------------
 
@@ -189,6 +198,24 @@ local function visible(i, j, d)
     return d >= world.dep[j * world.w + i] - 0.6
 end
 
+-- The board-image pixels a box of the room can cover, whichever way the board
+-- is turned: i0, i1, j0, j1.
+local function screenBox(x0, x1, y0, y1, z0, z1)
+    local i0, i1, j0, j1 = math.huge, -math.huge, math.huge, -math.huge
+    for _, x in ipairs({ x0, x1 }) do
+        for _, y in ipairs({ y0, y1 }) do
+            for _, z in ipairs({ z0, z1 }) do
+                local i, j = world:toImage(x, y, z)
+                i0, i1, j0, j1 = min(i0, i), max(i1, i), min(j0, j), max(j1, j)
+            end
+        end
+    end
+    return floor(i0) - 1, ceil(i1) + 1, floor(j0), ceil(j1)
+end
+
+-- A heading in the room as it is seen in the view shown.
+local function turned(h) return h + world.turn * math.pi / 2 end
+
 -- A picture laid down with its pivot at a room point, through a remap.
 local function stamp(pic, x, y, z, remap)
     remap = remap or T.SAME
@@ -235,11 +262,8 @@ end
 -- goes one step darker.
 local function shadow(x, z, r)
     local g = world:groundAt(x, z)
-    local i0 = floor(world:toImage(x - r, g, z + r)) - 1
-    local i1 = ceil(world:toImage(x + r, g, z - r)) + 1
-    local _, j0 = world:toImage(x - r, g + 4, z - r)
-    local _, j1 = world:toImage(x + r, g - 1, z + r)
-    for j = max(0, floor(j0)), min(world.h - 1, ceil(j1)) do
+    local i0, i1, j0, j1 = screenBox(x - r, x + r, g - 1, g + 4, z - r, z + r)
+    for j = max(0, j0), min(world.h - 1, j1) do
         for i = max(0, i0), min(world.w - 1, i1) do
             local n = j * world.w + i
             if world.up[n] == 1 and (world.wx[n] - x) ^ 2 + (world.wz[n] - z) ^ 2 <= r * r then
@@ -354,6 +378,12 @@ local function waveRect()
 end
 -- The top of everything the toolbar puts down: the tip line sits above it.
 local function barTop() return bar().top end
+-- The button that takes the camera round the board: in the bottom right
+-- corner, over the toolbar.
+local RW, RH = 22, 18
+local function turnRect()
+    return vw - inset.r - 2 - RW, barTop() - RH - 5, RW, RH
+end
 local function inside(x, y, rx, ry, rw, rh) return x >= rx and y >= ry and x < rx + rw and y < ry + rh end
 
 -- The info panel: everything about one species, or one fruiting body as it
@@ -478,7 +508,8 @@ local function info()
     else
         local top = inset.t + TOP + 2
         if wide() then
-            P.x, P.y, P.h = vw - inset.r - w - 3, top, barTop() - 4 - top
+            local _, ty = turnRect()
+            P.x, P.y, P.h = vw - inset.r - w - 3, top, ty - 4 - top
         else
             P.x, P.y, P.h = inset.l + 3, top, min(h + 8, floor((barTop() - top) * 0.5))
         end
@@ -669,6 +700,7 @@ local function findHover()
         if inside(mx, my, buttonRect(n)) then hover.button = n return end
     end
     if inside(mx, my, waveRect()) then hover.wave = true return end
+    if inside(mx, my, turnRect()) then hover.turn = true return end
     if my < inset.t + TOP then hover.strip = true return end
     local ci, cj = cursor()
     local best, bd = nil, 9
@@ -790,6 +822,63 @@ local function letGo()
     mode, drag, selected = "grow", nil, nil
 end
 
+-- Finishes painting view q of the board now, if the background has not got
+-- there yet (see love.update).
+local function paintNow(q)
+    local bg = world.backPainter
+    while not world:painted(q) and bg and coroutine.status(bg) ~= "dead" do
+        local ok, err = coroutine.resume(bg)
+        if not ok then error(err) end
+    end
+    if not world:painted(q) then
+        local co = coroutine.create(function() world:paint(q) end)
+        while coroutine.status(co) ~= "dead" do
+            local ok, err = coroutine.resume(co)
+            if not ok then error(err) end
+        end
+    end
+end
+
+-- Takes the camera a quarter turn round the board, d = 1 or -1. The ground
+-- under the middle of the screen stays where it is and the board turns about
+-- it; the frame being left is kept to be shown going round.
+local function turnCamera(d)
+    if turning or painter or menu or not game then return end
+    local q = (world.turn + d) % World.TURNS
+    paintNow(q)
+    local mi, mj = floor(cw / 2), floor(ch / 2)
+    local x, y, z = world:pick(mi + floor(camx), mj + floor(camy))
+    if not x then
+        x, z = world.W / 2, world.D / 2
+        y = world:groundAt(x, z)
+    end
+    local i0, j0 = world:toImage(x, y, z)
+    local i1, j1 = world:toImage(x + 10, y, z)
+    local px, py = i0 - floor(camx), j0 - floor(camy)
+    local a0 = math.atan2((j1 - j0) * 2, i1 - i0)
+
+    local old = love.graphics.newCanvas(cw, ch)
+    old:setFilter("nearest", "nearest")
+    love.graphics.setCanvas(old)
+    love.graphics.setColor(1, 1, 1)
+    love.graphics.draw(canvas)
+    love.graphics.setCanvas()
+
+    world:setTurn(q)
+    focus = nil
+    centre()
+    local n0, m0 = world:toImage(x, y, z)
+    panx = panx + (n0 - floor(camx)) - px
+    pany = pany + (m0 - floor(camy)) - py
+    centre()
+    -- How far the picture goes round on the screen, measured with the ground
+    -- unsquashed so a quarter turn of the room is a quarter turn of it.
+    local n1, m1 = world:toImage(x + 10, y, z)
+    local a = math.atan2((m1 - m0) * 2, n1 - n0) - a0
+    a = (a + math.pi) % (2 * math.pi) - math.pi
+    turning = { t = 0, old = old, px = px, py = py, angle = a }
+end
+
 local function click(b)
     if menu == "loadout" then
         -- A card opens its panel; the same card again (or the panel's button)
@@ -846,6 +935,7 @@ local function click(b)
         if game.phase == "build" then game:startWave() else speed = speed % 3 + 1 end
         return
     end
+    if hover.turn then turnCamera(1) return end
     if game.phase == "won" or game.phase == "lost" then openMenu() return end
     if hover.strip then
         -- No P key on a phone: the top strip is the pause button.
@@ -911,12 +1001,12 @@ local function point(x, y)
 end
 
 function love.mousepressed(x, y, b, istouch)
-    if painter or pinch then return end
+    if painter or pinch or turning then return end
     touch = istouch and true or false
     point(x, y)
     findHover()
     if b == 3 then mouse.pan = { wx = x, wy = y, px = panx, py = pany } return end
-    if b == 1 and not (hover.button or hover.wave or hover.node or hover.card or hover.mutation or hover.info) and not (mode == "grow" and drag) then
+    if b == 1 and not (hover.button or hover.wave or hover.turn or hover.node or hover.card or hover.mutation or hover.info) and not (mode == "grow" and drag) then
         press = { x = mouse.x, y = mouse.y, wx = x, wy = y, px = panx, py = pany }
         return
     end
@@ -1100,6 +1190,7 @@ function love.keypressed(key)
         if game.phase == "build" then game:startWave() end
     end
     if key == "f" then speed = speed % 3 + 1 end
+    if key == "e" then turnCamera(love.keyboard.isDown("lshift", "rshift") and -1 or 1) end
     if key == "p" then paused = not paused end
     if key == "r" and (game.phase == "won" or game.phase == "lost" or love.keyboard.isDown("lshift")) then start() end
     if key == "m" then openMenu() end
@@ -1142,6 +1233,16 @@ function love.update(dt)
         end
         if coroutine.status(painter) == "dead" then
             painter = nil
+            -- The other three sides of the board are painted in the background,
+            -- a slice a frame, so the camera can go round at once.
+            if not script and not world.backPainter then
+                local w = world
+                w.backPainter = coroutine.create(function()
+                    for q = 0, World.TURNS - 1 do
+                        if not w:painted(q) then w:paint(q) end
+                    end
+                end)
+            end
             start()
             if script then
                 -- The script clicks like a player: it is told where things are
@@ -1152,6 +1253,7 @@ function love.update(dt)
                         return (floor(i) - floor(camx) + 0.5) * zoom, (floor(j) - floor(camy) + 0.5) * zoom
                     end,
                     select = function(t) selected = t end,
+                    selection = function() return selected end,
                     menu = function(on) if on then openMenu() else menu = nil end end,
                     loadout = function(n) if n then openLoadout(n) else menu, pick = nil, nil end end,
                     button = function(name)
@@ -1188,8 +1290,23 @@ function love.update(dt)
         end
         return
     end
+    local bg = world.backPainter
+    if bg and coroutine.status(bg) ~= "dead" then
+        local t0 = love.timer.getTime()
+        while coroutine.status(bg) ~= "dead" and love.timer.getTime() - t0 < 0.004 do
+            local ok, err = coroutine.resume(bg)
+            if not ok then error(err) end
+        end
+    end
     dt = min(dt, 1 / 30)
     if script then dt = 1 / 30 end
+    if turning then
+        turning.t = turning.t + dt
+        if turning.t >= TURN_TIME then
+            turning.old:release()
+            turning = nil
+        end
+    end
 
     local k = love.keyboard.isDown
     local pan = 120 * dt
@@ -1326,11 +1443,8 @@ local function drawRing(r)
     local poly = r.nodes
     local x0, x1, z0, z1 = math.huge, -math.huge, math.huge, -math.huge
     for _, n in ipairs(poly) do x0, x1, z0, z1 = min(x0, n.x), max(x1, n.x), min(z0, n.z), max(z1, n.z) end
-    local i0 = floor(world:toImage(x0, 0, z1)) - 1
-    local i1 = ceil(world:toImage(x1, 0, z0)) + 1
-    local _, j0 = world:toImage(x0, 4, z0)
-    local _, j1 = world:toImage(x1, 0, z1)
-    for j = max(0, floor(j0)), min(world.h - 1, ceil(j1)) do
+    local i0, i1, j0, j1 = screenBox(x0, x1, 0, 4, z0, z1)
+    for j = max(0, j0), min(world.h - 1, j1) do
         for i = max(0, i0), min(world.w - 1, i1) do
             local n = j * world.w + i
             if world.up[n] == 1 and world.wy[n] < 1 and Game.inPoly(poly, world.wx[n], world.wz[n]) then
@@ -1398,37 +1512,37 @@ local function enemyPicture(e)
     local k = e.kind
     if k == "ant" then
         local rate = (e.state == "chew" or e.state == "gnawShelf") and 14 or 8
-        return M.ant(e.h, floor(e.anim * rate) % 2)
+        return M.ant(turned(e.h), floor(e.anim * rate) % 2)
     elseif k == "pillbug" then
-        if e.rolling then return M.pillbug(e.h, true, floor(e.anim * 12) % 4) end
-        return M.pillbug(e.h, false)
+        if e.rolling then return M.pillbug(turned(e.h), true, floor(e.anim * 12) % 4) end
+        return M.pillbug(turned(e.h), false)
     elseif k == "mite" then
-        return M.mite(e.h)
+        return M.mite(turned(e.h))
     elseif k == "gnat" then
-        return M.gnat(e.h, floor(e.anim * 20) % 2)
+        return M.gnat(turned(e.h), floor(e.anim * 20) % 2)
     elseif k == "slug" then
-        return M.slug(e.h, floor(e.anim * (e.state == "eat" and 4 or 2)) % 2)
+        return M.slug(turned(e.h), floor(e.anim * (e.state == "eat" and 4 or 2)) % 2)
     elseif k == "spider" then
-        return M.spider(e.h, floor(e.anim * 10) % 2)
+        return M.spider(turned(e.h), floor(e.anim * 10) % 2)
     elseif k == "knight" then
-        return M.knight(e.h, floor(e.anim * 6) % 2)
+        return M.knight(turned(e.h), floor(e.anim * 6) % 2)
     elseif k == "queen" then
-        return M.queen(e.h, floor(e.anim * 5) % 2)
+        return M.queen(turned(e.h), floor(e.anim * 5) % 2)
     elseif k == "stag" then
-        return M.stag(e.h, floor(e.anim * (e.charging and 14 or 6)) % 2, e.charging ~= nil)
+        return M.stag(turned(e.h), floor(e.anim * (e.charging and 14 or 6)) % 2, e.charging ~= nil)
     elseif k == "dung" then
         -- It walks backwards, pushing: its picture faces away from the way it goes.
-        return M.dung(e.h + math.pi, floor(e.anim * 5) % 2)
+        return M.dung(turned(e.h + math.pi), floor(e.anim * 5) % 2)
     elseif k == "moth" then
-        return M.moth(e.h, floor(e.anim * 12) % 2)
+        return M.moth(turned(e.h), floor(e.anim * 12) % 2)
     elseif k == "waterbug" then
-        return M.waterbug(e.h, floor(e.anim * 5) % 2, e.state == "grab" or e.state == "lunge")
+        return M.waterbug(turned(e.h), floor(e.anim * 5) % 2, e.state == "grab" or e.state == "lunge")
     elseif k == "centipede" then
-        return M.centipede(e.h, floor(e.anim * 8) % 2)
+        return M.centipede(turned(e.h), floor(e.anim * 8) % 2)
     elseif k == "centseg" then
-        return M.centseg(e.h, floor(e.anim * 8 + (e.x + e.z) * 0.1) % 2)
+        return M.centseg(turned(e.h), floor(e.anim * 8 + (e.x + e.z) * 0.1) % 2)
     elseif k == "bombardier" then
-        return M.bombardier(e.h, floor(e.anim * 6) % 2, e.state == "siege")
+        return M.bombardier(turned(e.h), floor(e.anim * 6) % 2, e.state == "siege")
     end
     return M.brine(floor(e.anim * 4) % 2)
 end
@@ -1455,11 +1569,8 @@ end
 -- A pool of a lamp's light at night: the ground in it is its daytime self again.
 local function lightPool(x, z, r)
     local g = world:groundAt(x, z)
-    local i0 = floor(world:toImage(x - r, g, z + r)) - 1
-    local i1 = ceil(world:toImage(x + r, g, z - r)) + 1
-    local _, j0 = world:toImage(x - r, g + 6, z - r)
-    local _, j1 = world:toImage(x + r, g - 1, z + r)
-    for j = max(0, floor(j0)), min(world.h - 1, ceil(j1)) do
+    local i0, i1, j0, j1 = screenBox(x - r, x + r, g - 1, g + 6, z - r, z + r)
+    for j = max(0, j0), min(world.h - 1, j1) do
         for i = max(0, i0), min(world.w - 1, i1) do
             local n = j * world.w + i
             local d2 = (world.wx[n] - x) ^ 2 + (world.wz[n] - z) ^ 2
@@ -1497,11 +1608,8 @@ end
 -- Ink on the ground: the board under it goes dark, in a checker so the soil shows.
 local function stain(x, z, r, life)
     local g = world:groundAt(x, z)
-    local i0 = floor(world:toImage(x - r, g, z + r)) - 1
-    local i1 = ceil(world:toImage(x + r, g, z - r)) + 1
-    local _, j0 = world:toImage(x - r, g + 4, z - r)
-    local _, j1 = world:toImage(x + r, g - 1, z + r)
-    for j = max(0, floor(j0)), min(world.h - 1, ceil(j1)) do
+    local i0, i1, j0, j1 = screenBox(x - r, x + r, g - 1, g + 4, z - r, z + r)
+    for j = max(0, j0), min(world.h - 1, j1) do
         for i = max(0, i0), min(world.w - 1, i1) do
             local n = j * world.w + i
             local d2 = (world.wx[n] - x) ^ 2 + (world.wz[n] - z) ^ 2
@@ -1702,7 +1810,7 @@ local function drawBoard()
     -- Then everything standing up, furthest first.
     local movers = {}
     local function add(x, y, z, draw)
-        local _, _, d = T.project(x, y, z)
+        local _, _, d = world:toImage(x, y, z)
         movers[#movers + 1] = { d = d, draw = draw }
     end
     local wilt = 1 - game.heartHp / game.heartMax
@@ -1755,7 +1863,7 @@ local function drawBoard()
         add(c.x, g, c.z, function()
             local remap = T.DARKER
             if c.absorb then remap = floor(game.clock * 10) % 2 == 0 and T.DARKER2 or T.DARKER end
-            stamp(M.corpse(c.kind, c.h or 0, c.fruit), c.x, g + (c.carried and 2.5 or 0), c.z, remap)
+            stamp(M.corpse(c.kind, turned(c.h or 0), c.fruit), c.x, g + (c.carried and 2.5 or 0), c.z, remap)
         end)
     end
     for _, e in ipairs(game.enemies) do
@@ -1782,7 +1890,7 @@ local function drawBoard()
             local g = world:groundAt(bx, bz)
             add(bx, g, bz, function()
                 local cracked = e.ballHp < e.ballMax * 0.4
-                stamp(M.ball(e.h, floor((e.ballRoll or 0) * 3) % 4, cracked), bx, g, bz, e.ballFlash > 0 and T.FLASH or nil)
+                stamp(M.ball(turned(e.h), floor((e.ballRoll or 0) * 3) % 4, cracked), bx, g, bz, e.ballFlash > 0 and T.FLASH or nil)
             end)
         end
     end
@@ -2001,6 +2109,7 @@ local function tooltip()
         end
         return b.name .. (b.cost and (" (" .. b.cost .. ")") or "") .. ": " .. b.blurb, "w"
     end
+    if hover.turn then return say("TURN THE BOARD (E, SHIFT+E BACK)", "TURN THE BOARD"), "w" end
     if hover.wave then
         return game.phase == "build" and say("START THE NEXT WAVE (SPACE)", "START THE NEXT WAVE") or say("GAME SPEED (F)", "GAME SPEED"), "w"
     end
@@ -2099,6 +2208,40 @@ local function tooltip()
 end
 
 local drawInfo -- the info panel, drawn by the HUD and the loadout (below)
+
+-- The turn button: a ring of ground going round, an arrowhead on its end, and
+-- a mark on the ring for the side the camera is on.
+local function drawTurnButton()
+    local x, y, w, h = turnRect()
+    box(x, y, w, h, (hover.turn or turning) and "n" or "u", hover.turn and "t" or "o")
+    local cx, cy = x + floor(w / 2), y + floor(h / 2) + 1
+    local spin = turning and turning.t / TURN_TIME * (turning.angle > 0 and 1 or -1) or 0
+    local function at(a, rx, ry) return cx + floor(math.cos(a) * rx + 0.5), cy + floor(math.sin(a) * ry + 0.5) end
+    -- The ring is the ground seen from the camera: twice as wide as it is deep.
+    color("k")
+    for s = 0, 23 do
+        local i, j = at(s / 24 * 2 * math.pi, 7, 4)
+        love.graphics.rectangle("fill", i, j, 1, 1)
+    end
+    color("w")
+    local a0 = (spin - 0.15) * math.pi * 0.5
+    for s = 0, 12 do
+        local i, j = at(a0 + s / 24 * 2 * math.pi, 7, 4)
+        love.graphics.rectangle("fill", i, j, 1, 1)
+    end
+    -- The arrowhead at the end of the arc, pointing on round.
+    local ae = a0 + 12 / 24 * 2 * math.pi
+    local i, j = at(ae, 7, 4)
+    love.graphics.rectangle("fill", i - 1, j - 1, 3, 1)
+    love.graphics.rectangle("fill", i, j - 2, 1, 1)
+    love.graphics.rectangle("fill", i - 1, j - 1, 1, 3)
+    -- Which side: a dot per view, the one shown lit.
+    for q = 0, World.TURNS - 1 do
+        color(q == world.turn and "l" or "k")
+        love.graphics.rectangle("fill", x + 3 + q * 2, y + 2, 1, 1)
+    end
+    if not touch then text("E", x + w - 4, y + 1, "s") end
+end
 
 local function drawHud()
     -- The top strip.
@@ -2213,6 +2356,7 @@ local function drawHud()
         text(s2, wx + floor((ww - Font.width(s2)) / 2), wy + 9, "w")
         if not touch then text("F", wx + floor((ww - 3) / 2), wy + 18, "s") end
     end
+    drawTurnButton()
 
     -- The upgrade panel: what the selected thing can become.
     local cards = panelCards()
@@ -2541,6 +2685,27 @@ function love.draw()
     love.graphics.setColor(1, 1, 1)
     if painter or menu then
         -- Nothing to stretch: the loading bar or the picker is the whole screen.
+    elseif turning and not (pinch and not pinch.done) then
+        -- Going round: the frame that was left turns half way, then the new
+        -- one comes in from the other half, the ground unsquashed for the turn
+        -- (so a square stays a square going round) and the whole board lifting
+        -- a little off the table and back.
+        love.graphics.clear(unpack(T.RGB[IDX.o]))
+        local f = turning.t / TURN_TIME
+        local e = f * f * (3 - 2 * f)
+        local a, pic
+        if e < 0.5 then a, pic = turning.angle * e, turning.old
+        else a, pic = -turning.angle * (1 - e), canvas end
+        local lift = 1 - 0.06 * math.sin(math.pi * e)
+        love.graphics.push()
+        love.graphics.scale(zoom, zoom)
+        love.graphics.translate(turning.px, turning.py)
+        love.graphics.scale(lift, lift * 0.5)
+        love.graphics.rotate(a)
+        love.graphics.scale(1, 2)
+        love.graphics.translate(-turning.px, -turning.py)
+        love.graphics.draw(pic, 0, 0)
+        love.graphics.pop()
     elseif pinch and not pinch.done then
         -- Mid-pinch: the frame stretched about where the fingers started and
         -- moved to where they are (see love.touchpressed).

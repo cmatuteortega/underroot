@@ -1,12 +1,18 @@
 -- The board: everything that does not move, painted once.
 --
--- The camera never turns and has no perspective, so a picture of the board is
--- the same picture whatever happens on it. It is traced once at load, a pixel at
+-- The camera has no perspective, so a picture of the board is the same picture
+-- whatever happens on it. It is traced once at load, a pixel at
 -- a time, into one image -- and into a depth buffer the same size, which is what
 -- lets an ant go behind a slab of the patio or a mushroom stand in front of one
 -- without anything being traced again. The buffer also keeps where in the room
 -- each pixel is, which is how a click lands on the ground and how a shadow is
 -- laid on whatever is under the thing casting it.
+--
+-- The camera can go round the board a quarter turn at a time. It is the board
+-- that turns, not the camera: each of the four views is the room turned about
+-- the vertical (`turn`, 0..3) and laid in the same place, traced once like the
+-- first and kept. The game never knows; it lives in the room, and only what
+-- is drawn (toImage) and what is clicked (pick) goes through the turn.
 --
 -- The board is a diorama: a block of soil cut out of the patio, so its two near
 -- sides show the strata. It is written as an ASCII map, one character per
@@ -282,10 +288,31 @@ MAT.blade = { id = 15, ramp = RAMP.leaf }
 
 --- building it -------------------------------------------------------------------
 
+-- What a ray needs of a solid, worked out once it is where it will be traced.
+local function prepare(s)
+    if s.kind == "ell" then
+        local v = A.inv(s.at)
+        s.inv = v
+        s.bx = v[1] * DX + v[2] * DY + v[3] * DZ
+        s.by = v[5] * DX + v[6] * DY + v[7] * DZ
+        s.bz = v[9] * DX + v[10] * DY + v[11] * DZ
+        s.qa = s.bx * s.bx + s.by * s.by + s.bz * s.bz
+        -- A box round it for binning: the unit ball's box through the map.
+        local m, cx, cy, cz = s.at, s.at[4], s.at[8], s.at[12]
+        local ex = abs(m[1]) + abs(m[2]) + abs(m[3])
+        local ey = abs(m[5]) + abs(m[6]) + abs(m[7])
+        local ez = abs(m[9]) + abs(m[10]) + abs(m[11])
+        s.x0, s.x1, s.y0, s.y1, s.z0, s.z1 = cx - ex, cx + ex, cy - ey, cy + ey, cz - ez, cz + ez
+    elseif s.kind == "cyl" then
+        s.x0, s.x1, s.z0, s.z1 = s.cx - s.r, s.cx + s.r, s.cz - s.r, s.cz + s.r
+    end
+end
+
 function World.new(id)
     local self = setmetatable({}, World)
     local MAP = assert(MAPS[id or "crack"], "no map " .. tostring(id))
     self.id = id or "crack"
+    self.turn, self.views = 0, {}
     self.tiled = TILED[self.id] or false
     self.solids, self.pockets = {}, {}
     self.rows, self.cols = #MAP, #MAP[1]
@@ -312,22 +339,7 @@ function World.new(id)
             if s.y0 then s.y0, s.y1 = s.y0 + lift, s.y1 + lift end
         end
         nextPart = nextPart + 1
-        if kind == "ell" then
-            local v = A.inv(s.at)
-            s.inv = v
-            s.bx = v[1] * DX + v[2] * DY + v[3] * DZ
-            s.by = v[5] * DX + v[6] * DY + v[7] * DZ
-            s.bz = v[9] * DX + v[10] * DY + v[11] * DZ
-            s.qa = s.bx * s.bx + s.by * s.by + s.bz * s.bz
-            -- A box round it for binning: the unit ball's box through the map.
-            local m, cx, cy, cz = s.at, s.at[4], s.at[8], s.at[12]
-            local ex = abs(m[1]) + abs(m[2]) + abs(m[3])
-            local ey = abs(m[5]) + abs(m[6]) + abs(m[7])
-            local ez = abs(m[9]) + abs(m[10]) + abs(m[11])
-            s.x0, s.x1, s.y0, s.y1, s.z0, s.z1 = cx - ex, cx + ex, cy - ey, cy + ey, cz - ez, cz + ez
-        elseif kind == "cyl" then
-            s.x0, s.x1, s.z0, s.z1 = s.cx - s.r, s.cx + s.r, s.cz - s.r, s.cz + s.r
-        end
+        prepare(s)
         self.solids[#self.solids + 1] = s
         return s
     end
@@ -438,20 +450,101 @@ function World.new(id)
 
     lift = 0
     self:route()
+    self.W, self.D = W, D
+    local v = self:frame(0)
+    self.i0, self.j0, self.w, self.h = v.i0, v.j0, v.w, v.h
+    return self
+end
 
-    -- How much of the screen the board covers, with a margin round it.
+--- the four views -----------------------------------------------------------------
+
+-- The room turned `q` quarter turns about the vertical and laid back where the
+-- board was: a heading h in the room is h + q * pi / 2 in the view, the same
+-- way round as a model's heading.
+local TURN = {
+    [0] = function(x, z) return x, z end,
+    function(x, z, W, D) return D - z, x end,
+    function(x, z, W, D) return W - x, D - z end,
+    function(x, z, W, D) return z, W - x end,
+}
+local UNTURN = {
+    [0] = function(x, z) return x, z end,
+    function(x, z, W, D) return z, D - x end,
+    function(x, z, W, D) return W - x, D - z end,
+    function(x, z, W, D) return W - z, x end,
+}
+World.TURNS = 4
+
+-- Room point to view point, and back, for turn q (the board's own by default).
+function World:toView(x, z, q) return TURN[q or self.turn](x, z, self.W, self.D) end
+function World:toRoom(x, z, q) return UNTURN[q or self.turn](x, z, self.W, self.D) end
+
+-- The view cell room cell (c, r) is in, and the view's size in cells; and back.
+function World:viewCell(c, r, q)
+    q = q or self.turn
+    local vc, vr = TURN[q](c + 0.5, r + 0.5, self.cols, self.rows)
+    local odd = q % 2 == 1
+    return floor(vc), floor(vr), odd and self.rows or self.cols, odd and self.cols or self.rows
+end
+function World:roomCell(vc, vr, q)
+    local c, r = UNTURN[q or self.turn](vc + 0.5, vr + 0.5, self.cols, self.rows)
+    return floor(c), floor(r)
+end
+
+-- How much of the screen view q of the board covers, with a margin round it.
+function World:frame(q)
     local i0, j0, i1, j1 = math.huge, math.huge, -math.huge, -math.huge
-    for _, x in ipairs({ 0, W }) do
-        for _, z in ipairs({ 0, D }) do
+    for _, x in ipairs({ 0, self.W }) do
+        for _, z in ipairs({ 0, self.D }) do
             for _, y in ipairs(self.tiled and { -3 * Tiled.L - 2, 4 * Tiled.L + 20 } or { -12, 30 }) do
-                local i, j = T.project(x, y, z)
+                local vx, vz = self:toView(x, z, q)
+                local i, j = T.project(vx, y, vz)
                 i0, i1, j0, j1 = min(i0, i), max(i1, i), min(j0, j), max(j1, j)
             end
         end
     end
-    self.i0, self.j0 = floor(i0) - 4, floor(j0) - 4
-    self.w, self.h = ceil(i1) - self.i0 + 4, ceil(j1) - self.j0 + 4
-    return self
+    local v = { q = q, variants = {} }
+    v.i0, v.j0 = floor(i0) - 4, floor(j0) - 4
+    v.w, v.h = ceil(i1) - v.i0 + 4, ceil(j1) - v.j0 + 4
+    return v
+end
+
+-- The solids turned into view q, ready to trace.
+function World:solidsIn(q)
+    if q == 0 then return self.solids end
+    local m = ({ { 0, 0, -1, self.D, 0, 1, 0, 0, 1, 0, 0, 0 },
+        { -1, 0, 0, self.W, 0, 1, 0, 0, 0, 0, -1, self.D },
+        { 0, 0, 1, 0, 0, 1, 0, 0, -1, 0, 0, self.W } })[q]
+    local out = {}
+    for n, s in ipairs(self.solids) do
+        local t = {}
+        for k, val in pairs(s) do t[k] = val end
+        if s.kind == "ell" then
+            t.at = A.mul(m, s.at)
+        elseif s.kind == "box" then
+            local ax, az = self:toView(s.x0, s.z0, q)
+            local bx, bz = self:toView(s.x1, s.z1, q)
+            t.x0, t.x1, t.z0, t.z1 = min(ax, bx), max(ax, bx), min(az, bz), max(az, bz)
+        else
+            t.cx, t.cz = self:toView(s.cx, s.cz, q)
+        end
+        prepare(t)
+        out[n] = t
+    end
+    return out
+end
+
+-- What the paint keeps of a view, worn by the board while it is the one shown.
+local WORN = { "image", "key", "dep", "wx", "wy", "wz", "up", "rgb", "variants", "i0", "j0", "w", "h" }
+
+-- Is view q painted yet?
+function World:painted(q) return self.views[q] ~= nil end
+
+-- Shows view q, which must be painted.
+function World:setTurn(q)
+    local v = assert(self.views[q], "view not painted")
+    self.turn = q
+    for _, k in ipairs(WORN) do self[k] = v[k] end
 end
 
 -- The trail as a flow field: every trail tile knows how many steps it is from
@@ -498,11 +591,11 @@ end
 -- pixel only asks the handful that could be in it.
 local BIN = 16
 
-function World:bin()
-    local bw, bh = ceil(self.w / BIN), ceil(self.h / BIN)
+function World:bin(v, solids)
+    local bw, bh = ceil(v.w / BIN), ceil(v.h / BIN)
     local bins = {}
     for n = 1, bw * bh do bins[n] = {} end
-    for _, s in ipairs(self.solids) do
+    for _, s in ipairs(solids) do
         local i0, j0, i1, j1 = math.huge, math.huge, -math.huge, -math.huge
         for _, x in ipairs({ s.x0, s.x1 }) do
             for _, y in ipairs({ s.y0, s.y1 }) do
@@ -512,8 +605,8 @@ function World:bin()
                 end
             end
         end
-        i0, i1 = floor(i0) - self.i0 - 1, ceil(i1) - self.i0 + 1
-        j0, j1 = floor(j0) - self.j0 - 1, ceil(j1) - self.j0 + 1
+        i0, i1 = floor(i0) - v.i0 - 1, ceil(i1) - v.i0 + 1
+        j0, j1 = floor(j0) - v.j0 - 1, ceil(j1) - v.j0 + 1
         for by = max(0, floor(j0 / BIN)), min(bh - 1, floor(j1 / BIN)) do
             for bx = max(0, floor(i0 / BIN)), min(bw - 1, floor(i1 / BIN)) do
                 local list = bins[by * bw + bx + 1]
@@ -524,23 +617,24 @@ function World:bin()
     return bins, bw
 end
 
--- Traces every solid into a buffer the board's size, keeping where in the room
--- each pixel is (wx, wy, wz) and whether it faces up. `yield` is told each
+-- Traces every solid into a buffer the size of view `v`, keeping where in the
+-- room each pixel is (wx, wy, wz) and whether it faces up. `yield` is told each
 -- row done.
-function World:trace(yield)
+function World:trace(v, yield)
     cellAt = self.cellAt -- the materials' prints ask the board being painted
-    local w, h = self.w, self.h
+    local w, h = v.w, v.h
     local b = T.buffer(w, h)
     b.open = true
     b.wx = ffi.new("float[?]", w * h)
     b.wy = ffi.new("float[?]", w * h)
     b.wz = ffi.new("float[?]", w * h)
     b.up = ffi.new("uint8_t[?]", w * h)
-    local bins, bw = self:bin()
+    local bins, bw = self:bin(v, self:solidsIn(v.q))
+    local unturn, W, D = UNTURN[v.q], self.W, self.D
 
     for pj = 0, h - 1 do
         for pi = 0, w - 1 do
-            local ox, oy, oz = T.origin(self.i0 + pi + 0.5, self.j0 + pj + 0.5, BACK)
+            local ox, oy, oz = T.origin(v.i0 + pi + 0.5, v.j0 + pj + 0.5, BACK)
             local bt, nx, ny, nz, best = math.huge, 0, 1, 0, nil
             local bux, buy, buz
             for _, s in ipairs(bins[floor(pj / BIN) * bw + floor(pi / BIN) + 1]) do
@@ -553,6 +647,7 @@ function World:trace(yield)
             local n = pj * w + pi
             if best then
                 local x, y, z = ox + DX * bt, oy + DY * bt, oz + DZ * bt
+                x, z = unturn(x, z, W, D) -- the room, for the prints and the game
                 local m = best.mat
                 local key, lev = T.shade(m.ramp, nx, ny, nz)
                 if m.print then
@@ -579,29 +674,37 @@ function World:trace(yield)
 end
 
 -- What is traced over a tiled board: everything there is, for it has no ground.
-function World:traceProps(yield) return self:trace(yield) end
+function World:traceProps(v, yield) return self:trace(v, yield) end
 
--- Paints the board. A coroutine body: it yields its progress (0..1) every few
--- rows so the load screen can say how far along it is.
-function World:paint()
-    if self.tiled then return Tiled.paint(self) end
-    local w, h = self.w, self.h
-    local b = self:trace(function(pj) coroutine.yield(pj / h) end)
-    self.key, self.dep = b.key, b.dep
-    self.wx, self.wy, self.wz, self.up = b.wx, b.wy, b.wz, b.up
+-- Paints view q of the board (the first, by default) and keeps it; the first
+-- one painted is shown. A coroutine body: it yields its progress (0..1) every
+-- few rows so the load screen can say how far along it is.
+function World:paint(q)
+    q = q or 0
+    local v = self:frame(q)
+    if self.tiled then
+        Tiled.paint(self, v)
+    else
+        local w, h = v.w, v.h
+        local b = self:trace(v, function(pj) coroutine.yield(pj / h) end)
+        v.key, v.dep = b.key, b.dep
+        v.wx, v.wy, v.wz, v.up = b.wx, b.wy, b.wz, b.up
 
-    -- Off the board is the dark under the patio.
-    local data = love.image.newImageData(w, h)
-    local bg = T.RGB[IDX.o]
-    for pj = 0, h - 1 do
-        for pi = 0, w - 1 do
-            local k = self.key[pj * w + pi]
-            local c = k ~= 0 and T.RGB[k] or bg
-            data:setPixel(pi, pj, c[1], c[2], c[3], 1)
+        -- Off the board is the dark under the patio.
+        local data = love.image.newImageData(w, h)
+        local bg = T.RGB[IDX.o]
+        for pj = 0, h - 1 do
+            for pi = 0, w - 1 do
+                local k = v.key[pj * w + pi]
+                local c = k ~= 0 and T.RGB[k] or bg
+                data:setPixel(pi, pj, c[1], c[2], c[3], 1)
+            end
         end
+        v.image = love.graphics.newImage(data)
+        v.image:setFilter("nearest", "nearest")
     end
-    self.image = love.graphics.newImage(data)
-    self.image:setFilter("nearest", "nearest")
+    self.views[q] = v
+    if not self.image then self:setTurn(q) end
 end
 
 -- The board under a weather: the same picture, remapped a pixel at a time
@@ -662,7 +765,7 @@ end
 -- The height of the ground at (x, z): the patio or the soil in the crack.
 function World:groundAt(x, z)
     local ch = self.cellAt(x, z)
-    if self.tiled then return Tiled.ground(self, ch, floor(x / TILE), floor(z / TILE)) end
+    if self.tiled then return Tiled.ground(self, ch, floor(x / TILE), floor(z / TILE), 0) end
     if ch == "#" then return SLAB end
     return 0
 end
@@ -671,8 +774,10 @@ end
 function World:wetAt(x, z) return WET[self.cellAt(x, z)] or false end
 function World:floodedAt(x, z) return self.cellAt(x, z) == "~" end
 
--- Screen pixel (relative to the board's image) of a room point, and its depth.
+-- Screen pixel (relative to the board's image) of a room point, and its depth,
+-- in the view shown.
 function World:toImage(x, y, z)
+    x, z = TURN[self.turn](x, z, self.W, self.D)
     local i, j, d = T.project(x, y, z)
     return i - self.i0, j - self.j0, d
 end
