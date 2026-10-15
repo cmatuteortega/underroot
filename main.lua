@@ -242,6 +242,28 @@ local function stamp(pic, x, y, z, remap)
     end
 end
 
+-- A one-pixel line in key k round a picture stamped as above: every empty pixel
+-- next to one of its own, as near as the pixel it borders, so the board in front
+-- still hides it.
+local function outline(pic, x, y, z, k)
+    local si, sj, d = world:toImage(x, y, z)
+    local bi, bj = floor(si) - pic.oi, floor(sj) - pic.oj
+    local w, h, key, dep = pic.w, pic.h, pic.key, pic.dep
+    local function at(pi, pj)
+        if pi < 0 or pj < 0 or pi >= w or pj >= h then return nil end
+        local n = pj * w + pi
+        if key[n] ~= 0 then return dep[n] end
+    end
+    for pj = -1, h do
+        for pi = -1, w do
+            if not at(pi, pj) then
+                local near = at(pi - 1, pj) or at(pi + 1, pj) or at(pi, pj - 1) or at(pi, pj + 1)
+                if near and visible(bi + pi, bj + pj, d + near) then put(k, bi + pi, bj + pj) end
+            end
+        end
+    end
+end
+
 -- The same picture flat on the screen, for the toolbar and the upgrade cards.
 -- Made into an image once per picture and remap, then drawn whole.
 local blits = setmetatable({}, { __mode = "k" })
@@ -1438,7 +1460,8 @@ local function drawLink(l, highlight)
     if surge then core, under = IDX.l, IDX.c end
     local hurt = l.state == "alive" and l.hp < game:linkHp() * 0.5
     local gap0, gap1 = 2, -1 -- the part of a cut link that is not there
-    if l.state == "cut" then
+    -- A salted link never regrows, so it has no gap: it lies there whole, crusted.
+    if l.state == "cut" and not l.salted then
         local open = 0.7 * (1 - min(1, l.regrow))
         gap0, gap1 = 0.5 - open / 2, 0.5 + open / 2
     end
@@ -1453,8 +1476,20 @@ local function drawLink(l, highlight)
             i, j = floor(i), floor(j)
             if visible(i, j, d + 1.5) then
                 local k = core
-                if l.state == "cut" then
-                    k = l.salted and IDX.w or (l.hand or l.regrow > 0) and IDX.c or IDX.n
+                local u = under
+                if l.state == "cut" and l.salted then
+                    -- Crusted over: cream and grey crystals on an ash bed, a few
+                    -- of them catching the light, and a rust cross on the middle
+                    -- of it: dead, prune it.
+                    k, u = highlight or ((s % 3 == 1) and IDX.s or IDX.w), IDX.k
+                    if s % 4 == 0 and floor(t * 3 + s * 0.37) % 3 == 0 then put(IDX.w, i, j - 1) end
+                    if s == floor(steps / 2) then
+                        put(IDX.r, i - 2, j - 2); put(IDX.r, i - 1, j - 1); put(IDX.r, i + 1, j + 1); put(IDX.r, i + 2, j + 2)
+                        put(IDX.r, i + 2, j - 2); put(IDX.r, i + 1, j - 1); put(IDX.r, i - 1, j + 1); put(IDX.r, i - 2, j + 2)
+                        k = IDX.r
+                    end
+                elseif l.state == "cut" then
+                    k = (l.hand or l.regrow > 0) and IDX.c or IDX.n
                     if abs(f - gap0) < 0.03 or abs(f - gap1) < 0.03 then k = IDX.r end
                 elseif l.state == "grow" and abs(f - l.grow) < 0.04 then
                     k = IDX.l
@@ -1467,8 +1502,8 @@ local function drawLink(l, highlight)
                     end
                 end
                 if hurt and s % 5 == 0 and floor(t * 6) % 2 == 0 then k = IDX.r end
-                put(under, i, j + 1)
-                if l.thick then put(under, i, j + 2) end
+                put(u, i, j + 1)
+                if l.thick then put(u, i, j + 2) end
                 put(k, i, j)
                 if l.thick then put(k, i, j + 1) end
             end
@@ -1662,6 +1697,38 @@ local function stain(x, z, r, life)
     end
 end
 
+-- A sterilised pocket: a crust of salt on the ground round it, drying back to
+-- nothing as the 12 s run out, and a cream bar over it for the time left.
+local function saltCrust(n)
+    local frac = min(1, n.salted / 12)
+    local r = 3 + 5 * frac
+    local g = world:groundAt(n.x, n.z)
+    local i0, i1, j0, j1 = screenBox(n.x - r, n.x + r, g - 1, g + 4, n.z - r, n.z + r)
+    for j = max(0, j0), min(world.h - 1, j1) do
+        for i = max(0, i0), min(world.w - 1, i1) do
+            local p = j * world.w + i
+            local d2 = (world.wx[p] - n.x) ^ 2 + (world.wz[p] - n.z) ^ 2
+            if world.up[p] == 1 and d2 <= r * r then
+                if d2 < (r * 0.55) ^ 2 then
+                    put((i + j) % 2 == 0 and IDX.w or IDX.s, i, j)
+                elseif (i + 2 * j) % 3 == 0 then
+                    put(IDX.w, i, j)
+                end
+            end
+        end
+    end
+end
+
+-- On the pocket itself, over its threads: a glinting crystal where the knot
+-- would be.
+local function saltKnot(n)
+    local i, j = world:toImage(n.x, n.y + 0.5, n.z)
+    i, j = floor(i), floor(j)
+    put(IDX.k, i - 1, j + 1); put(IDX.k, i + 1, j + 1); put(IDX.k, i, j + 2)
+    put(IDX.s, i - 1, j); put(IDX.s, i + 1, j); put(IDX.w, i, j - 1); put(IDX.w, i, j + 1)
+    put(floor(game.clock * 4) % 2 == 0 and IDX.w or IDX.s, i, j)
+end
+
 -- A web thrown over a tower.
 local function web(x, y, z)
     local i, j = world:toImage(x, y, z)
@@ -1748,13 +1815,18 @@ local function drawBoard()
     for _, m in ipairs(game.mats) do
         if m.kind == "mat" then
             local fading = not m.fed and m.life < 8 and floor(game.clock * 4) % 2 == 0
-            stamp(towerLook(m, m.c + m.r), m.x, m.y, m.z, fading and T.DARKER or nil)
+            local look = towerLook(m, m.c + m.r)
+            if selected == m then outline(look, m.x, m.y, m.z, IDX.w) end
+            stamp(look, m.x, m.y, m.z, fading and T.DARKER or nil)
         end
     end
     local trailMode = D.TOWER[mode] and D.TOWER[mode].onTrail
     if trailMode and hover.c and not hover.button and mode == "mat" and world:distAt(hover.c, hover.r) then
         local ok = game:canLay(mode, hover.c, hover.r)
         stamp(M.tower(mode), hover.c * 16 + 8, world:groundAt(hover.c * 16 + 8, hover.r * 16 + 8), hover.r * 16 + 8, ok and T.DARKER or T.DARKER2)
+    end
+    for _, n in ipairs(game.nodes) do
+        if (n.salted or 0) > 0 then saltCrust(n) end
     end
     for _, l in ipairs(game.links) do
         local hl
@@ -1765,7 +1837,12 @@ local function drawBoard()
         drawLink(l, hl)
     end
     for _, n in ipairs(game.nodes) do
-        if not n.heart and not n.tower and #n.links > 0 then knot(n, n.conn and IDX.c or IDX.d) end
+        if (n.salted or 0) > 0 then
+            saltKnot(n)
+            bar(n.x, n.y + 9, n.z, min(1, n.salted / 12), IDX.w)
+        elseif not n.heart and not n.tower and #n.links > 0 then
+            knot(n, n.conn and IDX.c or IDX.d)
+        end
     end
 
     -- Fairy rings: the ground inside goes to moss, and a ring of tiny white
@@ -1865,7 +1942,11 @@ local function drawBoard()
         local t = n.tower
         if t then
             add(n.x, n.y, n.z, function()
-                stamp(towerLook(t, n.id), n.x, n.y, n.z, t.flash > 0 and T.FLASH or remapFor(t))
+                local look = towerLook(t, n.id)
+                -- Picked up to pull a thread from, or selected: lined in one pixel.
+                if mode == "grow" and drag == n then outline(look, n.x, n.y, n.z, IDX.l)
+                elseif selected == t then outline(look, n.x, n.y, n.z, IDX.w) end
+                stamp(look, n.x, n.y, n.z, t.flash > 0 and T.FLASH or remapFor(t))
                 if t.boost then circling(n.x, n.y + 7, n.z, IDX.w, 4, 6) end
                 -- A stinkhorn always has a fly or two about it.
                 if t.kind == "stink" and t.hunger ~= "dormant" and t.branch ~= 2 then circling(n.x, n.y + 17, n.z, IDX.o, 2, 4) end
@@ -1888,7 +1969,9 @@ local function drawBoard()
     for _, m in ipairs(game.mats) do
         if m.kind == "shelf" then
             add(m.x, m.y, m.z, function()
-                stamp(towerLook(m, m.c + m.r), m.x, m.y, m.z, m.chewed and floor(game.clock * 10) % 2 == 0 and T.DARKER or nil)
+                local look = towerLook(m, m.c + m.r)
+                if selected == m then outline(look, m.x, m.y, m.z, IDX.w) end
+                stamp(look, m.x, m.y, m.z, m.chewed and floor(game.clock * 10) % 2 == 0 and T.DARKER or nil)
                 local hp = game:maxHp(m)
                 if m.hp < hp - 0.5 then bar(m.x, m.y + 20, m.z, m.hp / hp, IDX.t) end
             end)

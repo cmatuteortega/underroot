@@ -115,6 +115,9 @@ red bar), then goes dormant (darker still).
 the Heart. Each node it reaches is sterilised: its tower dies, the pocket can't
 be built on for 12 s, and the link it came down is salted (it won't regrow; prune
 it). If the thread it is on is pruned or cut, it falls into the soil and fizzles.
+A salted link lies there whole, crusted cream and grey with a rust cross on it; a
+salted pocket wears a crust of salt that dries back as its 12 s run out, with a
+cream bar over it counting them down.
 That is the design doc's counterplay: prune the link it is on, accept the loss,
 save what is downstream.
 
