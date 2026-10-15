@@ -119,7 +119,7 @@ function B.generic(g)
         end
         for _, l in ipairs(g.links) do
             if l.state == "cut" and not l.hand then
-                if l.salted then g:prune(l) elseif g.nutrients > g:repairCost(l) + 5 then g:repair(l) end
+                if g.nutrients > g:repairCost(l) + 5 then g:repair(l) end
             end
         end
         -- The next species on the best pocket it can reach.
@@ -262,7 +262,7 @@ local function run(seed, lv, generic, challenge)
         end
         for _, l in ipairs(g.links) do
             if l.state == "cut" and not l.hand then
-                if l.salted then g:prune(l) elseif g.nutrients > g:repairCost(l) + 5 then g:repair(l) end
+                if g.nutrients > g:repairCost(l) + 5 then g:repair(l) end
             end
         end
         if g.phase == "build" then g:startWave() end

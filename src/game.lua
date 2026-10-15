@@ -321,7 +321,7 @@ function Game:repairCost(l) return max(1, floor(l.cost * D.LINK.repair + 0.5)) e
 function Game:repairable()
     local list, h = {}, self.heart
     for _, l in ipairs(self.links) do
-        if l.state == "cut" and not l.hand and not l.salted then
+        if l.state == "cut" and not l.hand then
             local hop = min(l.a.conn and l.a.hop or huge, l.b.conn and l.b.hop or huge)
             local d = min(dist(l.a, h), dist(l.b, h))
             list[#list + 1] = { l = l, hop = hop, d = d }
@@ -344,7 +344,7 @@ function Game:repairAll()
 end
 
 function Game:repair(l)
-    if l.state ~= "cut" or l.hand or l.salted then return false end
+    if l.state ~= "cut" or l.hand then return false end
     local c = self:repairCost(l)
     if self.nutrients < c then return false end
     self.nutrients = self.nutrients - c
@@ -1163,7 +1163,7 @@ function Game:mane(n, t, S, power, boost, dt)
             if l.state == "alive" and l.hp < full then
                 l.hp = min(full, l.hp + S("heal") * power * boost * dt)
                 busy = true
-            elseif l.state == "cut" and not l.salted then
+            elseif l.state == "cut" then
                 l.regrow = l.regrow + S("regrow") * power * boost * dt
                 busy = true
             end
@@ -2337,8 +2337,12 @@ function Game:slide(e, d, dt)
             local other = o.a == node and o.b or o.a
             if o ~= l and alive(o) and other.hop > node.hop and other.hop < huge then nextLink = o break end
         end
-        self:cut(l)
-        l.salted = true
+        -- Salted through: the link is gone, nothing to regrow. Draw it again.
+        self.stats.cuts = self.stats.cuts + 1
+        self.events.cut = true
+        local mx, mz = (l.a.x + l.b.x) / 2, (l.a.z + l.b.z) / 2
+        self:burst(mx, 1, mz, 8, { "w", "s", "r" }, 18)
+        self:removeLink(l)
         if node.tower then
             self:burst(node.x, node.y + 6, node.z, 14, { "w", "s", "r" }, 26)
             self:say("STERILISED", node.x, node.y + 14, node.z, "r")

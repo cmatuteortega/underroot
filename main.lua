@@ -1454,7 +1454,7 @@ local function drawLink(l, highlight)
             if visible(i, j, d + 1.5) then
                 local k = core
                 if l.state == "cut" then
-                    k = l.salted and IDX.w or (l.hand or l.regrow > 0) and IDX.c or IDX.n
+                    k = (l.hand or l.regrow > 0) and IDX.c or IDX.n
                     if abs(f - gap0) < 0.03 or abs(f - gap1) < 0.03 then k = IDX.r end
                 elseif l.state == "grow" and abs(f - l.grow) < 0.04 then
                     k = IDX.l
@@ -1760,7 +1760,7 @@ local function drawBoard()
         local hl
         if hover.link == l then
             if mode == "prune" then hl = IDX.r
-            elseif l.state == "cut" and not l.hand and not l.salted then hl = IDX.l end
+            elseif l.state == "cut" and not l.hand then hl = IDX.l end
         end
         drawLink(l, hl)
     end
@@ -2222,7 +2222,6 @@ local function tooltip()
             return "PRUNE LINK: +" .. floor(l.cost * (l.state == "alive" and D.LINK.prune or D.LINK.prune * 0.5)), "r"
         end
         if l.state == "cut" then
-            if l.salted then return "SALTED LINK. IT WILL NOT REGROW: PRUNE IT", "w" end
             if l.hand then return "REGROWING", "l" end
             return say("CUT LINK. CLICK TO REGROW: ", "CUT LINK. TAP TO REGROW: ") .. game:repairCost(l), "l"
         end

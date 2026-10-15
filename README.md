@@ -113,9 +113,9 @@ red bar), then goes dormant (darker still).
 
 **Pruning and brine.** A brine drop that touches a link runs down it away from
 the Heart. Each node it reaches is sterilised: its tower dies, the pocket can't
-be built on for 12 s, and the link it came down is salted (it won't regrow; prune
-it). If the thread it is on is pruned or cut, it falls into the soil and fizzles.
-That is the design doc's counterplay: prune the link it is on, accept the loss,
+be built on for 12 s, and the link it came down is destroyed outright (it
+can't be regrown; draw it again). If the thread it is on is pruned or cut, it
+falls into the soil and fizzles. That is the design doc's counterplay: prune the link it is on, accept the loss,
 save what is downstream.
 
 **Regrowing.** Lion's Mane tends the branch below it: it heals chewed links and
