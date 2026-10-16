@@ -1985,13 +1985,16 @@ local function enemyPicture(e)
         if e.state == "belly" then return M.click(turned(e.h), floor(e.anim * 8) % 2, "belly") end
         if e.state == "leap" then return M.click(turned(e.h), 0, "leap", floor((e.spin or 0) * 4) % 4) end
         return M.click(turned(e.h), floor(e.anim * 5) % 2)
+    elseif k == "mole" then
+        local dig = e.state == "dig" or e.state == "surface"
+        return M.mole(turned(e.h), floor(e.anim * (dig and 7 or 5)) % 2, dig)
     end
     return M.brine(floor(e.anim * 4) % 2)
 end
 
 local SHADOW = { ant = 4, pillbug = 4.5, brine = 3.5, gnat = 2.5, slug = 6, spider = 5, knight = 5,
     queen = 11, stag = 13, dung = 10, moth = 3.5, waterbug = 12, centipede = 6, centseg = 5.5, bombardier = 10,
-    springtail = 3, click = 10 }
+    springtail = 3, click = 10, mole = 10 }
 
 -- Something under the water: rings spreading on the surface where it is.
 local function ripples(x, z, t)
@@ -2006,6 +2009,45 @@ local function ripples(x, z, t)
                 if visible(floor(i), floor(j), d + 1) then put(r < 9 and IDX.w or IDX.s, i, j) end
             end
         end
+    end
+end
+
+-- Something burrowing: the soil heaving up over it, a ridge of loose crumbs.
+function flair.heave(x, z, t)
+    for s = 0, 13 do
+        local a = s * 2.39996 + t * 3
+        local r = (s % 4) * 1.6 + math.sin(t * 9 + s) * 0.8
+        local px, pz = x + math.cos(a) * r, z + math.sin(a) * r
+        local i, j, d = world:toImage(px, world:groundAt(px, pz) + 0.5 + (s % 3) * 0.6, pz)
+        if visible(floor(i), floor(j), d + 1) then put(s % 3 == 0 and IDX.u or (s % 3 == 1 and IDX.n or IDX.t), i, j) end
+    end
+end
+
+-- A tunnel's mouth: a dark hole in a rim of thrown-up soil. While the tunnel
+-- is open, a line of loose soil over where it runs between its two ends.
+function flair.hole(x, z, r)
+    local g = world:groundAt(x, z)
+    local R = r + 2.5
+    local i0, i1, j0, j1 = screenBox(x - R, x + R, g - 1, g + 4, z - R, z + R)
+    for j = max(0, j0), min(world.h - 1, j1) do
+        for i = max(0, i0), min(world.w - 1, i1) do
+            local n = j * world.w + i
+            local d2 = (world.wx[n] - x) ^ 2 + (world.wz[n] - z) ^ 2
+            if world.up[n] == 1 and d2 <= R * R then
+                if d2 <= (r * 0.6) ^ 2 then put(IDX.o, i, j)
+                elseif d2 <= r * r then put(IDX.u, i, j)
+                elseif (i + j) % 2 == 0 then put(IDX.t, i, j) end
+            end
+        end
+    end
+end
+function flair.tunnelLine(a, b)
+    local len = math.sqrt((b.x - a.x) ^ 2 + (b.z - a.z) ^ 2)
+    for s = 4, len - 4, 3 do
+        local f = s / len
+        local x, z = a.x + (b.x - a.x) * f, a.z + (b.z - a.z) * f
+        local i, j, d = world:toImage(x, world:groundAt(x, z) + 0.2, z)
+        if visible(floor(i), floor(j), d + 1) then put(floor(s / 3) % 2 == 0 and IDX.n or IDX.u, i, j) end
     end
 end
 
@@ -2219,8 +2261,13 @@ local function drawBoard()
     end
     for _, p in ipairs(game.fx) do if p.splat then flair.splat(p) end end
     for _, p in ipairs(game.fx) do if p.shock then flair.shock(p) end end
+    for _, t in ipairs(game.tunnels) do
+        if t.open then flair.tunnelLine(t.a, t.b); flair.hole(t.b.x, t.b.z, 6) end
+        flair.hole(t.a.x, t.a.z, 6)
+    end
     for _, e in ipairs(game.enemies) do
-        if e.under then ripples(e.x, e.z, game.clock)
+        if e.under and e.kind == "mole" then flair.heave(e.x, e.z, game.clock)
+        elseif e.under then ripples(e.x, e.z, game.clock)
         elseif SHADOW[e.kind] and not e.hidden then shadow(e.x, e.z, SHADOW[e.kind]) end
         if e.ballHp and e.ballHp > 0 then
             local bx, bz = game:ballAt(e)
@@ -2416,11 +2463,12 @@ local function drawBoard()
     end
     for _, c in ipairs(game.corpses) do
         local g = world:groundAt(c.x, c.z)
-        add(c.x, g, c.z, function()
+        -- Carried down a tunnel, it is out of sight with its ant.
+        if not (c.carried and c.carried.hidden) then add(c.x, g, c.z, function()
             local remap = T.DARKER
             if c.absorb then remap = floor(game.clock * 10) % 2 == 0 and T.DARKER2 or T.DARKER end
             stamp(M.corpse(c.kind, turned(c.h or 0), c.fruit), c.x, g + (c.carried and 2.5 or 0), c.z, remap)
-        end)
+        end) end
     end
     for _, e in ipairs(game.enemies) do
         local size = D.ENEMIES[e.kind].size or 1
@@ -3009,7 +3057,7 @@ local function drawHud()
             color("t")
             love.graphics.rectangle("fill", bx, by + 6, floor(w * boss.ballHp / boss.ballMax), 2)
         end
-        local name = d.name .. (boss.under and " (UNDER WATER)" or "")
+        local name = d.name .. (boss.under and (boss.kind == "mole" and " (UNDERGROUND)" or " (UNDER WATER)") or "")
         text(name, floor(bx + (w - Font.width(name)) / 2), by + (boss.ballHp and boss.ballHp > 0 and 11 or 7), "w")
     end
     if game.bossIntro then

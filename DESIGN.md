@@ -113,6 +113,7 @@ different assumption about how the network behaves.
 | Queen Ant | Lays workers as she walks and gnaws every thread within reach without stopping | Area damage and corpse management at scale |
 | Stag Beetle | Charges every few seconds: its jaws shear any link they pass and the thunder of it stuns towers beside the trail | Whether you have a second route to the Heart, and towers set back from the path |
 | Dung Beetle | Walks backwards pushing a ball bigger than itself. The ball soaks every hit and flattens links, mats and shelves it rolls over; broken, it is a feast for the network | Burst damage, and pruning ahead of the ball |
+| Mole Cricket | Stops to dig, burrows across to a later stretch of the trail and leaves the tunnel open; everything walking behind it takes the shortcut until it is killed, and then the tunnel caves in on them | Defence in depth rather than one kill zone, and burst damage while it digs |
 | Giant Water Bug | Lurks under the flooded lane, surfaces beside a fruiting body and drags it under | Building on high ground and keeping a Lion's Mane in reach |
 | Giant Centipede | A long train of armored segments, each with its own HP; every segment cuts the links it crosses, and it splits where it is broken | Area damage across a whole lane, and rebuilding behind it |
 | Bombardier Beetle | Turns at the end of the trail and sprays a boiling cone that hits the sprout itself | Using Shelf Fungus and leaves as cover for the sprout |
@@ -185,7 +186,8 @@ Seven levels, each teaching one new idea about the network.
 | 7. The Lawn | Open grass, human tools | Everything at once | Beetle Knight, Centipede | Giant Centipede |
 
 The Bombardier Beetle is a challenge-mode boss that can appear in any level once the
-story is done.
+story is done. The Mole Cricket comes part way through the Flowerpot (whose spiral
+it cuts across) and the Rotting Log, in place of a second Stag Beetle.
 
 ## Tone, art and open questions
 

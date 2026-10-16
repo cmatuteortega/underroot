@@ -7,10 +7,10 @@ A tower defense where you are the mycelium under a sprout, built from the design
 doc (`DESIGN.md`, 13 oct 2026). Six levels, each its own map and waves (The
 Crack, The Flowerpot, The Shed Floor, The Rotting Log, The Pond Edge, The Lawn),
 weather that changes wave by wave, twelve fruiting bodies that each fork into two
-upgrade branches of two tiers, ten enemies, seven bosses (big bugs: a Queen Ant, a
-Stag Beetle, a Dung Beetle with its ball, a Click Beetle, a Giant Water Bug, a
-Giant Centipede and, in challenge mode, a Bombardier Beetle; three on every
-level, the two met part way through it at a third of their health), and
+upgrade branches of two tiers, ten enemies, eight bosses (big bugs: a Queen Ant, a
+Stag Beetle, a Dung Beetle with its ball, a Click Beetle, a Mole Cricket, a Giant
+Water Bug, a Giant Centipede and, in challenge mode, a Bombardier Beetle; three
+on every level, the two met part way through it at a third of their health), and
 Mutations between waves. All of it sits on the MVP's sever / prune /
 regrow loop, the Fairy Ring and the Spore Pulse. It is drawn isometrically with
 Survive School's 3D method and the frog prototype's world painter (sekiroclone).
@@ -217,6 +217,17 @@ shake the board.
   down the trail, over everything; where it comes down, links within 20 are cut
   and towers within 30 stunned for 2.5 s. Answer: hit it while it is on its
   back, and have a second way to the Heart (or a Lion's Mane) where it lands.
+- **Mole Cricket** (part way through the Flowerpot and the Rotting Log, at the
+  head of its wave): every ten seconds it stops and digs for 2.5 s, still and
+  open to anything, then burrows straight across to the trail tile within six
+  tiles that is the most steps nearer the sprout (5 to 14 of them: on the
+  Flowerpot, through the wall to the next turn of the spiral) and comes up there.
+  It digs twice. Under the soil it cannot be hurt; you see the ground heave. The
+  tunnel stays open behind it: anything walking that reaches the first hole goes
+  down it and climbs out of the second three seconds later, dazed for 0.8 s.
+  Bosses and fliers do not use it. Kill the cricket and its tunnels cave in,
+  killing whatever is still down them. Answer: kill it while it digs, and keep
+  something on the far hole for what comes out.
 - **Giant Water Bug** (the Pond Edge, wave 12): under the flooded lane it cannot
   be seen or hurt, only its ripples. Every seven seconds it surfaces, lunges at
   the nearest fruiting body within 44 and drags at it for 2.6 s. Answer: build on

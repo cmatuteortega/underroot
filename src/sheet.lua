@@ -39,6 +39,8 @@ function S.run()
     rows[#rows + 1] = { "click", M.click(0.6, 1, "belly"), M.click(0.6, 0, "leap", 1), M.click(0.6, 0, "leap", 3), M.corpse("click", 0.4) }
     headings("bomb", function(h) return M.bombardier(h, 0) end, 4)
     rows[#rows + 1] = { "bomb", M.bombardier(0.6, 1, true), M.bombardier(3.8, 0, true), M.corpse("bombardier", 0.4) }
+    headings("mole", function(h) return M.mole(h, 0) end, 4)
+    rows[#rows + 1] = { "mole", M.mole(0.6, 0, true), M.mole(0.6, 1, true), M.corpse("mole", 0.4) }
     rows[#rows + 1] = { "dead", M.corpse("ant", 0, true), M.corpse("spider", 1), M.corpse("knight", 2), M.corpse("slug", 0.5),
         M.corpse("gnat", 0), M.corpse("pillbug", 0, true) }
 

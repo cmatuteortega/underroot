@@ -42,6 +42,7 @@ the game; the numbers behind every ticked item are rows in `src/defs.lua`.
 - [x] Springtail (hops shelves and mats; its first landing by a thread snaps it)
 - [x] Click Beetle (plays dead on its back, soft; then leaps down the trail, cutting and stunning where it lands)
 - [x] The picker in rows for six levels; saves from before keep what they had open
+- [x] Mole Cricket (part way through the Flowerpot and the Rotting Log, for the Stag: digs a tunnel ahead that the walkers behind it take; killed, it caves in on them)
 
 ## Next
 

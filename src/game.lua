@@ -90,6 +90,7 @@ function Game.new(world, level, opts)
     self.nodes, self.links, self.mats = {}, {}, {}
     self.enemies, self.corpses, self.shots, self.fx, self.texts = {}, {}, {}, {}, {}
     self.clouds, self.inks = {}, {}
+    self.tunnels = {} -- a Mole Cricket's: { a = hole, b = hole, owner = it, open }
     self.nutrients = level.start
     self.heartMax = level.heart
     self.heartHp = level.heart
@@ -833,6 +834,7 @@ function Game:spawnAt(kind, x, z, c, r)
     if d.sprayEvery then en.spray = d.sprayEvery * 0.5 end
     if d.hopEvery then en.hopCd = d.hopEvery * random() end
     if d.clickEvery then en.clickCd = d.clickEvery * 0.6 end
+    if d.digEvery then en.digCd, en.digs = d.digEvery * 0.5, 0 end
     if d.moth then en.y = 10 end
     self.enemies[#self.enemies + 1] = en
     return en
@@ -1036,7 +1038,7 @@ function Game:infectable(x, z, range, maxHp)
     for _, e in ipairs(self.enemies) do
         local d = D.ENEMIES[e.kind]
         if not e.dead and not d.boss and not d.fly and e.kind ~= "brine" and not (e.infected and e.infected > 0)
-            and e.hp <= maxHp and (e.x - x) ^ 2 + (e.z - z) ^ 2 <= range * range then
+            and not e.hidden and e.hp <= maxHp and (e.x - x) ^ 2 + (e.z - z) ^ 2 <= range * range then
             if not best or e.hp > best.hp then best = e end
         end
     end
@@ -1127,6 +1129,9 @@ function Game:update(dt)
             end
         end
     end
+    for k = #self.tunnels, 1, -1 do
+        if self.tunnels[k].owner.dead then self:collapse(self.tunnels[k]) end
+    end
     for n = #self.enemies, 1, -1 do if self.enemies[n].dead then table.remove(self.enemies, n) end end
     self:updateShots(dt)
     self:updateClouds(dt)
@@ -1142,7 +1147,7 @@ function Game:update(dt)
         self:shock(self.heart.x, self.heart.z, 30, 1, "r", "d")
     elseif self.phase == "wave" and not self.queue[1] and not self.enemies[1] then
         self.cleared = self.wave
-        self.inks, self.clouds = {}, {}
+        self.inks, self.clouds, self.tunnels = {}, {}, {}
         self.weather = nil
         if self.endless then
             if self.cleared > self.best then self.best, self.record = self.cleared, true end
@@ -1526,7 +1531,7 @@ end
 function Game:lurable(e)
     local d = D.ENEMIES[e.kind]
     return not e.dead and not d.boss and not e.lured and e.kind ~= "brine" and e.kind ~= "mite"
-        and not (e.infected and e.infected > 0) and not e.rolling and not e.under
+        and not (e.infected and e.infected > 0) and not e.rolling and not e.under and not e.hidden
         and (e.state == "walk" or e.state == "chew")
 end
 
@@ -1984,6 +1989,7 @@ function Game:walk(e, speed, dt)
     e.togo = left * TILE + d
     if arrived then
         if left == 0 then return true end
+        if self.tunnels[1] and self:burrow(e) then return end
         if nc then e.tc, e.tr = nc, nr end
     end
 end
@@ -2041,12 +2047,17 @@ function Game:move(e, dt)
     e.ballFlash = max(0, (e.ballFlash or 0) - dt)
     e.anim = e.anim + dt
     e.mark = max(0, e.mark - dt)
-    -- A centipede segment waiting its turn at the gate.
+    -- A centipede segment waiting its turn at the gate, or one down a tunnel.
     if e.hidden then
         e.hidden = e.hidden - dt
-        if e.hidden <= 0 then e.hidden = nil end
+        if e.hidden <= 0 then
+            e.hidden = nil
+            if e.tunnel then self:emerge(e) end
+        end
         return
     end
+    -- Burrowing: nothing on the surface touches it.
+    if e.under and e.kind == "mole" then return self:mole(e, d, 1, dt) end
 
     if e.infected and e.infected > 0 then return self:host(e, d, dt) end
 
@@ -2104,6 +2115,7 @@ function Game:move(e, dt)
     if e.kind == "click" and self:click(e, d, dt) then return end
     if e.kind == "waterbug" and self:waterbug(e, d, slow, dt) then return end
     if e.kind == "bombardier" and self:bombardier(e, d, slow, dt) then return end
+    if e.kind == "mole" and self:mole(e, d, slow, dt) then return end
 
     -- Stopped to chew a link it walked into.
     if e.state == "chew" then
@@ -2500,6 +2512,135 @@ function Game:scald(e, d, tx, tz, target)
     self:burst(ex, 4, ez, 10, { "w", "t", "s" }, 20)
     self:splat(ex, ez, 5, "w", 1.5)
     self:cue("spray", e.x, e.z)
+end
+
+-- The Mole Cricket: every so often it stops and digs, then burrows straight
+-- across to the trail tile in reach that is the most steps nearer the sprout
+-- and comes up there, dazed. The tunnel it leaves stays open (see `burrow`).
+-- Answers true while it is not walking.
+function Game:mole(e, d, slow, dt)
+    if e.state == "dig" then
+        local a = e.dug.a
+        toward(e, a.x, a.z, d.speed * slow, dt)
+        e.h = atan2(e.dug.b.z - e.z, e.dug.b.x - e.x)
+        e.anim = e.anim + dt
+        e.digT = e.digT - dt * self:pace()
+        if fr() < dt * 12 then
+            self:motes(e.x + cos(e.h) * 9, e.y, e.z + sin(e.h) * 9, 1, { "t", "n", "u" }, 4, 16, 0.5)
+        end
+        if e.digT <= 0 then
+            e.state, e.under = "burrow", true
+            e.x, e.z = a.x, a.z
+            self.tunnels[#self.tunnels + 1] = e.dug
+            self:burst(a.x, 3, a.z, 18, { "t", "n", "u" }, 24)
+            self:splat(a.x, a.z, 8, "u", 4)
+            self:say("IT BURROWS", a.x, 24, a.z, "r")
+            self:cue("burrow", a.x, a.z)
+        end
+        return true
+    elseif e.state == "burrow" then
+        local b = e.dug.b
+        e.togo = (self.world:distAt(b.c, b.r) or 0) * TILE
+        if fr() < dt * 8 then self:motes(e.x, e.y, e.z, 1, { "t", "n" }, 5, 6, 0.6) end
+        if toward(e, b.x, b.z, d.burrow * self:pace(), dt) then
+            e.under, e.state, e.surfaceT = false, "surface", d.surfaceFor
+            e.tc, e.tr = b.c, b.r
+            e.dug.open, e.dug = true, nil
+            e.digs, e.digCd = e.digs + 1, d.digEvery
+            self:burst(b.x, 3, b.z, 22, { "t", "n", "u" }, 28)
+            self:splat(b.x, b.z, 8, "u", 4)
+            self:shock(b.x, b.z, 24, 0.6, "t", "n")
+            self:say("A TUNNEL OPENS", b.x, 24, b.z, "r")
+            self:cue("surface", b.x, b.z)
+            self.events.shake = 0.3
+        end
+        return true
+    elseif e.state == "surface" then
+        -- Shaking the soil off: still, for a moment.
+        e.surfaceT = e.surfaceT - dt
+        if e.surfaceT <= 0 then e.state = "walk" end
+        return true
+    end
+    if e.state ~= "walk" or e.digs >= d.digs then return false end
+    e.digCd = e.digCd - dt
+    if e.digCd > 0 then return false end
+    -- The tile it is walking to, and the one in reach most steps on from it.
+    local w = self.world
+    local from = w:distAt(e.tc, e.tr)
+    local ax, az = e.tc * TILE + TILE / 2, e.tr * TILE + TILE / 2
+    local best, bd, bs
+    local span = math.ceil(d.reach / TILE)
+    if not from or w:floodedAt(ax, az) then from, span = 0, -1 end -- no digging in water
+    for r = e.tr - span, e.tr + span do
+        for c = e.tc - span, e.tc + span do
+            local left = w:distAt(c, r)
+            local x, z = c * TILE + TILE / 2, r * TILE + TILE / 2
+            local d2 = (x - ax) ^ 2 + (z - az) ^ 2
+            if left and left >= d.keep and from - left >= d.save and from - left <= d.most and d2 <= d.reach * d.reach
+                and not w:floodedAt(x, z)
+                and (not best or left < bd or (left == bd and d2 < bs)) then
+                best, bd, bs = { c = c, r = r, x = x, z = z }, left, d2
+            end
+        end
+    end
+    if not best then
+        e.digCd = 1 -- nowhere worth it from here; try again further on
+        return false
+    end
+    e.state, e.digT = "dig", d.digFor
+    e.dug = { a = { c = e.tc, r = e.tr, x = ax, z = az }, b = best, owner = e, open = false }
+    self:say("IT DIGS", e.x, 24, e.z, "t")
+    self:cue("dig", e.x, e.z)
+    return true
+end
+
+-- Something walking comes to the mouth of an open tunnel: down it goes, and
+-- climbs out of the far end a few seconds on. Not a boss, a flier, a drop of
+-- brine, a host, or a springtail in the air. Answers true when it went down.
+function Game:burrow(e)
+    local d = D.ENEMIES[e.kind]
+    if d.boss or d.fly or e.slide or e.hopT or (e.infected and e.infected > 0) then return false end
+    for _, t in ipairs(self.tunnels) do
+        if t.open and e.tc == t.a.c and e.tr == t.a.r then
+            e.hidden, e.tunnel = D.ENEMIES[t.owner.kind].tunnelFor, t
+            e.state, e.chewing, e.rolling = "walk", nil, false
+            self:motes(e.x, e.y, e.z, 2, { "t", "n" }, 3, 8, 0.4)
+            self:cue("dig", e.x, e.z, 0.4)
+            return true
+        end
+    end
+    return false
+end
+
+-- Out of the far end of a tunnel, dazed.
+function Game:emerge(e)
+    local t = e.tunnel
+    e.tunnel = nil
+    e.x, e.z = t.b.x + (random() - 0.5) * 6, t.b.z + (random() - 0.5) * 6
+    e.tc, e.tr = t.b.c, t.b.r
+    e.y = self.world:groundAt(e.x, e.z)
+    e.stun = max(e.stun, D.ENEMIES[t.owner.kind].daze)
+    self:motes(e.x, e.y, e.z, 4, { "t", "n" }, 4, 10, 0.5)
+end
+
+-- The digger is gone: its tunnel falls in on whatever is down it.
+function Game:collapse(t)
+    unlist(self.tunnels, t)
+    if not t.open then return end
+    local buried = 0
+    for _, e in ipairs(self.enemies) do
+        if e.tunnel == t and not e.dead then
+            e.hidden, e.tunnel = nil, nil
+            self:kill(e)
+            buried = buried + 1
+        end
+    end
+    for _, h in ipairs({ t.a, t.b }) do
+        self:burst(h.x, 2, h.z, 12, { "t", "n", "u" }, 18)
+        self:shock(h.x, h.z, 14, 0.5, "n", "u")
+    end
+    self:say(buried > 0 and ("CAVED IN: " .. buried .. " BURIED") or "CAVED IN", t.a.x, 20, t.a.z, "g")
+    self:cue("thump", t.a.x, t.a.z)
 end
 
 function Game:mite(e, d, slow, dt)

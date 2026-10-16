@@ -386,6 +386,15 @@ local DEFS = {
         { dur = 0.03, wave = "noise", hp = { 2000 }, lp = { 9000 }, curve = 1 },
         { dur = 0.05, wave = "square", f0 = 1800, f1 = 900, duty = 0.2, curve = 2, vol = 0.7 },
         { at = 0.02, dur = 0.25, wave = "sine", f0 = 160, f1 = 60, curve = 1.8, vol = 0.6 } },
+    -- The Mole Cricket's shovels at the soil: a dry scrape, again and again.
+    dig = { vol = 0.3, gap = 0.25, poly = 2, wob = 0.12,
+        { dur = 0.12, wave = "noise", hp = { 300 }, lp = { 2500, 700 }, curve = 1.5 },
+        { at = 0.16, dur = 0.12, wave = "noise", hp = { 300 }, lp = { 2200, 600 }, curve = 1.5 },
+        { at = 0.32, dur = 0.14, wave = "noise", hp = { 300 }, lp = { 2000, 500 }, curve = 1.5 } },
+    -- Going under: a low rumble of soil falling in behind it.
+    burrow = { vol = 0.55, gap = 0.4,
+        { dur = 0.7, wave = "grit", f0 = 140, f1 = 50, lp = { 900, 200 }, a = 0.03, curve = 1.3 },
+        { dur = 0.6, wave = "noise", lp = { 700, 150 }, curve = 1.4, vol = 0.6 } },
     spray = { vol = 0.5, gap = 0.2,
         { dur = 0.08, wave = "sine", f0 = 200, f1 = 70, curve = 2 },
         { dur = 0.5, wave = "noise", hp = { 1800 }, lp = { 8000, 3000 }, a = 0.02, curve = 1.3, vol = 0.8 } },

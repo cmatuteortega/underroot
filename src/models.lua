@@ -147,6 +147,7 @@ local R = {
     bombard = ramp("w", "t", "r", "u"),
     springtail = ramp("w", "s", "k", "u"),
     click = ramp("t", "n", "u", "o"),
+    mole = ramp("t", "n", "n", "u"),
 }
 M.R = R
 
@@ -1277,6 +1278,55 @@ function M.click(h, leg, pose, spin)
     end)
 end
 
+-- The Mole Cricket: a velvet-brown helmet of a pronotum, a soft banded
+-- abdomen ending in two long cerci, cricket hind legs, and in front a pair of
+-- broad toothed shovels for forelegs. Digging (`dig`), it hunches down and
+-- the shovels scoop in turn, `leg` 0/1.
+local function moleParts(leg, dig)
+    local duck = dig and 0.6 or 0
+    local parts = {
+        { id = 1, ramp = R.mole, at = ell(-3.2, 2.8, 0, 4.6, 2.3, 2.8),
+            print = function(ux, uy, uz)
+                if uy > 0 and abs((ux + 1) % 0.33 - 0.165) < 0.03 then return IDX.u end -- the bands
+                if uy > 0.4 and abs(uz) < 0.05 then return IDX.u end
+            end },
+        { id = 2, ramp = R.mole, at = A.mul(A.move(1.8, 3.6 - duck, 0), A.rotZ(-duck * 0.4), A.scale(3.0, 2.7, 2.9)),
+            print = function(ux, uy, uz)
+                if uy > 0.3 and abs(uz) < 0.05 then return IDX.o end -- the seam down the helmet
+                if uy > 0.5 and ux < -0.3 then return IDX.t end       -- velvet catching the light
+            end },
+        { id = 3, ramp = R.mole, at = ell(4.8, 2.7 - duck, 0, 1.6, 1.5, 1.7),
+            print = function(ux, uy, uz) if ux > 0.3 and abs(uz) > 0.6 and uy > -0.1 then return IDX.o end end },
+    }
+    for _, side in ipairs({ -1, 1 }) do
+        -- Short feelers, and the two cerci trailing behind.
+        parts[#parts + 1] = seg(6, 3.2 - duck, side * 0.7, 7.8, 3.8 - duck, side * 1.6, 0.22, R.jaw, 4)
+        parts[#parts + 1] = seg(-7.6, 2.8, side * 0.8, -9.8, 3.4, side * 1.8, 0.25, R.jaw, 4)
+        -- The shovels: a thick arm out to the side, and a broad toothed blade.
+        local scoop = dig and ((leg + (side > 0 and 1 or 0)) % 2 == 0 and 1.6 or -0.8) or 0
+        local sx, sy, sz = 6.6 + scoop, (dig and 0.9 or 1.6), side * (dig and 2.6 or 3.4)
+        parts[#parts + 1] = seg(3.6, 2.4 - duck, side * 1.8, sx - 0.8, sy + 0.6, sz, 1.0, R.mole, 5)
+        parts[#parts + 1] = { id = 6, ramp = R.jaw,
+            at = A.mul(A.move(sx, sy, sz), A.rotY(side * 0.5), A.scale(1.6, 0.7, 2.0)),
+            print = function(ux, uy, uz) if ux > 0.5 and abs((uz * 4) % 1 - 0.5) < 0.18 then return IDX.o end end }
+        -- Short middle legs; the hind legs a cricket's, thick thighs folded
+        -- along its sides.
+        local fwd = (leg + (side > 0 and 1 or 0)) % 2 == 0 and 0.9 or -0.9
+        if dig then fwd = 0 end
+        limb(parts, 0.4, 2.2, side * 2.2, 0.6 + fwd, side * 4.6, 1.0, 0.36, R.jaw, 7)
+        parts[#parts + 1] = seg(-1.6, 2.6, side * 2.4, -5.2, 4.0, side * 3.4, 0.95, R.mole, 8)
+        parts[#parts + 1] = seg(-5.2, 4.0, side * 3.4, -7.2 - fwd * 0.5, 0.4, side * 3.8, 0.38, R.jaw, 8)
+    end
+    return parts
+end
+
+function M.mole(h, leg, dig)
+    local hs = step(h, 16)
+    return kept("mole" .. hs .. leg .. (dig and "d" or ""), function()
+        return place(moleParts(leg, dig), heading(hs / 16 * TAU), A.scale(2.2, 2.2, 2.2))
+    end)
+end
+
 --- what is left -----------------------------------------------------------------------
 
 local function fruit(parts, x, y)
@@ -1341,6 +1391,9 @@ function M.corpse(kind, h, fruited)
             top = 2
         elseif kind == "click" then
             parts = flip(clickParts(0), 7, 2.2)
+            top = 9
+        elseif kind == "mole" then
+            parts = flip(moleParts(0), 7, 2.2)
             top = 9
         elseif kind == "ball" then
             -- A broken ball is a heap.

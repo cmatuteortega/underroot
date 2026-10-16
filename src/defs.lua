@@ -268,9 +268,21 @@ D.ENEMIES = {
         sprayEvery = 6, sprayR = 44, scald = 30, siege = 3, siegeEvery = 2.5, heartSpray = 2, coverR = 7,
         heart = 12, corpse = 60, size = 2.6,
         blurb = "AT THE END OF THE TRAIL IT TURNS AND SPRAYS THE SPROUT. COVER IT" },
+    -- Every so often it stops and digs (still, and open to anything), then
+    -- burrows straight across to whichever trail tile within `reach` is the
+    -- most steps nearer the sprout, up to `most` and at least `save` -- through
+    -- the wall to the next turn of a winding trail -- and comes up there, dazed. The tunnel stays open behind
+    -- it: anything walking that comes to the first hole goes down and climbs out
+    -- of the second `tunnelFor` seconds later, itself dazed for `daze`. Bosses
+    -- and fliers do not use it. Killed, it takes its tunnels with it, and what
+    -- is down them.
+    mole = { name = "MOLE CRICKET", boss = true, hp = 1500, speed = 7, armor = 5, bite = 40,
+        digEvery = 10, digFor = 2.5, digs = 2, reach = 96, save = 5, most = 14, keep = 3, burrow = 26, surfaceFor = 1.2,
+        tunnelFor = 3, daze = 0.8, heart = 12, corpse = 60, size = 2.6,
+        blurb = "DIGS A TUNNEL AHEAD, AND THE REST FOLLOW. KILL IT AND THE TUNNEL CAVES IN" },
 }
 D.ENEMY_ORDER = { "ant", "pillbug", "mite", "gnat", "moth", "brine", "slug", "spider", "knight", "springtail",
-    "queen", "stag", "dung", "click", "waterbug", "centipede", "bombardier" }
+    "queen", "stag", "dung", "click", "waterbug", "centipede", "bombardier", "mole" }
 
 -- What answers each enemy: the species the loadout picker lights up when the
 -- player points at one coming in the level (the design doc's counterplay).
@@ -292,6 +304,7 @@ D.COUNTERS = {
     bombardier = { "shelf", "lamp" },
     springtail = { "puffer", "stink", "lamp" },
     click = { "needle", "mortar", "mane" },
+    mole = { "needle", "mortar", "mat" },
 }
 
 -- Weather, per wave: a wave row's `weather` names one of these, and the
@@ -350,7 +363,7 @@ local FLOWERPOT = {
     { { "gnat", 4, 1.5, 1, 0 }, { "ant", 8, 1.1, 2, 2 }, { "pillbug", 2, 4, 1, 6 } },
     { weather = "night", { "moth", 4, 2, 1, 0 }, { "ant", 10, 1, 1, 2 }, { "brine", 1, 1, 1, 6 }, { "ant", 4, 1.2, 2, 10 } },
     { { "slug", 1, 1, 1, 0 }, { "pillbug", 3, 4, 1, 2 }, { "mite", 2, 6, 2, 4 }, { "ant", 10, 0.9, 1, 8 } },
-    { weather = "drought", { "spider", 2, 5, 1, 0 }, { "ant", 12, 0.9, 1, 2 }, { "stag", 1, 1, 1, 4, MID }, { "gnat", 5, 1.2, 1, 6 },
+    { weather = "drought", { "mole", 1, 1, 1, 0, MID }, { "spider", 2, 5, 1, 2 }, { "gnat", 5, 1.2, 1, 6 }, { "ant", 12, 0.9, 1, 10 },
         { "ant", 6, 1, 2, 10 } },
     { weather = "rain", { "knight", 2, 5, 1, 0 }, { "brine", 2, 7, 1, 3 }, { "pillbug", 3, 4, 2, 4 }, { "ant", 10, 0.9, 1, 8 } },
     { weather = "frost", { "pillbug", 4, 3, 1, 0 }, { "slug", 2, 7, 1, 2 }, { "mite", 3, 5, 2, 4 }, { "gnat", 6, 1, 1, 8 } },
@@ -378,8 +391,8 @@ local SHED = {
     { { "ant", 10, 0.9, 1, 0 }, { "stag", 1, 1, 2, 3 }, { "ant", 10, 0.9, 1, 8 }, { "springtail", 8, 0.6, 2, 10 } },
 }
 
--- The Rotting Log: dark nearly every wave. Slugs and mites, and the Click
--- Beetle down the long straights at the end.
+-- The Rotting Log: dark nearly every wave. Slugs and mites, the Mole Cricket
+-- in the soft wood, and the Click Beetle down the long straights at the end.
 local LOG = {
     { weather = "night", { "ant", 8, 1.4, 1, 0 }, { "mite", 1, 1, 2, 4 } },
     { weather = "night", { "ant", 8, 1.2, 2, 0 }, { "slug", 1, 1, 1, 4 }, { "moth", 3, 2, 1, 6 } },
@@ -390,8 +403,8 @@ local LOG = {
     { weather = "rain", { "slug", 2, 8, 1, 0 }, { "brine", 2, 6, 2, 2 }, { "springtail", 8, 0.7, 1, 6 }, { "ant", 8, 1, 2, 6 } },
     { weather = "night", { "spider", 3, 4, 2, 0 }, { "moth", 6, 1.4, 1, 2 }, { "mite", 3, 5, 2, 4 }, { "ant", 12, 0.9, 1, 8 } },
     { weather = "night", { "knight", 3, 5, 1, 0 }, { "slug", 3, 6, 2, 2 }, { "springtail", 8, 0.6, 2, 6 }, { "moth", 6, 1.2, 1, 8 } },
-    { weather = "frost", { "pillbug", 4, 3, 2, 0 }, { "mite", 4, 4, 1, 2 }, { "stag", 1, 1, 2, 4, MID }, { "knight", 2, 5, 2, 6 },
-        { "gnat", 8, 0.9, 1, 8 } },
+    { weather = "frost", { "pillbug", 4, 3, 2, 0 }, { "mite", 2, 4, 1, 2 }, { "mole", 1, 1, 2, 4, MID }, { "knight", 2, 5, 2, 6 },
+        { "gnat", 8, 0.9, 1, 8 }, { "mite", 3, 3, 2, 12 } },
     { weather = "night", { "moth", 10, 1, 2, 0 }, { "spider", 4, 4, 1, 2 }, { "slug", 3, 6, 1, 4 }, { "ant", 16, 0.7, 2, 8 } },
     { weather = "rain", { "springtail", 12, 0.5, 1, 0 }, { "knight", 4, 4, 2, 2 }, { "brine", 3, 6, 1, 6 }, { "mite", 4, 4, 2, 8 } },
     { weather = "night", { "slug", 4, 5, 2, 0 }, { "spider", 5, 3, 1, 2 }, { "moth", 12, 0.8, 2, 4 }, { "knight", 4, 4, 1, 8 },
@@ -457,7 +470,7 @@ D.LEVELS = {
         growth = 0.42, unlock = { giant = 4 },
         mutateAfter = { [2] = true, [4] = true, [7] = true, [9] = true },
         loadout = { "puffer", "needle", "mat", "mane", "relay", "mortar" },
-        idea = "A CRACKED POT. CUT AND REGROW, AND WATCH THE HOLE", boss = "DUNG, STAG, QUEEN ANT" },
+        idea = "A CRACKED POT. CUT AND REGROW, AND WATCH THE HOLE", boss = "DUNG, MOLE, QUEEN ANT" },
     { id = "shed", name = "THE SHED FLOOR", map = "shed", waves = SHED, start = 160, heart = 23, open = true, growth = 0.08,
         unlock = { giant = 5 },
         mutateAfter = { [3] = true, [5] = true, [8] = true, [10] = true, [12] = true },
@@ -467,7 +480,7 @@ D.LEVELS = {
         ringNodes = 3, unlock = { giant = 4 },
         mutateAfter = { [2] = true, [4] = true, [7] = true, [9] = true, [11] = true },
         loadout = { "puffer", "needle", "mane", "lamp", "inky", "mortar" },
-        idea = "DARK AND DAMP. THREE NODES CLOSE A RING", boss = "QUEEN, STAG, CLICK BEETLE" },
+        idea = "DARK AND DAMP. THREE NODES CLOSE A RING", boss = "QUEEN, MOLE, CLICK BEETLE" },
     { id = "pond", name = "THE POND EDGE", map = "pond", waves = POND, start = 150, heart = 20, open = true, growth = 0.08,
         unlock = { giant = 4 },
         mutateAfter = { [2] = true, [4] = true, [7] = true, [9] = true },
