@@ -113,6 +113,7 @@ different assumption about how the network behaves.
 | Queen Ant | Lays workers as she walks and gnaws every thread within reach without stopping | Area damage and corpse management at scale |
 | Stag Beetle | Charges every few seconds: its jaws shear any link they pass and the thunder of it stuns towers beside the trail | Whether you have a second route to the Heart, and towers set back from the path |
 | Dung Beetle | Walks backwards pushing a ball bigger than itself. The ball soaks every hit and flattens links, mats and shelves it rolls over; broken, it is a feast for the network | Burst damage, and pruning ahead of the ball |
+| Click Beetle | Every few seconds rolls onto its back and plays dead, soft and unarmored; then clicks and leaps down the trail, and where it lands links are cut and towers stunned | Burst damage timed to the soft spell, and links set back from the trail |
 | Mole Cricket | Stops to dig, burrows across to a later stretch of the trail and leaves the tunnel open; everything walking behind it takes the shortcut until it is killed, and then the tunnel caves in on them | Defence in depth rather than one kill zone, and burst damage while it digs |
 | Giant Water Bug | Lurks under the flooded lane, surfaces beside a fruiting body and drags it under | Building on high ground and keeping a Lion's Mane in reach |
 | Giant Centipede | A long train of armored segments, each with its own HP; every segment cuts the links it crosses, and it splits where it is broken | Area damage across a whole lane, and rebuilding behind it |
@@ -178,13 +179,14 @@ Seven levels, each teaching one new idea about the network.
 | Level | Setting | New idea | Introduces | Boss |
 | --- | --- | --- | --- | --- |
 | 1. The Crack | Sidewalk crack | Growing links and towers | Worker Ant, Spore Puffer | None |
-| 2. The Flowerpot | Cracked terracotta pot | Cutting and regrowing | Pillbug, Lion's Mane | Queen Ant |
+| 2. The Flowerpot | Cracked terracotta pot | Cutting and regrowing | Pillbug, Lion's Mane, Mole Cricket (boss) | Queen Ant |
 | 3. The Shed Floor | Dusty boards, bottle caps, Lego | Chokepoints and blockers | Wolf Spider, Shelf Fungus | Stag Beetle |
 | 4. The Rotting Log | Damp, rich, dark | Fairy Rings and loops | Slug, Mite Swarm, Inky Cap | Click Beetle |
 | 5. The Compost Heap | Heat and decay | Economy and decomposition | Green Mold, Cordyceps | Dung Beetle |
-| 6. The Pond Edge | Water and reeds | Flooding, high ground | Brine Drop, Mole Cricket | Giant Water Bug |
+| 6. The Pond Edge | Water and reeds | Flooding, high ground | Brine Drop, Mole Cricket (the small one) | Giant Water Bug |
 | 7. The Lawn | Open grass, human tools | Everything at once | Beetle Knight, Centipede | Giant Centipede |
 
+The boss named is the level's own and comes last; each level also brings two of the others before it.
 The Bombardier Beetle is a challenge-mode boss that can appear in any level once the
 story is done. The Mole Cricket comes part way through the Flowerpot (whose spiral
 it cuts across) and the Rotting Log, in place of a second Stag Beetle.

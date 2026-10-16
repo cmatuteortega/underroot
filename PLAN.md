@@ -44,11 +44,17 @@ the game; the numbers behind every ticked item are rows in `src/defs.lua`.
 - [x] The picker in rows for six levels; saves from before keep what they had open
 - [x] Mole Cricket (part way through the Flowerpot and the Rotting Log, for the Stag: digs a tunnel ahead that the walkers behind it take; killed, it caves in on them)
 
+### MVP5
+- [x] Loadout: six of the twelve species picked before each level, with an info panel for each, in the loadout and on the board
+- [x] Three bosses on every level, the level's own last (the Crack: Queen, Stag, Dung Beetle)
+- [x] Endless: play on past a level's last wave, bosses coming closer together and more of them; the most waves held is kept a level
+- [x] A turn button that takes the board round the other way; a weather tooltip; the pockets a species in hand can grow on outlined
+
 ## Next
 
 ### Enemies
-- [ ] Mole Cricket (burrows, surfaces beside a link)
-- [ ] Centipede (segments, damages every link it runs along)
+- [ ] Mole Cricket, the small one (burrows under the map, soil bumps warn of it, surfaces beside a link and cuts it); the boss that digs a tunnel is in
+- [ ] Centipede, the small one (segments, damages every link it runs along); the Giant Centipede boss is in
 - [ ] Green Mold (grows along links, converts nodes)
 - [ ] Elite modifiers: Fungicidal, Scent-masked, Armored shell, Hive-minded
 
@@ -64,12 +70,12 @@ the game; the numbers behind every ticked item are rows in `src/defs.lua`.
 ### Levels
 Six of the doc's seven are in, in its order: the Crack, the Flowerpot, the Shed
 Floor, the Rotting Log, the Pond Edge and the Lawn. Still to come:
-- [ ] 5. The Compost Heap (boss: Dung Beetle; needs Green Mold)
+- [ ] 5. The Compost Heap (its own boss is the Dung Beetle, already met on other levels; needs Green Mold)
 
 ### Feel
 - [x] Audio: synthesised at load (`src/sfx.lua`), a sound for every action and bug, the soil, the network's hum rising and falling with links, a loop a weather
 - [x] Effects: hit sparks, stains, shock rings, motes, shot flashes, thread flashes, HUD flashes and banners
-- [ ] Balance by hand: over 20 runs the bot wins the Crack 18, the Flowerpot 17, the Rotting Log 16, the Shed Floor and the Pond Edge 15, the Lawn 12; the Stag Beetle usually gets through (the Shed Floor's sprout has 23 to allow for it), and challenge mode is rarely won anywhere
+- [ ] Balance by hand: over 20 runs the bot wins the Crack 18, the Flowerpot 17, the Rotting Log 16, the Shed Floor and the Pond Edge 15, the Lawn 12; the Stag Beetle usually gets through (the Shed Floor's sprout has 23 to allow for it), and challenge mode is rarely won anywhere. These runs are from before the loadout, three bosses a level and the Mole Cricket, so they want doing again
 
 ## Open questions (as answered so far)
 
