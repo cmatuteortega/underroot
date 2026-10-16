@@ -9,8 +9,9 @@ Crack, The Flowerpot, The Shed Floor, The Rotting Log, The Pond Edge, The Lawn),
 weather that changes wave by wave, twelve fruiting bodies that each fork into two
 upgrade branches of two tiers, ten enemies, seven bosses (big bugs: a Queen Ant, a
 Stag Beetle, a Dung Beetle with its ball, a Click Beetle, a Giant Water Bug, a
-Giant Centipede and, in challenge mode, a Bombardier Beetle), and Mutations
-between waves. All of it sits on the MVP's sever / prune /
+Giant Centipede and, in challenge mode, a Bombardier Beetle; three on every
+level, the two met part way through it at a third of their health), and
+Mutations between waves. All of it sits on the MVP's sever / prune /
 regrow loop, the Fairy Ring and the Spore Pulse. It is drawn isometrically with
 Survive School's 3D method and the frog prototype's world painter (sekiroclone).
 
@@ -39,8 +40,10 @@ A level won offers four ways on: the next level (`N`), endless (`E`), the same
 level again (`R`) or the levels (`M`). Endless keeps the run going past the last
 wave for as long as the sprout lives: each wave is one of the level's later
 waves with more enemies, closer together and tougher than the last (7% a wave,
-on top of the level's own growth), its weather now and then shuffled, a boss
-wave every fifth and a Mutation every fourth. The most waves held in endless on
+on top of the level's own growth), its weather now and then shuffled, and a
+Mutation every fourth. Boss waves come every fifth wave (every fourth past 20,
+every third past 40), and from wave 10 each brings an extra boss from the
+level's own, one more every 10 waves. The most waves held in endless on
 each level is kept in the save directory (`endless.txt`) and shown at the bottom
 left of its card in the level picker.
 

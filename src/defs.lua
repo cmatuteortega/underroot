@@ -312,7 +312,8 @@ D.WEATHER = {
         blurb = "EVERYTHING SLOWS: GROWTH, FIRE AND ENEMIES ALIKE" },
 }
 
--- Waves: { kind, how many, seconds between, gate, start }, gates counted down
+-- Waves: { kind, how many, seconds between, gate, start[, health] }, health
+-- a fraction of the usual (a boss met part way through a level comes weaker), gates counted down
 -- the map's left edge from the top. A mite row counts swarms, not mites.
 local CRACK = {
     { { "ant", 6, 1.6, 1, 0 } },
@@ -335,17 +336,22 @@ local CRACK = {
         { "gnat", 8, 1, 2, 20 } },
 }
 
+local MID = 0.35 -- the health of a boss met part way through a level
+-- Every level has three bosses, at about a third, two thirds and the end of
+-- it: two met before along the way, its own at the end.
+
 -- The Flowerpot: one long spiral in from the rim, and from wave 3 the
 -- drainage hole (gate 2), three tiles from the sprout.
 local FLOWERPOT = {
     { { "ant", 8, 1.4, 1, 0 } },
     { { "ant", 8, 1.3, 1, 0 }, { "pillbug", 1, 1, 1, 6 } },
     { weather = "rain", { "ant", 6, 1.4, 1, 0 }, { "ant", 4, 1.6, 2, 6 } },
-    { { "pillbug", 2, 5, 1, 0 }, { "ant", 10, 1.1, 1, 2 }, { "mite", 1, 1, 2, 8 } },
+    { { "pillbug", 2, 5, 1, 0 }, { "ant", 10, 1.1, 1, 2 }, { "dung", 1, 1, 1, 4, MID }, { "mite", 1, 1, 2, 8 } },
     { { "gnat", 4, 1.5, 1, 0 }, { "ant", 8, 1.1, 2, 2 }, { "pillbug", 2, 4, 1, 6 } },
     { weather = "night", { "moth", 4, 2, 1, 0 }, { "ant", 10, 1, 1, 2 }, { "brine", 1, 1, 1, 6 }, { "ant", 4, 1.2, 2, 10 } },
     { { "slug", 1, 1, 1, 0 }, { "pillbug", 3, 4, 1, 2 }, { "mite", 2, 6, 2, 4 }, { "ant", 10, 0.9, 1, 8 } },
-    { weather = "drought", { "spider", 2, 5, 1, 0 }, { "ant", 12, 0.9, 1, 2 }, { "gnat", 5, 1.2, 1, 6 }, { "ant", 6, 1, 2, 10 } },
+    { weather = "drought", { "spider", 2, 5, 1, 0 }, { "ant", 12, 0.9, 1, 2 }, { "stag", 1, 1, 1, 4, MID }, { "gnat", 5, 1.2, 1, 6 },
+        { "ant", 6, 1, 2, 10 } },
     { weather = "rain", { "knight", 2, 5, 1, 0 }, { "brine", 2, 7, 1, 3 }, { "pillbug", 3, 4, 2, 4 }, { "ant", 10, 0.9, 1, 8 } },
     { weather = "frost", { "pillbug", 4, 3, 1, 0 }, { "slug", 2, 7, 1, 2 }, { "mite", 3, 5, 2, 4 }, { "gnat", 6, 1, 1, 8 } },
     { weather = "night", { "moth", 6, 1.5, 1, 0 }, { "spider", 3, 4, 1, 2 }, { "knight", 3, 5, 1, 6 }, { "ant", 14, 0.7, 2, 8 } },
@@ -359,11 +365,13 @@ local SHED = {
     { { "ant", 8, 1.2, 2, 0 }, { "spider", 1, 1, 1, 4 }, { "ant", 6, 1.3, 1, 6 } },
     { { "pillbug", 2, 5, 1, 0 }, { "ant", 10, 1.1, 2, 2 }, { "gnat", 3, 1.5, 1, 8 } },
     { { "springtail", 6, 1, 1, 0 }, { "ant", 8, 1.1, 2, 3 }, { "springtail", 4, 1, 2, 8 } },
-    { weather = "rain", { "spider", 2, 5, 2, 0 }, { "ant", 10, 1, 1, 2 }, { "brine", 1, 1, 1, 6 }, { "springtail", 6, 0.8, 2, 8 } },
+    { weather = "rain", { "spider", 2, 5, 2, 0 }, { "ant", 10, 1, 1, 2 }, { "dung", 1, 1, 1, 4, 0.2 }, { "brine", 1, 1, 1, 6 },
+        { "springtail", 6, 0.8, 2, 8 } },
     { { "knight", 1, 1, 1, 0 }, { "mite", 2, 6, 2, 2 }, { "ant", 12, 0.9, 1, 6 } },
     { weather = "night", { "moth", 5, 1.5, 2, 0 }, { "spider", 3, 4, 1, 2 }, { "springtail", 8, 0.7, 2, 4 }, { "ant", 10, 1, 1, 8 } },
     { { "slug", 2, 8, 1, 0 }, { "pillbug", 4, 4, 2, 2 }, { "springtail", 8, 0.6, 1, 6 }, { "gnat", 6, 1, 2, 8 } },
-    { weather = "drought", { "knight", 2, 5, 2, 0 }, { "spider", 4, 4, 1, 2 }, { "mite", 3, 5, 2, 6 }, { "ant", 14, 0.8, 1, 8 } },
+    { weather = "drought", { "knight", 2, 5, 2, 0 }, { "spider", 4, 4, 1, 2 }, { "queen", 1, 1, 1, 4, MID }, { "mite", 3, 5, 2, 6 },
+        { "ant", 14, 0.8, 1, 8 } },
     { weather = "frost", { "pillbug", 4, 3, 1, 0 }, { "knight", 2, 5, 2, 2 }, { "springtail", 10, 0.5, 1, 6 }, { "brine", 2, 8, 2, 6 } },
     { weather = "night", { "moth", 8, 1.2, 1, 0 }, { "spider", 5, 3, 2, 2 }, { "slug", 3, 6, 1, 4 }, { "ant", 16, 0.7, 2, 8 } },
     { weather = "rain", { "springtail", 14, 0.4, 2, 0 }, { "knight", 3, 4, 1, 2 }, { "gnat", 10, 0.7, 2, 6 }, { "brine", 3, 6, 1, 8 } },
@@ -377,11 +385,13 @@ local LOG = {
     { weather = "night", { "ant", 8, 1.2, 2, 0 }, { "slug", 1, 1, 1, 4 }, { "moth", 3, 2, 1, 6 } },
     { weather = "rain", { "mite", 2, 6, 1, 0 }, { "ant", 10, 1.1, 2, 2 }, { "springtail", 4, 1, 1, 6 } },
     { weather = "night", { "slug", 2, 8, 2, 0 }, { "moth", 5, 1.6, 1, 2 }, { "ant", 10, 1, 1, 4 } },
-    { weather = "night", { "mite", 3, 5, 1, 0 }, { "pillbug", 3, 4, 2, 2 }, { "gnat", 4, 1.4, 1, 6 }, { "ant", 8, 1, 2, 8 } },
+    { weather = "night", { "mite", 3, 5, 1, 0 }, { "pillbug", 3, 4, 2, 2 }, { "queen", 1, 1, 1, 4, MID }, { "gnat", 4, 1.4, 1, 6 },
+        { "ant", 8, 1, 2, 8 } },
     { weather = "rain", { "slug", 2, 8, 1, 0 }, { "brine", 2, 6, 2, 2 }, { "springtail", 8, 0.7, 1, 6 }, { "ant", 8, 1, 2, 6 } },
     { weather = "night", { "spider", 3, 4, 2, 0 }, { "moth", 6, 1.4, 1, 2 }, { "mite", 3, 5, 2, 4 }, { "ant", 12, 0.9, 1, 8 } },
     { weather = "night", { "knight", 3, 5, 1, 0 }, { "slug", 3, 6, 2, 2 }, { "springtail", 8, 0.6, 2, 6 }, { "moth", 6, 1.2, 1, 8 } },
-    { weather = "frost", { "pillbug", 4, 3, 2, 0 }, { "mite", 4, 4, 1, 2 }, { "knight", 2, 5, 2, 6 }, { "gnat", 8, 0.9, 1, 8 } },
+    { weather = "frost", { "pillbug", 4, 3, 2, 0 }, { "mite", 4, 4, 1, 2 }, { "stag", 1, 1, 2, 4, MID }, { "knight", 2, 5, 2, 6 },
+        { "gnat", 8, 0.9, 1, 8 } },
     { weather = "night", { "moth", 10, 1, 2, 0 }, { "spider", 4, 4, 1, 2 }, { "slug", 3, 6, 1, 4 }, { "ant", 16, 0.7, 2, 8 } },
     { weather = "rain", { "springtail", 12, 0.5, 1, 0 }, { "knight", 4, 4, 2, 2 }, { "brine", 3, 6, 1, 6 }, { "mite", 4, 4, 2, 8 } },
     { weather = "night", { "slug", 4, 5, 2, 0 }, { "spider", 5, 3, 1, 2 }, { "moth", 12, 0.8, 2, 4 }, { "knight", 4, 4, 1, 8 },
@@ -396,11 +406,11 @@ local POND = {
     { { "ant", 8, 1.4, 1, 0 }, { "ant", 6, 1.4, 2, 5 } },
     { weather = "rain", { "ant", 8, 1.2, 2, 0 }, { "pillbug", 2, 5, 1, 4 }, { "gnat", 3, 1.5, 1, 8 } },
     { { "ant", 10, 1.1, 1, 0 }, { "brine", 1, 1, 2, 4 }, { "mite", 1, 1, 2, 8 } },
-    { weather = "night", { "moth", 5, 1.6, 1, 0 }, { "ant", 10, 1, 2, 2 }, { "spider", 2, 5, 1, 6 } },
+    { weather = "night", { "moth", 5, 1.6, 1, 0 }, { "ant", 10, 1, 2, 2 }, { "queen", 1, 1, 1, 4, MID }, { "spider", 2, 5, 1, 6 } },
     { weather = "rain", { "slug", 2, 8, 1, 0 }, { "brine", 2, 6, 2, 3 }, { "ant", 12, 0.9, 2, 6 } },
     { weather = "drought", { "knight", 2, 5, 1, 0 }, { "mite", 2, 6, 2, 2 }, { "pillbug", 3, 4, 2, 4 }, { "gnat", 5, 1.2, 1, 8 } },
     { weather = "night", { "moth", 8, 1.2, 2, 0 }, { "spider", 3, 4, 1, 3 }, { "ant", 12, 0.9, 1, 6 } },
-    { { "ant", 10, 1, 2, 0 }, { "queen", 1, 1, 1, 3 }, { "gnat", 6, 1, 2, 10 } },
+    { { "ant", 10, 1, 2, 0 }, { "stag", 1, 1, 1, 3, MID }, { "gnat", 6, 1, 2, 10 } },
     { weather = "rain", { "brine", 3, 6, 1, 0 }, { "knight", 3, 5, 2, 2 }, { "slug", 2, 8, 1, 6 }, { "gnat", 8, 1, 2, 8 } },
     { weather = "frost", { "pillbug", 5, 3, 1, 0 }, { "knight", 4, 4, 2, 2 }, { "spider", 4, 4, 1, 6 }, { "mite", 3, 5, 2, 8 } },
     { weather = "night", { "moth", 10, 1, 1, 0 }, { "slug", 3, 6, 2, 2 }, { "ant", 20, 0.6, 1, 6 }, { "brine", 2, 8, 2, 8 } },
@@ -447,27 +457,27 @@ D.LEVELS = {
         growth = 0.42, unlock = { giant = 4 },
         mutateAfter = { [2] = true, [4] = true, [7] = true, [9] = true },
         loadout = { "puffer", "needle", "mat", "mane", "relay", "mortar" },
-        idea = "A CRACKED POT. CUT AND REGROW, AND WATCH THE HOLE", boss = "QUEEN ANT" },
+        idea = "A CRACKED POT. CUT AND REGROW, AND WATCH THE HOLE", boss = "DUNG, STAG, QUEEN ANT" },
     { id = "shed", name = "THE SHED FLOOR", map = "shed", waves = SHED, start = 160, heart = 23, open = true, growth = 0.08,
         unlock = { giant = 5 },
         mutateAfter = { [3] = true, [5] = true, [8] = true, [10] = true, [12] = true },
         loadout = { "puffer", "needle", "mat", "mane", "shelf", "stink" },
-        idea = "BOARDS AND LEGO. HOLD THE CHOKEPOINT", boss = "STAG BEETLE" },
+        idea = "BOARDS AND LEGO. HOLD THE CHOKEPOINT", boss = "DUNG, QUEEN, STAG BEETLE" },
     { id = "log", name = "THE ROTTING LOG", map = "log", waves = LOG, start = 130, heart = 20, open = true, growth = 0.2,
         ringNodes = 3, unlock = { giant = 4 },
         mutateAfter = { [2] = true, [4] = true, [7] = true, [9] = true, [11] = true },
         loadout = { "puffer", "needle", "mane", "lamp", "inky", "mortar" },
-        idea = "DARK AND DAMP. THREE NODES CLOSE A RING", boss = "CLICK BEETLE" },
+        idea = "DARK AND DAMP. THREE NODES CLOSE A RING", boss = "QUEEN, STAG, CLICK BEETLE" },
     { id = "pond", name = "THE POND EDGE", map = "pond", waves = POND, start = 150, heart = 20, open = true, growth = 0.08,
         unlock = { giant = 4 },
         mutateAfter = { [2] = true, [4] = true, [7] = true, [9] = true },
         loadout = { "puffer", "needle", "mat", "mane", "stink", "lamp" },
-        idea = "WATER AND REEDS. BUILD ON HIGH GROUND", boss = "GIANT WATER BUG" },
+        idea = "WATER AND REEDS. BUILD ON HIGH GROUND", boss = "QUEEN, STAG, GIANT WATER BUG" },
     { id = "lawn", name = "THE LAWN", map = "lawn", waves = LAWN, start = 140, heart = 20, open = true, growth = 0.2,
         unlock = { giant = 5 },
         mutateAfter = { [3] = true, [5] = true, [8] = true, [10] = true, [12] = true },
         loadout = { "puffer", "needle", "mat", "mane", "mortar", "stink" },
-        idea = "OPEN GRASS, THREE GATES. EVERYTHING AT ONCE", boss = "GIANT CENTIPEDE" },
+        idea = "OPEN GRASS, THREE GATES. EVERYTHING AT ONCE", boss = "QUEEN, STAG, GIANT CENTIPEDE" },
 }
 D.LEVEL = {}
 for _, l in ipairs(D.LEVELS) do D.LEVEL[l.id] = l end

@@ -719,9 +719,10 @@ function Game:nextWave()
 end
 
 -- Endless: after the level is won the run goes on. Wave n past the last is
--- one of the level's own later waves (one with a boss every fifth), more of
--- everything, closer together, and the enemies tougher each wave than the
--- last, bosses too.
+-- one of the level's own later waves (one with a boss every fifth, every
+-- fourth past 20, every third past 40), more of everything, closer together,
+-- and the enemies tougher each wave than the last, bosses too. From 10 a boss
+-- wave brings an extra boss from the level's own, and another every 10 more.
 function Game:goEndless()
     if self.phase ~= "won" then return end
     self.endless = true
@@ -753,7 +754,9 @@ function Game:endlessWave(n)
             for _, g in ipairs(w) do if D.ENEMIES[g[1]].boss then bossy[#bossy + 1] = w; break end end
         end
     end
-    local from = (k % 5 == 0 and bossy[1]) and bossy[random(#bossy)] or plain[random(#plain)] or waves[#waves]
+    local apart = k > 40 and 3 or (k > 20 and 4 or 5)
+    local bossWave = k % apart == 0 and bossy[1]
+    local from = bossWave and bossy[random(#bossy)] or plain[random(#plain)] or waves[#waves]
     local more, closer = 1 + 0.12 * k, 1 / (1 + 0.06 * k)
     local weathers = { false, "rain", "night", "drought", "frost" }
     local w = { weather = from.weather }
@@ -762,7 +765,21 @@ function Game:endlessWave(n)
         local boss = D.ENEMIES[g[1]].boss
         local count = boss and g[2] or max(1, floor(g[2] * more + 0.5))
         local every = boss and g[3] or max(0.25, g[3] * closer)
+        -- At full strength: a boss met weaker part way through the level is not here.
         w[#w + 1] = { g[1], count, every, g[4], g[5] * closer }
+    end
+    if bossWave then
+        -- The level's bosses, and the gates its waves come in at.
+        local bosses, seen, gates = {}, {}, {}
+        for _, wv in ipairs(waves) do
+            for _, g in ipairs(wv) do
+                if D.ENEMIES[g[1]].boss and not seen[g[1]] then seen[g[1]] = true; bosses[#bosses + 1] = g[1] end
+                gates[#gates + 1] = g[4]
+            end
+        end
+        for x = 1, floor(k / 10) do
+            w[#w + 1] = { bosses[random(#bosses)], 1, 1, gates[random(#gates)], 4 + 6 * x }
+        end
     end
     return w
 end
@@ -777,7 +794,7 @@ function Game:startWave()
     for _, g in ipairs(self.waves[self.wave]) do
         local kind, n, every, gate, at = g[1], g[2], g[3], g[4], g[5]
         for k = 0, n - 1 do
-            self.queue[#self.queue + 1] = { kind = kind, gate = gate, t = at + k * every }
+            self.queue[#self.queue + 1] = { kind = kind, gate = gate, t = at + k * every, hp = g[6] }
         end
     end
     table.sort(self.queue, function(a, b) return a.t < b.t end)
@@ -798,6 +815,7 @@ function Game:spawnAt(kind, x, z, c, r)
     local d = D.ENEMIES[kind]
     local scale = d.boss and 1 or 1 + (self.level.growth or D.HP_GROWTH) * (self.wave - 1)
     -- Endless: everything tougher each wave than the last, bosses too.
+    scale = scale * (self.spawnScale or 1) -- a wave's own say: a boss met mid-level comes in weaker
     local deep = self:endlessDepth()
     if deep > 0 then scale = scale * 1.07 ^ deep * (d.boss and 1 + 0.05 * deep or 1) end
     local hp = d.hp * scale
@@ -807,7 +825,7 @@ function Game:spawnAt(kind, x, z, c, r)
     if d.boss then en.off = 0 end
     en.y = self.world:groundAt(x, z)
     if d.fly then en.y = 12 end
-    if d.ball then en.ballHp, en.ballMax = d.ball, d.ball end
+    if d.ball then en.ballHp = d.ball * (self.spawnScale or 1); en.ballMax = en.ballHp end
     if d.chargeEvery then en.charge = d.chargeEvery * 0.6 end
     if d.broodEvery then en.brood = d.broodEvery * 0.5 end
     if d.webCd then en.webCd = 1 end
@@ -1069,7 +1087,9 @@ function Game:update(dt)
         self.waveClock = self.waveClock + dt
         while self.queue[1] and self.queue[1].t <= self.waveClock do
             local q = table.remove(self.queue, 1)
+            self.spawnScale = q.hp
             self:spawn(q.kind, q.gate)
+            self.spawnScale = nil
         end
         local living = 0
         for _, l in ipairs(self.links) do if alive(l) then living = living + 1 end end
