@@ -47,7 +47,7 @@ its card).
 
 You start with the sprout (the Heart) and 110 nutrients (more on the later
 levels). Grow hyphae out from it to pockets (a leaf, a crumb, a pebble, a dead
-beetle, a lily pad, a stone, a shard of the pot, a bottle cap, rotten wood), grow fruiting bodies on the pockets, and start the
+beetle, a lily pad, a stone), grow fruiting bodies on the pockets, and start the
 wave. Enemies walk the pale trail from the gates on the left to the sprout, and
 chew through any thread they cross.
 
@@ -106,7 +106,7 @@ brings it.
 
 **The five parts.** The Heart pays 2.2 nutrients a second while a wave is on.
 Pockets are poor (pebble, −25% power), normal (leaf, crumb) or rich (dead beetle,
-rotten wood, +30% power, and pays 0.35/s when something grows on it while it is fed). Links
++30% power, and pays 0.35/s when something grows on it while it is fed). Links
 cost `6 + 0.32 × length` (a tile is 16), reach at most 80, have 40 HP and carry
 3 nutrients/s, and each one costs 0.04/s upkeep during a wave. Nutrients are the
 only resource and the ammo: a tower holds a reserve, fires from it, and refills
@@ -224,7 +224,7 @@ shake the board.
 | --- | --- | --- | --- | --- |
 | 1. The Crack | a sidewalk crack across a patio, two gates | 15 | everything up to the Humongous Fungus, a species at a time | Queen Ant, Stag Beetle, Dung Beetle |
 | 2. The Flowerpot | inside a cracked terracotta pot: one trail spirals in from the rim to the sprout in the middle, and from wave 3 bugs come up out of the drainage hole three tiles from it | 12 | cutting and regrowing; a gate behind your lines | Queen Ant |
-| 3. The Shed Floor | dusty floorboards; Lego bricks fix two trails into one chokepoint to the sprout; bottle caps beside it | 13 | chokepoints and blockers, and the Springtail that hops them | Stag Beetle |
+| 3. The Shed Floor | dusty floorboards; piles of bricks fix two trails into one chokepoint to the sprout | 13 | chokepoints and blockers, and the Springtail that hops them | Stag Beetle |
 | 4. The Rotting Log | inside a hollow log, dark nearly every wave; two long straights meet at the sprout | 13 | Fairy Rings close with three nodes here; slugs and mites | Click Beetle |
 | 5. The Pond Edge | the two trails meet on the west shore and wade one flooded lane across a pond; lily pads on the water, stones on the banks, reeds round it | 12 | flooding, high ground; rain often | Giant Water Bug |
 | 6. The Lawn | open mown grass, a long dirt path, three gates | 15 | everything at once, each wave 20% tougher than the last (10% elsewhere) | Queen Ant, Stag Beetle, Giant Centipede |
@@ -234,12 +234,10 @@ three bosses the levels after it each have one of. A save from before the
 Flowerpot, the Shed Floor and the Rotting Log came in keeps every level it had
 open: a level is open once the one before it is won, or it or any after it is.
 
-The pockets past the Crack's: a **lily pad** (normal, lies low: rain washes it),
-a **stone** and a **shard** of the pot (normal, high ground: the Water Bug cannot
-reach them, and a mortar on one has no minimum range), a **bottle cap** (normal,
-a stronghold: its rim walls in its tower, which cannot be webbed or stunned, and
-every link to it is shielded as a shelf shields one) and **rotten wood** (rich).
-A leaf lies low too.
+The pockets past the Crack's: a **lily pad** (normal, lies low: rain washes it)
+and a **stone** (normal, high ground: the Water Bug cannot reach it, and a mortar
+on it has no minimum range). A leaf lies low too. Every board is built from the
+tileset's tiles alone; only the pockets and the sprout's mound are modelled.
 
 **Weather.** A wave can come with weather; the forecast says so before it starts
 (and the top bar while it lasts). Each is a row in `D.WEATHER`, and each has its
@@ -445,8 +443,8 @@ to see every size.
   answers in `D.COUNTERS`.
 - **A map**: a row in `MAPS` in `src/world.lua`. `E` gates (off the left edge, a
   hole in the floor), `=` trail to `H`, `~` flooded trail, `o` water, pocket
-  letters `p L C P S B A O W`, `#` raised patio or skirting, `T` the pot's rim, `X`
-  the log's bark, `K` Lego, `"` grass, `Y` long grass, `r` reeds, `,` boards. The
+  letters `p L C P S B`, `#` raised patio or skirting, `T` the pot's rim, `X`
+  the log's bark, `K` a pile of bricks, `"` grass, `Y` long grass, `r` reeds, `,` boards. The
   trail must reach the Heart from every gate (it asserts). A tiled board also
   wants a theme in `THEMES` (`src/tiled.lua`).
 - **A level**: a row in `D.LEVELS` naming its map, its waves (each can carry a

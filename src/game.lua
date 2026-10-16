@@ -168,8 +168,7 @@ end
 function Game:recompute()
     for _, n in ipairs(self.nodes) do
         n.conn, n.hop, n.cap, n.parent, n.via = false, huge, 0, nil, nil
-        -- A bottle cap's rim walls in what grows on it.
-        if n.tower then n.tower.battery, n.tower.amp, n.tower.warded = 1, 1, (n.pocket and n.pocket.walled) or false end
+        if n.tower then n.tower.battery, n.tower.amp, n.tower.warded = 1, 1, false end
     end
     for _, l in ipairs(self.links) do l.capMul = 1 end
     local h = self.heart
@@ -309,11 +308,9 @@ function Game:cut(l)
     self:recompute()
 end
 
--- How much of a bite gets through: a shelf fungus nearby takes most of it,
--- and so does a bottle cap at either end.
+-- How much of a bite gets through: a shelf fungus nearby takes most of it.
 function Game:shield(l)
     local best = 1
-    if (l.a.pocket and l.a.pocket.walled) or (l.b.pocket and l.b.pocket.walled) then best = D.TOWER.shelf.shieldMul end
     for _, m in ipairs(self.mats) do
         if m.kind == "shelf" then
             local d = D.TOWER.shelf

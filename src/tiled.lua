@@ -67,10 +67,11 @@ local SET = {
     bark = { 25 },
     rot = { 26, 25, 19, 20, 26 },
     sticks = { 48, 49, 50, 51, 52, 30, 31 },
+    hole = { 105 },
 }
 
 -- Each level's look: which characters stand a block up (`raised`, with the
--- tiles for their top and sides), the tiles for the rest of the field, and
+-- tiles for their top and sides, or `tiles` of their own), the tiles for the rest of the field, and
 -- what grows on the raised ground and in the field, how often.
 local THEMES = {
     pond = {
@@ -91,9 +92,11 @@ local THEMES = {
         raised = { T = true }, raisedTop = SET.clay, raisedSide = SET.dirt, tall = true,
         field = SET.potting, raisedProp = { SET.shards, 0.3 }, fieldProp = { ["."] = { SET.sprigs, 0.1 } },
     },
-    -- The shed: dark floorboards, a pale skirting board round them.
+    -- The shed: dark floorboards, a pale skirting board round them, and piles
+    -- of bricks (K) on the floor that the trail runs between.
     shed = {
-        raised = { ["#"] = true }, raisedTop = SET.skirting, raisedSide = SET.skirting,
+        raised = { ["#"] = true, K = true }, raisedTop = SET.skirting, raisedSide = SET.skirting,
+        tiles = { K = { top = SET.slab, side = SET.slab } },
         field = SET.boards, fieldProp = { [","] = { SET.pebbles, 0.05 } },
     },
     -- The hollow log: its bark walls high and mossed over, the floor rotten
@@ -270,17 +273,19 @@ function Tiled.paint(world, view)
             local ch = cell(c, r)
             local top = Tiled.level(world, ch, c, r, q)
             local raised = theme.raised[ch]
+            local own = theme.tiles and theme.tiles[ch] -- a raised character with tiles of its own
             for k = BASE, top do
                 local t, drop, calm, ford = pick(SET.under, c, r, k + 90), 0, false, nil
                 if k == top then
-                    if raised then t = pick(theme.raisedTop, c, r, 82)
+                    if raised then t = pick(own and own.top or theme.raisedTop, c, r, 82)
+                    elseif ch == "E" and c > 0 then t = SET.hole[1] -- a hole in the floor
                     elseif TRAIL[ch] then t = pick(SET.trail, c, r, 83)
                     elseif WATER[ch] then
                         t, drop, calm = pick(SET.water, c, r, 84), 4, true
                         if ch == "~" then ford = pick(SET.trail, c, r, 83) end
                     else t = pick(theme.field, c, r, 85) end
                 elseif raised and k > 0 then
-                    t = pick(theme.raisedSide, c, r, k + 86)
+                    t = pick(own and own.side or theme.raisedSide, c, r, k + 86)
                 end
                 stamp(t, vc, vr, k * L, drop, false, calm, ford)
             end

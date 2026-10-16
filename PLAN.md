@@ -37,11 +37,10 @@ the game; the numbers behind every ticked item are rows in `src/defs.lua`.
 
 ### MVP4
 - [x] The Flowerpot (boss: Queen Ant): a spiral trail in from the rim, and a drainage-hole gate beside the sprout
-- [x] The Shed Floor (boss: Stag Beetle): Lego bricks fix two trails into one chokepoint; bottle caps as strongholds
+- [x] The Shed Floor (boss: Stag Beetle): piles of bricks fix two trails into one chokepoint
 - [x] The Rotting Log (boss: the new Click Beetle): dark nearly every wave, Fairy Rings of three
 - [x] Springtail (hops shelves and mats; its first landing by a thread snaps it)
 - [x] Click Beetle (plays dead on its back, soft; then leaps down the trail, cutting and stunning where it lands)
-- [x] New pockets: shard (high ground), bottle cap (walled), rotten wood (rich)
 - [x] The picker in rows for six levels; saves from before keep what they had open
 
 ## Next
@@ -53,8 +52,8 @@ the game; the numbers behind every ticked item are rows in `src/defs.lua`.
 - [ ] Elite modifiers: Fungicidal, Scent-masked, Armored shell, Hive-minded
 
 ### Environment
-- [ ] Props: matchsticks, magnifying glass (bottle caps and Lego bricks are in)
-- [ ] Pocket kinds: leaf litter (lily pad, stone, shard, bottle cap and rotten wood are in)
+- [ ] Props: bottle caps, matchsticks, Lego bricks, magnifying glass (only if the tileset gets tiles for them)
+- [ ] Pocket kinds: rotting log, leaf litter (lily pad and stone are in)
 
 ### Progression
 - [ ] Spore Bank (meta progression between levels)

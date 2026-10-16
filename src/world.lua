@@ -46,18 +46,15 @@ World.TILE = TILE
 --   pockets, where fruiting bodies grow:
 --   p  a pebble (poor)   L  a fallen leaf, C  a crumb, P  a lily pad, S  a stone (normal)
 --   B  a dead beetle (rich)
---   A  a shard of the pot (normal, high ground)   O  a bottle cap (normal, walled)
---   W  a lump of rotten wood (rich)
---   T  the flowerpot's terracotta rim (raised)    K  a Lego brick: a wall the trail
---   X  the log's bark wall (raised)                  is fixed by
+--   T  the flowerpot's terracotta rim (raised)    X  the log's bark wall (raised)
+--   K  a pile of bricks on the shed floor (raised): a wall the trail is fixed by
 --   ,  the shed's floorboards
 -- An E that is not on the left edge is a hole in the floor: the drainage hole
 -- of the flowerpot, where the bugs come up from below.
 --
--- A stone or a shard is high ground: the Giant Water Bug cannot reach what grows
--- on it, and a mortar on it has no minimum range. A leaf and a lily pad lie low:
--- rain washes the spores off them. A bottle cap is a stronghold: its rim walls
--- in what grows on it (no web or stun gets through) and shields its links.
+-- A stone is high ground: the Giant Water Bug cannot reach what grows on it,
+-- and a mortar on it has no minimum range. A leaf and a lily pad lie low: rain
+-- washes the spores off them.
 local MAPS = {
     -- The Crack: a sidewalk crack across an abandoned patio.
     crack = {
@@ -110,45 +107,45 @@ local MAPS = {
 MAPS.flowerpot = {
     "TTTTTTTTTTTTTTTT",
     "E============.LT",
-    "T.p.C...A..B=.CT",
+    "T.p.C...S..B=.CT",
     "T.=======.L.=..T",
-    "TL=.p.C.=.A.=.AT",
+    "TL=.p.C.=.S.=.ST",
     "T.=.E==H=...=.pT",
     "TC=..L...C..=.LT",
-    "T.=.B..A..p.=..T",
+    "T.=.B..S..p.=..T",
     "T.===========..T",
-    "T.L..C..A.L..C.T",
+    "T.L..C..S.L..C.T",
     "TTTTTTTTTTTTTTTT",
 }
--- The Shed Floor: dusty boards and a child's Lego. The bricks fix the trail:
--- two ways in, one chokepoint to the sprout, and bottle caps to hold it from.
+-- The Shed Floor: dusty boards and piles of bricks. The bricks fix the trail:
+-- two ways in, one chokepoint to the sprout.
 MAPS.shed = {
     "##################",
     "E=====,C,,,p,,,C,#",
-    "#,O,,=,,,L,,,O,,,#",
+    "#,C,,=,,,L,,,C,,,#",
     "#,p,,=,KKKK,,B,,,#",
     "#C,,,====,K,,C,p,#",
     "#,,L,KKK=,K,,,L,,#",
-    "#,O,,,,,=======H,#",
+    "#,C,,,,,=======H,#",
     "#,,C,KKK=,K,,C,p,#",
-    "#p,,,====,K,,O,,,#",
+    "#p,,,====,K,,C,,,#",
     "#,B,,=,KKKK,,L,,,#",
     "E=====,,p,C,,,B,,#",
     "##################",
 }
--- The Rotting Log: inside a hollow log, damp and dark, rotten wood everywhere.
+-- The Rotting Log: inside a hollow log, damp and dark, dead beetles in the rot.
 -- Two long straights meet at the sprout: the Click Beetle's runway.
 MAPS.log = {
     "XXXXXXXXXXXXXXXX",
-    "E======.W.L..p.X",
-    "X.W.L.=..C.L...X",
-    "X..C..=.W..L.C.X",
-    "XW....======.p.X",
-    "X.L.W.....L=.C.X",
-    "X..W.C.L...=H.LX",
-    "Xp...W.....=.C.X",
-    "X.W.L.======..CX",
-    "X..C..=.W..L.L.X",
+    "E======.B.L..p.X",
+    "X.B.L.=..C.L...X",
+    "X..C..=.B..L.C.X",
+    "XB....======.p.X",
+    "X.L.B.....L=.C.X",
+    "X..B.C.L...=H.LX",
+    "Xp...B.....=.C.X",
+    "X.B.L.======..CX",
+    "X..C..=.B..L.L.X",
     "E======.L.p..p.X",
     "XXXXXXXXXXXXXXXX",
 }
@@ -164,9 +161,6 @@ local POCKET = {
     P = { kind = "lily", quality = "normal", low = true, wet = true },
     S = { kind = "stone", quality = "normal", high = true },
     B = { kind = "beetle", quality = "rich" },
-    A = { kind = "shard", quality = "normal", high = true },
-    O = { kind = "cap", quality = "normal", walled = true },
-    W = { kind = "wood", quality = "rich" },
 }
 -- Tiles that are water on top, and tiles an enemy can walk.
 local WET = { ["~"] = true, o = true, P = true }
@@ -345,38 +339,6 @@ end }
 MAT.reed = { id = 13, ramp = T.ramp("t", "m", "m", "d") }
 MAT.cattail = { id = 14, ramp = T.ramp("t", "n", "u", "o") }
 MAT.blade = { id = 15, ramp = RAMP.leaf }
--- A shard of the pot: terracotta, its broken edge pale.
-MAT.clay = { id = 16, ramp = T.ramp("t", "r", "n", "u"), print = function(s, x, y, z, nx, ny, nz, lev)
-    if abs(s.uy or 0) > 0.8 then return IDX.t end
-    if grain(x * 2, z * 2 + y, 17) > 0.94 then return IDX.u end
-end }
--- A bottle cap, red, crimped round its rim, the brand a cream ring on top.
-MAT.cap = { id = 17, ramp = T.ramp("w", "r", "r", "u"), print = function(s, x, y, z, nx, ny, nz, lev)
-    -- (x, z) is in the room; the cap sits in the middle of its tile.
-    local cx, cz = floor(x / TILE) * TILE + TILE / 2, floor(z / TILE) * TILE + TILE / 2
-    if ny < 0.5 then
-        if abs(math.sin(math.atan2(z - cz, x - cx) * 11)) < 0.3 then return IDX.u end
-    elseif abs(sqrt((x - cx) ^ 2 + (z - cz) ^ 2) - 3.6) < 0.45 then
-        return IDX.w
-    end
-end }
--- Rotten wood: soft, ringed on its cut end, mossy where it lies.
-MAT.wood = { id = 18, ramp = T.ramp("t", "n", "u", "o"), print = function(s, x, y, z, nx, ny, nz, lev)
-    local ux, uy, uz = s.ux or 0, s.uy or 0, s.uz or 0
-    if abs(ux) > 0.75 then
-        if abs((sqrt(uy * uy + uz * uz) * 4) % 1 - 0.5) < 0.12 then return IDX.u end
-        return
-    end
-    if uy > 0.55 and grain(x * 1.5, z * 1.5, 18) > 0.55 then return IDX.m end
-    if abs((uz * 5 + ux * 0.6) % 1 - 0.5) < 0.07 then return IDX.u end
-end }
--- Lego: a brick's studs and sides in one colour, a hairline at each stud's foot.
-local function brick(id, rmp) return { id = id, ramp = rmp } end
-MAT.legoR = brick(19, T.ramp("w", "r", "r", "u"))
-MAT.legoY = brick(20, T.ramp("w", "w", "t", "n"))
-MAT.legoG = brick(21, T.ramp("w", "s", "k", "u"))
--- The drainage hole: a dark mouth in the floor.
-MAT.hole = { id = 22, ramp = T.ramp("u", "o", "o", "o") }
 
 --- building it -------------------------------------------------------------------
 
@@ -487,20 +449,6 @@ function World.new(id)
                     add("ell", MAT.stone, { at = ell(cx, 1.5, cz, 6.6, 5.6, 5.8, turn) })
                     add("ell", MAT.stone, { at = A.mul(A.move(cx, 0, cz), turn, T.ell(4.6, 0.6, 3, 3, 2.4, 2.6)) })
                     top = 6.6
-                elseif pk.kind == "shard" then
-                    -- A curved piece of the pot standing on its edge, another
-                    -- fallen flat beside it.
-                    add("ell", MAT.clay, { at = A.mul(A.move(cx, 4, cz), turn, A.rotZ(0.25), A.scale(1.4, 5, 6)) })
-                    add("ell", MAT.clay, { at = A.mul(A.move(cx, 0.5, cz), turn, A.move(2.5, 0, 2.5), A.scale(3.6, 0.9, 3)) })
-                    top = 8
-                elseif pk.kind == "cap" then
-                    add("cyl", MAT.cap, { cx = cx, cz = cz, r = 6.5, y0 = -0.5, y1 = 2.6 })
-                    top = 2.6
-                elseif pk.kind == "wood" then
-                    -- A lump of rotten wood, lying, and a crumb of it broken off.
-                    add("ell", MAT.wood, { at = ell(cx, 1.6, cz, 7.5, 3.4, 4.2, turn) })
-                    add("ell", MAT.wood, { at = A.mul(A.move(cx, 0, cz), turn, T.ell(4.2, 0.6, 4, 2, 1.4, 1.8)) })
-                    top = 4.6
                 elseif pk.kind == "beetle" then
                     -- On its back: the reason it is rich.
                     add("ell", MAT.beetle, { at = ell(cx, 0.6, cz, 6, 2.6, 4.2, turn) })
@@ -517,15 +465,13 @@ function World.new(id)
                     top = 2.3
                 end
                 self.pockets[#self.pockets + 1] = { x = cx, z = cz, y = top + lift, c = c, r = r,
-                    kind = pk.kind, quality = pk.quality, low = pk.low, high = pk.high, wet = pk.wet, walled = pk.walled }
+                    kind = pk.kind, quality = pk.quality, low = pk.low, high = pk.high, wet = pk.wet }
             elseif ch == "H" then
                 add("ell", MAT.mound, { at = ell(cx, -0.5, cz, 7, 3, 7) })
                 self.heart = { x = cx, z = cz, y = 2.2 + lift, c = c, r = r }
             elseif ch == "E" then
                 -- Off the left edge, it is a hole the bugs come up out of.
-                local hole = c > 0
-                self.entrances[#self.entrances + 1] = { c = c, r = r, x = cx, z = cz, hole = hole }
-                if hole then add("ell", MAT.hole, { at = ell(cx, -0.3, cz, 6.4, 0.6, 6.4) }) end
+                self.entrances[#self.entrances + 1] = { c = c, r = r, x = cx, z = cz, hole = c > 0 }
             elseif self.tiled then
                 -- The tiles bring their own grass, reeds and gravel.
             elseif ch == "r" then
@@ -553,30 +499,6 @@ function World.new(id)
                 -- Gravel: not a pocket, just something to look at.
                 add("ell", MAT.pebble, { at = ell(cx + (seed - 4), 0, cz + (seed % 3 - 1) * 3,
                     1.6 + seed * 0.2, 1.1, 1.4, A.rotY(seed)) })
-            end
-        end
-    end
-
-    -- Lego: each run of K along a row is one brick, studs on top, its colour
-    -- by where it is.
-    local LEGO = { MAT.legoR, MAT.legoY, MAT.legoG }
-    for r = 0, self.rows - 1 do
-        local c = 0
-        while c < self.cols do
-            if cell(c, r) == "K" then
-                local c1 = c
-                while cell(c1 + 1, r) == "K" do c1 = c1 + 1 end
-                lift = self.tiled and Tiled.ground(self, "K", c, r) or 0
-                local m = LEGO[(r * 3 + c) % 3 + 1]
-                add("box", m, { x0 = c * TILE + 1, x1 = (c1 + 1) * TILE - 1, y0 = -1, y1 = 7.6, z0 = r * TILE + 1, z1 = (r + 1) * TILE - 1 })
-                for k = c, c1 do
-                    for _, o in ipairs({ { 4, 4 }, { 12, 4 }, { 4, 12 }, { 12, 12 } }) do
-                        add("cyl", m, { cx = k * TILE + o[1], cz = r * TILE + o[2], r = 2.4, y0 = 7, y1 = 9.2 })
-                    end
-                end
-                c = c1 + 1
-            else
-                c = c + 1
             end
         end
     end
