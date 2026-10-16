@@ -4,12 +4,13 @@
 directory keep that name.)
 
 A tower defense where you are the mycelium under a sprout, built from the design
-doc (`DESIGN.md`, 13 oct 2026). Three levels, each its own map and waves (The
-Crack, The Pond Edge, The Lawn), weather that changes wave by wave, twelve
-fruiting bodies that each fork into two upgrade branches of two tiers, nine
-enemies, six bosses (big bugs: a Queen Ant, a Stag Beetle, a Dung Beetle with its
-ball, a Giant Water Bug, a Giant Centipede and, in challenge mode, a Bombardier
-Beetle), and Mutations between waves. All of it sits on the MVP's sever / prune /
+doc (`DESIGN.md`, 13 oct 2026). Six levels, each its own map and waves (The
+Crack, The Flowerpot, The Shed Floor, The Rotting Log, The Pond Edge, The Lawn),
+weather that changes wave by wave, twelve fruiting bodies that each fork into two
+upgrade branches of two tiers, ten enemies, seven bosses (big bugs: a Queen Ant, a
+Stag Beetle, a Dung Beetle with its ball, a Click Beetle, a Giant Water Bug, a
+Giant Centipede and, in challenge mode, a Bombardier Beetle), and Mutations
+between waves. All of it sits on the MVP's sever / prune /
 regrow loop, the Fairy Ring and the Spore Pulse. It is drawn isometrically with
 Survive School's 3D method and the frog prototype's world painter (sekiroclone).
 
@@ -17,7 +18,8 @@ Survive School's 3D method and the frog prototype's world painter (sekiroclone).
 love .                 # LÖVE 11.x
 love . --shots         # dev: a scripted game that clicks like a player, writes
                        # screenshots to the save directory, prints a summary, quits
-love . --shots pond    # dev: the same for another level (pond, lawn), the bot playing;
+love . --shots pond    # dev: the same for another level (flowerpot, shed, log, pond,
+                       # lawn), the bot playing;
                        # add `challenge` for the challenge wave
 love . --sheet         # dev: every look of every model on one sheet (sheet.png)
 love . --sounds        # dev: every sound and loop written as a .wav (sounds/), to listen to
@@ -45,7 +47,7 @@ its card).
 
 You start with the sprout (the Heart) and 110 nutrients (more on the later
 levels). Grow hyphae out from it to pockets (a leaf, a crumb, a pebble, a dead
-beetle, a lily pad, a stone), grow fruiting bodies on the pockets, and start the
+beetle, a lily pad, a stone, a shard of the pot, a bottle cap, rotten wood), grow fruiting bodies on the pockets, and start the
 wave. Enemies walk the pale trail from the gates on the left to the sprout, and
 chew through any thread they cross.
 
@@ -71,7 +73,7 @@ chew through any thread they cross.
 | `R` | restart after a win or loss (`Shift+R` any time) |
 | `N` | after a win: on to the next level's loadout |
 | `M` | the level picker (`Esc` there goes back to the run) |
-| `1` `2` `3`, `C` in the picker | pick a level; challenge mode on or off |
+| `1`–`6`, `C` in the picker | pick a level; challenge mode on or off |
 | click a species in the loadout | read it in the panel; click it again to bring it or leave it (six at most) |
 | a species' key in the loadout | bring it or leave it at once |
 | `Enter` / `Space`, `Esc` in the loadout | grow the level with that loadout; back to the levels |
@@ -104,7 +106,7 @@ brings it.
 
 **The five parts.** The Heart pays 2.2 nutrients a second while a wave is on.
 Pockets are poor (pebble, −25% power), normal (leaf, crumb) or rich (dead beetle,
-+30% power, and pays 0.35/s when something grows on it while it is fed). Links
+rotten wood, +30% power, and pays 0.35/s when something grows on it while it is fed). Links
 cost `6 + 0.32 × length` (a tile is 16), reach at most 80, have 40 HP and carry
 3 nutrients/s, and each one costs 0.04/s upkeep during a wave. Nutrients are the
 only resource and the ammo: a tower holds a reserve, fires from it, and refills
@@ -175,7 +177,10 @@ it stuck and soft), Mite Swarm (ten 4-HP mites that each go for a link), Brine
 Drop (above), Fungus Gnat (flies straight at the sprout over everything; only
 puffers and needles reach it), Slug (huge, slow, can't be slowed, stops to eat any
 fruiting body it passes), Wolf Spider (leaves the trail for your deadliest tower
-and webs it shut), Beetle Knight (armor 9: cheap hits glance off). Each wave's
+and webs it shut), Beetle Knight (armor 9: cheap hits glance off), Springtail
+(every few seconds it springs off its tail, and at once when a shelf blocks it or
+a mat is under it: over and on, two tiles down the trail; the first time it comes
+down beside a thread, the thread snaps). Each wave's
 enemies have 10% more HP than the last.
 
 **Bosses.** The design doc's human-world bosses became big bugs (see
@@ -191,6 +196,12 @@ shake the board.
   every hit and flattens links, mats and shelves; broken, it leaves a heap worth
   60 and the beetle runs. If the ball reaches the sprout it is 20 damage on its
   own.
+- **Click Beetle** (the Rotting Log, wave 13): every seven seconds it rolls onto
+  its back and plays dead for 2.4 s, and on its back it is soft (no armor, and
+  it takes half as much again). Then it clicks and leaps three and a half tiles
+  down the trail, over everything; where it comes down, links within 20 are cut
+  and towers within 30 stunned for 2.5 s. Answer: hit it while it is on its
+  back, and have a second way to the Heart (or a Lion's Mane) where it lands.
 - **Giant Water Bug** (the Pond Edge, wave 12): under the flooded lane it cannot
   be seen or hurt, only its ripples. Every seven seconds it surfaces, lunges at
   the nearest fruiting body within 44 and drags at it for 2.6 s. Answer: build on
@@ -212,12 +223,23 @@ shake the board.
 | level | map | waves | new | boss |
 | --- | --- | --- | --- | --- |
 | 1. The Crack | a sidewalk crack across a patio, two gates | 15 | everything up to the Humongous Fungus, a species at a time | Queen Ant, Stag Beetle, Dung Beetle |
-| 2. The Pond Edge | the two trails meet on the west shore and wade one flooded lane across a pond; lily pads on the water, stones on the banks, reeds round it | 12 | flooding, high ground; rain often | Giant Water Bug |
-| 3. The Lawn | open mown grass, a long dirt path, three gates | 15 | everything at once, each wave 20% tougher than the last (10% elsewhere) | Queen Ant, Stag Beetle, Giant Centipede |
+| 2. The Flowerpot | inside a cracked terracotta pot: one trail spirals in from the rim to the sprout in the middle, and from wave 3 bugs come up out of the drainage hole three tiles from it | 12 | cutting and regrowing; a gate behind your lines | Queen Ant |
+| 3. The Shed Floor | dusty floorboards; Lego bricks fix two trails into one chokepoint to the sprout; bottle caps beside it | 13 | chokepoints and blockers, and the Springtail that hops them | Stag Beetle |
+| 4. The Rotting Log | inside a hollow log, dark nearly every wave; two long straights meet at the sprout | 13 | Fairy Rings close with three nodes here; slugs and mites | Click Beetle |
+| 5. The Pond Edge | the two trails meet on the west shore and wade one flooded lane across a pond; lily pads on the water, stones on the banks, reeds round it | 12 | flooding, high ground; rain often | Giant Water Bug |
+| 6. The Lawn | open mown grass, a long dirt path, three gates | 15 | everything at once, each wave 20% tougher than the last (10% elsewhere) | Queen Ant, Stag Beetle, Giant Centipede |
 
-The Crack stands in for the design doc's first five levels (it has their three
-bosses). The new pockets: a **lily pad** (normal, lies low: rain washes it) and a
-**stone** (normal, high ground: the Water Bug cannot reach it). A leaf lies low too.
+They come in the design doc's order. The Crack, the first, also brings the
+three bosses the levels after it each have one of. A save from before the
+Flowerpot, the Shed Floor and the Rotting Log came in keeps every level it had
+open: a level is open once the one before it is won, or it or any after it is.
+
+The pockets past the Crack's: a **lily pad** (normal, lies low: rain washes it),
+a **stone** and a **shard** of the pot (normal, high ground: the Water Bug cannot
+reach them, and a mortar on one has no minimum range), a **bottle cap** (normal,
+a stronghold: its rim walls in its tower, which cannot be webbed or stunned, and
+every link to it is shielded as a shelf shields one) and **rotten wood** (rich).
+A leaf lies low too.
 
 **Weather.** A wave can come with weather; the forecast says so before it starts
 (and the top bar while it lasts). Each is a row in `D.WEATHER`, and each has its
@@ -421,12 +443,15 @@ to see every size.
   `enemyPicture` in `main.lua`, and a branch in `Game:move` if it does something to
   the network nothing else does. Put it in a wave in `D.WAVES`, and give it its
   answers in `D.COUNTERS`.
-- **A map**: a row in `MAPS` in `src/world.lua`. `E` gates, `=` trail to `H`,
-  `~` flooded trail, `o` water, pocket letters `p L C P S B`, `#` raised patio,
-  `"` grass, `Y` long grass, `r` reeds. The trail must reach the Heart from every
-  gate (it asserts).
+- **A map**: a row in `MAPS` in `src/world.lua`. `E` gates (off the left edge, a
+  hole in the floor), `=` trail to `H`, `~` flooded trail, `o` water, pocket
+  letters `p L C P S B A O W`, `#` raised patio or skirting, `T` the pot's rim, `X`
+  the log's bark, `K` Lego, `"` grass, `Y` long grass, `r` reeds, `,` boards. The
+  trail must reach the Heart from every gate (it asserts). A tiled board also
+  wants a theme in `THEMES` (`src/tiled.lua`).
 - **A level**: a row in `D.LEVELS` naming its map, its waves (each can carry a
-  `weather`), its starting nutrients and sprout, when it mutates, and the
+  `weather`), its starting nutrients and sprout, how much tougher each wave gets
+  (`growth`), how few nodes close a ring (`ringNodes`), when it mutates, and the
   `loadout` it suggests the first time. It gets a
   card in the picker by being in the list. Give it a build order in `PLANS`
   (`src/bot.lua`) to balance it with `--bot`.

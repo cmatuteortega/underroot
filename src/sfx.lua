@@ -377,6 +377,15 @@ local DEFS = {
     charge = { vol = 0.6, gap = 0.5,
         { dur = 0.6, wave = "saw", f0 = 85, f1 = 140, lp = { 500, 1400 }, vib = { 15, 0.06 }, a = 0.05, curve = 1.2 },
         { dur = 0.6, wave = "noise", lp = { 400 }, vol = 0.6, curve = 1 } },
+    -- A springtail off its tail: a tiny twang.
+    spring = { vol = 0.2, gap = 0.08, poly = 3, wob = 0.15,
+        { dur = 0.07, wave = "tri", f0 = 900, f1 = 2400, bend = 0.4, curve = 2 },
+        { dur = 0.03, wave = "noise", hp = { 3000 }, vol = 0.4 } },
+    -- The Click Beetle's click: a hard snap, and the thud of it going up.
+    clack = { vol = 0.6, gap = 0.3,
+        { dur = 0.03, wave = "noise", hp = { 2000 }, lp = { 9000 }, curve = 1 },
+        { dur = 0.05, wave = "square", f0 = 1800, f1 = 900, duty = 0.2, curve = 2, vol = 0.7 },
+        { at = 0.02, dur = 0.25, wave = "sine", f0 = 160, f1 = 60, curve = 1.8, vol = 0.6 } },
     spray = { vol = 0.5, gap = 0.2,
         { dur = 0.08, wave = "sine", f0 = 200, f1 = 70, curve = 2 },
         { dur = 0.5, wave = "noise", hp = { 1800 }, lp = { 8000, 3000 }, a = 0.02, curve = 1.3, vol = 0.8 } },

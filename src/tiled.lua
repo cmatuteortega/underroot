@@ -57,6 +57,16 @@ local SET = {
     fieldProp = { 43, 46, 58, 56 },
     pebbles = { 62, 53, 43 },
     flowers = { 41, 42, 47, 43 },
+    clay = { 0, 1, 2, 4, 5, 6 },
+    potting = { 17, 18, 19, 20, 17, 18 },
+    shards = { 53, 54, 55, 56, 57, 58, 59, 60 },
+    sprigs = { 45, 43, 46 },
+    skirting = { 14, 15, 16 },
+    boards = { 25, 25, 25, 26 },
+    mossy = { 19, 20 },
+    bark = { 25 },
+    rot = { 26, 25, 19, 20, 26 },
+    sticks = { 48, 49, 50, 51, 52, 30, 31 },
 }
 
 -- Each level's look: which characters stand a block up (`raised`, with the
@@ -74,6 +84,23 @@ local THEMES = {
     lawn = {
         raised = { Y = true }, raisedTop = SET.bush, raisedSide = SET.dirt,
         field = SET.lawn, fieldProp = { ['"'] = { SET.flowers, 0.12 } },
+    },
+    -- Inside the pot: its terracotta rim (two blocks at the back), potting
+    -- soil gone to moss, and broken bits of the pot lying on the rim.
+    flowerpot = {
+        raised = { T = true }, raisedTop = SET.clay, raisedSide = SET.dirt, tall = true,
+        field = SET.potting, raisedProp = { SET.shards, 0.3 }, fieldProp = { ["."] = { SET.sprigs, 0.1 } },
+    },
+    -- The shed: dark floorboards, a pale skirting board round them.
+    shed = {
+        raised = { ["#"] = true }, raisedTop = SET.skirting, raisedSide = SET.skirting,
+        field = SET.boards, fieldProp = { [","] = { SET.pebbles, 0.05 } },
+    },
+    -- The hollow log: its bark walls high and mossed over, the floor rotten
+    -- wood and moss, fallen sticks and ferns on the walls.
+    log = {
+        raised = { X = true }, raisedTop = SET.mossy, raisedSide = SET.bark, tall = true,
+        field = SET.rot, raisedProp = { SET.sticks, 0.35 }, fieldProp = { ["."] = { SET.sprigs, 0.12 } },
     },
 }
 

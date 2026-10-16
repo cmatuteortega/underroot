@@ -104,7 +104,14 @@ local function saveLoadouts()
 end
 
 -- A level is open once the one before it is won; challenge mode once the last is.
-local function levelOpen(n) return n == 1 or won[D.LEVELS[n - 1].id] end
+-- One won already, or any after it, keeps it open: a save from before the
+-- Flowerpot, the Shed Floor and the Rotting Log came in still has the Pond
+-- Edge and the Lawn.
+local function levelOpen(n)
+    if n == 1 or won[D.LEVELS[n - 1].id] then return true end
+    for k = n, #D.LEVELS do if won[D.LEVELS[k].id] then return true end end
+    return false
+end
 local function challengeOpen() return won[D.LEVELS[#D.LEVELS].id] end
 local camx, camy, panx, pany = 0, 0, 0, 0
 local mode = "grow"
@@ -640,23 +647,24 @@ local function mutationCards()
     return cards
 end
 
--- The level picker: a card a level, across the middle (or down it on a
--- narrow screen), and the challenge switch under them once it is open.
+-- The level picker: a card a level, in rows of as many as fit across (three
+-- on a wide screen, two rows of them; down the middle on a narrow one), and
+-- the challenge switch under them once it is open.
 local LW, LH = 124, 50
 local function levelCards()
     local n = #D.LEVELS
+    local cols = max(1, min(3, floor((vw - inset.l - inset.r - 8 + 6) / (LW + 6))))
+    local rows = ceil(n / cols)
+    local gap = cols == 1 and 4 or 6
     local cards = {}
-    local y0
-    if vw - inset.l - inset.r >= n * LW + (n - 1) * 6 + 8 then
-        local x0 = floor((vw - (n * LW + (n - 1) * 6)) / 2)
-        y0 = floor(vh / 2) - 30
-        for k = 1, n do cards[k] = { x = x0 + (k - 1) * (LW + 6), y = y0, w = LW, h = LH, n = k } end
-        y0 = y0 + LH + 8
-    else
-        y0 = floor(vh / 2 - (n * LH + (n - 1) * 4) / 2) - 8
-        for k = 1, n do cards[k] = { x = floor((vw - LW) / 2), y = y0 + (k - 1) * (LH + 4), w = LW, h = LH, n = k } end
-        y0 = y0 + n * (LH + 4) + 4
+    local y0 = floor(vh / 2 - (rows * LH + (rows - 1) * gap) / 2) - 8
+    for k = 1, n do
+        local row, col = floor((k - 1) / cols), (k - 1) % cols
+        local across = min(cols, n - row * cols)
+        local x0 = floor((vw - (across * LW + (across - 1) * 6)) / 2)
+        cards[k] = { x = x0 + col * (LW + 6), y = y0 + row * (LH + gap), w = LW, h = LH, n = k }
     end
+    y0 = y0 + rows * (LH + gap) + 4
     local switch = { x = floor((vw - LW) / 2), y = y0, w = LW, h = 16, challenge = true }
     return cards, switch
 end
@@ -1867,12 +1875,19 @@ local function enemyPicture(e)
         return M.centseg(turned(e.h), floor(e.anim * 8 + (e.x + e.z) * 0.1) % 2)
     elseif k == "bombardier" then
         return M.bombardier(turned(e.h), floor(e.anim * 6) % 2, e.state == "siege")
+    elseif k == "springtail" then
+        return M.springtail(turned(e.h), floor(e.anim * 9) % 2, e.hopT ~= nil)
+    elseif k == "click" then
+        if e.state == "belly" then return M.click(turned(e.h), floor(e.anim * 8) % 2, "belly") end
+        if e.state == "leap" then return M.click(turned(e.h), 0, "leap", floor((e.spin or 0) * 4) % 4) end
+        return M.click(turned(e.h), floor(e.anim * 5) % 2)
     end
     return M.brine(floor(e.anim * 4) % 2)
 end
 
 local SHADOW = { ant = 4, pillbug = 4.5, brine = 3.5, gnat = 2.5, slug = 6, spider = 5, knight = 5,
-    queen = 11, stag = 13, dung = 10, moth = 3.5, waterbug = 12, centipede = 6, centseg = 5.5, bombardier = 10 }
+    queen = 11, stag = 13, dung = 10, moth = 3.5, waterbug = 12, centipede = 6, centseg = 5.5, bombardier = 10,
+    springtail = 3, click = 10 }
 
 -- Something under the water: rings spreading on the surface where it is.
 local function ripples(x, z, t)
@@ -2983,7 +2998,7 @@ local function drawMenu()
     local st = "SOUND " .. lv
     text(st, sw.x + floor((sw.w - Font.width(st)) / 2), sw.y + 3, Sfx.level > 0 and "l" or "k")
     local hintY = vh - inset.b - 12
-    centred(say("1 2 3 OR CLICK A LEVEL", "TAP A LEVEL") .. (challengeOpen() and say("   C: CHALLENGE", "") or ""), hintY, "s", "o")
+    centred(say("1-" .. #D.LEVELS .. " OR CLICK A LEVEL", "TAP A LEVEL") .. (challengeOpen() and say("   C: CHALLENGE", "") or ""), hintY, "s", "o")
 end
 
 -- The info panel, its lines kept inside it (a short screen cuts the end).

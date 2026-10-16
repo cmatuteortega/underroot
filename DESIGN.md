@@ -179,7 +179,7 @@ Seven levels, each teaching one new idea about the network.
 | 1. The Crack | Sidewalk crack | Growing links and towers | Worker Ant, Spore Puffer | None |
 | 2. The Flowerpot | Cracked terracotta pot | Cutting and regrowing | Pillbug, Lion's Mane | Queen Ant |
 | 3. The Shed Floor | Dusty boards, bottle caps, Lego | Chokepoints and blockers | Wolf Spider, Shelf Fungus | Stag Beetle |
-| 4. The Rotting Log | Damp, rich, dark | Fairy Rings and loops | Slug, Mite Swarm, Inky Cap | None |
+| 4. The Rotting Log | Damp, rich, dark | Fairy Rings and loops | Slug, Mite Swarm, Inky Cap | Click Beetle |
 | 5. The Compost Heap | Heat and decay | Economy and decomposition | Green Mold, Cordyceps | Dung Beetle |
 | 6. The Pond Edge | Water and reeds | Flooding, high ground | Brine Drop, Mole Cricket | Giant Water Bug |
 | 7. The Lawn | Open grass, human tools | Everything at once | Beetle Knight, Centipede | Giant Centipede |

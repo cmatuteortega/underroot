@@ -44,6 +44,74 @@ PLANS.crack = {
     { "lay", "shelf", { 5, 2 } }, { "lay", "mat", { 9, 3 } }, { "lay", "shelf", { 5, 8 } },
 }
 
+-- The Flowerpot: puffers either side of the sprout hold the hole and the
+-- last turn of the spiral; the rest reaches out over the rings of trail.
+PLANS.flowerpot = {
+    { "link", "H", { 6, 4 } }, { "build", "puffer", { 6, 4 } },
+    { "link", "H", { 9, 6 } }, { "build", "needle", { 9, 6 } },
+    { "link", "H", { 5, 6 } }, { "build", "puffer", { 5, 6 } },
+    { "lay", "mat", { 8, 4 } },
+    { "link", "H", { 7, 7 } }, { "build", "mane", { 7, 7 } },
+    { "up", { 6, 4 }, 2 }, { "up", { 9, 6 }, 1 },
+    { "link", { 9, 6 }, { 10, 4 } }, { "build", "puffer", { 10, 4 } },
+    { "link", { 7, 7 }, { 10, 7 } }, { "build", "needle", { 10, 7 } },
+    { "lay", "mat", { 6, 5 } },
+    { "link", { 5, 6 }, { 4, 7 } }, { "build", "mortar", { 4, 7 } },
+    { "link", { 6, 4 }, { 4, 4 } }, { "link", { 4, 4 }, { 4, 7 } }, { "build", "relay", { 4, 4 } },
+    { "up", { 5, 6 }, 2 }, { "up", { 10, 4 }, 2 }, { "up", { 7, 7 }, 1 },
+    { "lay", "mat", { 2, 6 } }, { "lay", "mat", { 12, 5 } },
+    { "link", { 10, 4 }, { 8, 2 } }, { "build", "mortar", { 8, 2 } },
+    { "up", { 9, 6 }, 1 }, { "up", { 10, 7 }, 1 }, { "up", { 4, 7 }, 1 }, { "up", { 4, 4 }, 2 },
+    { "up", { 6, 4 }, 2 }, { "up", { 5, 6 }, 2 }, { "up", { 10, 4 }, 2 }, { "up", { 8, 2 }, 1 },
+    { "up", { 7, 7 }, 1 }, { "up", { 10, 7 }, 1 }, { "up", { 4, 7 }, 1 }, { "up", { 8, 2 }, 1 }, { "up", { 4, 4 }, 2 },
+    { "lay", "mat", { 7, 8 } },
+}
+
+-- The Shed Floor: hold the chokepoint from the caps either side of it, a
+-- shelf across it and mats behind, and puffers for the springtails that hop it.
+PLANS.shed = {
+    { "link", "H", { 14, 5 } }, { "build", "puffer", { 14, 5 } },
+    { "link", "H", { 13, 7 } }, { "build", "needle", { 13, 7 } },
+    { "lay", "shelf", { 12, 6 } },
+    { "link", { 13, 7 }, { 13, 8 } }, { "build", "puffer", { 13, 8 } },
+    { "link", "H", { 13, 4 } }, { "build", "mane", { 13, 4 } },
+    { "lay", "mat", { 10, 6 } },
+    { "up", { 14, 5 }, 2 }, { "up", { 13, 7 }, 1 },
+    { "link", { 13, 4 }, { 13, 2 } }, { "build", "needle", { 13, 2 } },
+    { "link", { 13, 4 }, { 13, 3 } }, { "build", "stink", { 13, 3 } },
+    { "link", { 13, 8 }, { 10, 10 } }, { "build", "puffer", { 10, 10 } },
+    { "lay", "mat", { 11, 6 } },
+    { "up", { 13, 8 }, 2 }, { "up", { 13, 3 }, 1 }, { "up", { 13, 4 }, 2 },
+    { "link", { 13, 2 }, { 9, 2 } }, { "build", "puffer", { 9, 2 } },
+    { "up", { 13, 2 }, 1 }, { "up", { 13, 7 }, 1 }, { "up", { 10, 10 }, 2 }, { "up", { 9, 2 }, 2 },
+    { "lay", "mat", { 9, 6 } },
+    { "up", { 14, 5 }, 2 }, { "up", { 13, 8 }, 2 }, { "up", { 13, 3 }, 1 }, { "up", { 13, 4 }, 2 },
+    { "up", { 13, 2 }, 1 }, { "up", { 13, 7 }, 1 }, { "up", { 10, 10 }, 2 }, { "up", { 9, 2 }, 2 },
+    { "lay", "mat", { 8, 6 } },
+}
+
+-- The Rotting Log: two rings of three over the last straight either side of
+-- the sprout, a lamp out at the corner, and the rot paying for it all.
+PLANS.log = {
+    { "link", "H", { 13, 5 } }, { "build", "puffer", { 13, 5 } },
+    { "link", "H", { 13, 7 } }, { "build", "needle", { 13, 7 } },
+    { "link", "H", { 10, 5 } }, { "build", "puffer", { 10, 5 } },
+    { "link", { 13, 5 }, { 13, 3 } }, { "link", { 10, 5 }, { 13, 3 } }, { "build", "needle", { 13, 3 } },
+    { "link", "H", { 14, 6 } }, { "build", "mane", { 14, 6 } },
+    { "up", { 13, 5 }, 2 }, { "up", { 13, 7 }, 1 },
+    { "link", { 13, 7 }, { 13, 9 } }, { "build", "puffer", { 13, 9 } },
+    { "link", { 13, 9 }, { 10, 10 } }, { "link", { 13, 7 }, { 10, 10 } }, { "build", "mortar", { 10, 10 } },
+    { "link", { 10, 5 }, { 8, 3 } }, { "build", "lamp", { 8, 3 } },
+    { "up", { 10, 5 }, 2 }, { "up", { 13, 3 }, 1 }, { "up", { 14, 6 }, 1 },
+    { "link", { 10, 5 }, { 7, 6 } }, { "build", "inky", { 7, 6 } },
+    { "link", { 13, 9 }, { 11, 9 } }, { "build", "needle", { 11, 9 } },
+    { "up", { 13, 9 }, 2 }, { "up", { 10, 10 }, 1 }, { "up", { 8, 3 }, 1 }, { "up", { 13, 7 }, 1 },
+    { "link", { 8, 3 }, { 8, 1 } }, { "build", "mortar", { 8, 1 } },
+    { "up", { 13, 5 }, 2 }, { "up", { 10, 5 }, 2 }, { "up", { 13, 3 }, 1 }, { "up", { 11, 9 }, 1 },
+    { "up", { 7, 6 }, 2 }, { "up", { 8, 1 }, 1 }, { "up", { 14, 6 }, 1 }, { "up", { 13, 9 }, 2 },
+    { "up", { 10, 10 }, 1 }, { "up", { 8, 3 }, 1 }, { "up", { 13, 7 }, 1 }, { "up", { 11, 9 }, 1 }, { "up", { 8, 1 }, 1 },
+}
+
 -- The Pond Edge: hold the end of the flooded lane and the turn down to the
 -- sprout; stones for what the Water Bug must not have.
 PLANS.pond = {
@@ -275,6 +343,7 @@ local function run(seed, lv, generic, challenge)
         g:update(1 / 30)
         clock = clock + 1 / 30
     end
+    g.planStep = PLAN[step] and step
     return g
 end
 
@@ -297,6 +366,8 @@ function B.run(args)
         print("   leaked: " .. table.concat(leaks, " ") .. "  bosses through at:" .. (g.stats.bossLeft or ""))
         local mods = {}
         for _, m in ipairs(g.picked) do mods[#mods + 1] = m.id end
+        -- Lost with the build order unfinished: the step it was waiting on.
+        if g.phase == "lost" and g.planStep then print("   stuck at plan step " .. g.planStep) end
         print(("run %d: %s at wave %d  sprout %.1f/%d  kills %d  bosses %d  cuts %d  drunk %d  bank %d  [%s]  %.1fs")
             :format(seed, g.phase, g.wave, g.heartHp, g.heartMax, g.stats.kills, g.stats.bosses, g.stats.cuts,
                 g.stats.drunk, g.nutrients, table.concat(mods, " "), love.timer.getTime() - t0))

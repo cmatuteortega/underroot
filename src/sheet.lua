@@ -33,6 +33,10 @@ function S.run()
     headings("centi", function(h) return M.centipede(h, 0) end, 6)
     headings("seg", function(h) return M.centseg(h, 0) end, 6)
     rows[#rows + 1] = { "centi", M.centipede(0.5, 1), M.centseg(0.5, 1), M.corpse("centipede", 0), M.corpse("centseg", 1) }
+    headings("spring", function(h) return M.springtail(h, 0) end, 6)
+    rows[#rows + 1] = { "spring", M.springtail(0.5, 1), M.springtail(0.5, 0, true), M.springtail(3.6, 0, true), M.corpse("springtail", 0) }
+    headings("click", function(h) return M.click(h, 0) end, 4)
+    rows[#rows + 1] = { "click", M.click(0.6, 1, "belly"), M.click(0.6, 0, "leap", 1), M.click(0.6, 0, "leap", 3), M.corpse("click", 0.4) }
     headings("bomb", function(h) return M.bombardier(h, 0) end, 4)
     rows[#rows + 1] = { "bomb", M.bombardier(0.6, 1, true), M.bombardier(3.8, 0, true), M.corpse("bombardier", 0.4) }
     rows[#rows + 1] = { "dead", M.corpse("ant", 0, true), M.corpse("spider", 1), M.corpse("knight", 2), M.corpse("slug", 0.5),

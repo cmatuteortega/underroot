@@ -168,7 +168,8 @@ end
 function Game:recompute()
     for _, n in ipairs(self.nodes) do
         n.conn, n.hop, n.cap, n.parent, n.via = false, huge, 0, nil, nil
-        if n.tower then n.tower.battery, n.tower.amp, n.tower.warded = 1, 1, false end
+        -- A bottle cap's rim walls in what grows on it.
+        if n.tower then n.tower.battery, n.tower.amp, n.tower.warded = 1, 1, (n.pocket and n.pocket.walled) or false end
     end
     for _, l in ipairs(self.links) do l.capMul = 1 end
     local h = self.heart
@@ -308,9 +309,11 @@ function Game:cut(l)
     self:recompute()
 end
 
--- How much of a bite gets through: a shelf fungus nearby takes most of it.
+-- How much of a bite gets through: a shelf fungus nearby takes most of it,
+-- and so does a bottle cap at either end.
 function Game:shield(l)
     local best = 1
+    if (l.a.pocket and l.a.pocket.walled) or (l.b.pocket and l.b.pocket.walled) then best = D.TOWER.shelf.shieldMul end
     for _, m in ipairs(self.mats) do
         if m.kind == "shelf" then
             local d = D.TOWER.shelf
@@ -420,7 +423,7 @@ function Game:findRings()
             if back[l.b] ~= nil then
                 local loop, n = {}, l.b
                 while n do loop[#loop + 1] = n; n = back[n] end
-                if #loop >= D.RING.nodes then
+                if #loop >= (self.level.ringNodes or D.RING.nodes) then
                     local ids = {}
                     for k, m in ipairs(loop) do ids[k] = m.id end
                     table.sort(ids)
@@ -754,6 +757,8 @@ function Game:spawnAt(kind, x, z, c, r)
     if d.webCd then en.webCd = 1 end
     if d.grabEvery then en.grabCd = d.grabEvery * 0.6 end
     if d.sprayEvery then en.spray = d.sprayEvery * 0.5 end
+    if d.hopEvery then en.hopCd = d.hopEvery * random() end
+    if d.clickEvery then en.clickCd = d.clickEvery * 0.6 end
     if d.moth then en.y = 10 end
     self.enemies[#self.enemies + 1] = en
     return en
@@ -763,7 +768,8 @@ function Game:spawn(kind, gate)
     local e = self.world.entrances[gate] or self.world.entrances[1]
     local d = D.ENEMIES[kind]
     self.seen[kind] = true
-    local x, z = e.x - TILE * 0.6, e.z
+    -- From off the left edge, or up out of a hole in the floor.
+    local x, z = e.x - (e.hole and 0 or TILE * 0.6), e.z
     if kind == "mite" then
         for _ = 1, d.swarm do self:spawnAt(kind, x + (random() - 0.5) * 10, z + (random() - 0.5) * 10, e.c, e.r) end
     else
@@ -843,6 +849,7 @@ end
 function Game:armor(e)
     local d = D.ENEMIES[e.kind]
     if e.rolling then return d.rolledArmor end
+    if e.state == "belly" then return 0 end
     return d.armor
 end
 
@@ -851,6 +858,8 @@ function Game:hurt(e, amount, pierce, quiet)
     -- Under water, or not yet out of the gate: nothing reaches it.
     if e.dead or e.under or e.hidden then return 0 end
     if e.mark > 0 then amount = amount * (e.markMul or 1) end
+    -- On its back, a click beetle is soft.
+    if e.state == "belly" then amount = amount * (D.ENEMIES[e.kind].belly or 1) end
     local a = pierce and 0 or self:armor(e)
     local dmg = quiet and amount or max(amount * 0.15, amount - a)
     if not quiet then
@@ -1029,7 +1038,8 @@ function Game:update(dt)
             -- block, the pond lower still): only fliers and a slider on a
             -- thread keep their own height.
             local d = D.ENEMIES[e.kind]
-            if not e.dead and not d.fly and not d.moth and not e.slide then e.y = self.world:groundAt(e.x, e.z) end
+            -- A hop or a leap lifts it off the ground for a moment.
+            if not e.dead and not d.fly and not d.moth and not e.slide then e.y = self.world:groundAt(e.x, e.z) + (e.lift or 0) end
             -- A boss's footfalls kick up the soil; a charge, a cloud of it.
             if d.boss and not e.dead and not d.fly and not e.under and not e.hidden then
                 e.stepT = (e.stepT or 0) + dt * (e.charging and 3 or 1)
@@ -1464,7 +1474,7 @@ function Game:stink(n, t, S, power, boost, dt)
             busy = true
             e.reek = (e.reekT or 0) > 0 and min(e.reek, S("reek")) or S("reek")
             e.reekT = 0.25
-            if not d.boss and not e.slide then
+            if not d.boss and not e.slide and not e.hopT then -- a springtail in the air does not trip
                 if random() < S("stumble") * boost * dt then
                     e.stun = max(e.stun, S("trip"))
                     self:burst(e.x, 3, e.z, 2, { "m", "d" }, 8)
@@ -2009,6 +2019,8 @@ function Game:move(e, dt)
         return
     end
     if e.leader then return self:follow(e, d, slow, dt) end
+    if e.kind == "springtail" and self:springtail(e, d, slow, dt) then return end
+    if e.kind == "click" and self:click(e, d, dt) then return end
     if e.kind == "waterbug" and self:waterbug(e, d, slow, dt) then return end
     if e.kind == "bombardier" and self:bombardier(e, d, slow, dt) then return end
 
@@ -2531,6 +2543,87 @@ function Game:stag(e, d, slow, dt)
         self:shock(e.x, e.z, 18, 0.4, "t", "n")
         self:cue("charge", e.x, e.z)
     end
+end
+
+-- A springtail springs off its tail every few seconds, and at once when a
+-- shelf stands in its way or a mat is under it: over, and on down the trail.
+-- The first time it comes down by a thread, the thread snaps.
+function Game:springtail(e, d, slow, dt)
+    if e.hopT then
+        e.hopT = e.hopT - dt
+        e.lift = sin(min(1, 1 - e.hopT / d.hopFor) * math.pi) * d.hopH
+        if self:walk(e, d.hopSpeed * self:pace(), dt) then self:reachHeart(e) return true end
+        -- It keeps going until it is past the shelf.
+        if e.hopT <= 0 and not self:blocker(e) then
+            e.hopT, e.lift, e.hopCd = nil, 0, d.hopEvery * (0.8 + random() * 0.4)
+            self:motes(e.x, e.y, e.z, 3, { "t", "n" }, 4, 6, 0.4)
+            if not e.snapped then
+                local l = self:linkNear(e, d.snapR)
+                if l then
+                    e.snapped = true
+                    self:say("SNAP", e.x, e.y + 10, e.z, "r")
+                    self:crush(l)
+                end
+            end
+        end
+        return true
+    end
+    e.hopCd = e.hopCd - dt
+    if e.hopCd <= 0 or self:blocker(e) or self:onMat(e) then
+        e.hopT, e.state, e.chewing = d.hopFor, "walk", nil
+        self:cue("spring", e.x, e.z)
+        return true
+    end
+    return false
+end
+
+-- The Click Beetle: walks, rolls onto its back and plays dead (soft), then
+-- clicks and leaps down the trail. Where it comes down, links are cut and
+-- towers stunned.
+function Game:click(e, d, dt)
+    if e.state == "belly" then
+        e.bellyT = e.bellyT - dt
+        if e.bellyT <= 0 then
+            e.state, e.leapT = "leap", d.leapFor
+            self:say("CLICK!", e.x, 26, e.z, "r")
+            self:burst(e.x, 3, e.z, 10, { "t", "n" }, 22)
+            self:cue("clack", e.x, e.z)
+            self.events.shake = 0.15
+        end
+        return true
+    elseif e.state == "leap" then
+        e.leapT = e.leapT - dt
+        local p = min(1, 1 - e.leapT / d.leapFor)
+        e.lift, e.spin = sin(p * math.pi) * d.leapH, p
+        if self:walk(e, d.leapSpeed * self:pace(), dt) then self:reachHeart(e) return true end
+        if e.leapT <= 0 then
+            e.state, e.lift, e.spin, e.clickCd = "walk", 0, nil, d.clickEvery
+            for _, l in ipairs(self:linksNear(e.x, e.z, d.slamR)) do self:crush(l) end
+            for _, n in ipairs(self.nodes) do
+                if n.tower and not n.tower.warded and (n.x - e.x) ^ 2 + (n.z - e.z) ^ 2 <= d.stunR * d.stunR then
+                    if n.tower.stun <= 0 then
+                        self:burst(n.x, n.y + 8, n.z, 4, { "w", "t" }, 10)
+                        self:cue("stun", n.x, n.z)
+                    end
+                    n.tower.stun = d.stun
+                end
+            end
+            self:shock(e.x, e.z, d.slamR + 6, 0.5, "t", "n")
+            self:burst(e.x, 2, e.z, 16, { "t", "n", "u" }, 24)
+            self:cue("thump", e.x, e.z)
+            self.events.shake = 0.5
+        end
+        return true
+    end
+    e.clickCd = e.clickCd - dt
+    if e.clickCd <= 0 then
+        e.state, e.bellyT = "belly", d.bellyFor
+        self:say("IT PLAYS DEAD", e.x, 26, e.z, "l")
+        self:burst(e.x, 3, e.z, 6, { "t", "n" }, 12)
+        self:cue("trip", e.x, e.z)
+        return true
+    end
+    return false
 end
 
 -- The Dung Beetle's ball flattens every link and mat it rolls over.

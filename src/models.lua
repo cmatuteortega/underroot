@@ -145,6 +145,8 @@ local R = {
     centi = ramp("t", "r", "n", "u"),
     wingtan = ramp("w", "t", "n", "u"),
     bombard = ramp("w", "t", "r", "u"),
+    springtail = ramp("w", "s", "k", "u"),
+    click = ramp("t", "n", "u", "o"),
 }
 M.R = R
 
@@ -865,6 +867,44 @@ function M.knight(h, leg)
     return kept("knight" .. hs .. leg, function() return place(knightParts(leg), heading(hs / 16 * TAU), A.scale(1.2, 1.2, 1.2)) end)
 end
 
+-- A springtail: a long soft grey body in segments, feelers longer than its
+-- head, and under its tail the fork it springs off. Hopping (`hop`), it arches
+-- and the fork snaps out behind it.
+local function springtailParts(leg, hop)
+    local arch = hop and 0.35 or 0
+    local parts = {
+        { id = 1, ramp = R.springtail, at = A.mul(A.move(-1.4, 2.2 + arch * 2, 0), A.rotZ(arch), A.scale(3.4, 1.5, 1.6)),
+            print = function(ux) if abs((ux + 1) % 0.5 - 0.25) < 0.05 then return IDX.k end end },
+        { id = 2, ramp = R.springtail, at = ell(2.2, 2.2, 0, 1.6, 1.3, 1.4),
+            print = function(ux, uy, uz) if ux > 0.3 and uy > 0 and abs(uz) > 0.6 then return IDX.o end end },
+    }
+    -- The fork: tucked under the belly, or kicked out behind.
+    for _, side in ipairs({ -1, 1 }) do
+        if hop then
+            parts[#parts + 1] = seg(-4.2, 2, side * 0.3, -7, 0.4, side * 1, 0.3, R.springtail, 3)
+        else
+            parts[#parts + 1] = seg(-4.4, 1.4, side * 0.3, -1.6, 0.6, side * 0.6, 0.28, R.springtail, 3)
+        end
+        parts[#parts + 1] = seg(3.4, 2.8, side * 0.5, 5.6, 4.6, side * 1.5, 0.22, R.ink, 4)
+        parts[#parts + 1] = seg(5.6, 4.6, side * 1.5, 7.2, 4.2, side * 2.4, 0.2, R.ink, 4)
+    end
+    for n, x in ipairs({ 1.4, 0.4, -0.6 }) do
+        for _, side in ipairs({ -1, 1 }) do
+            local fwd = ((n + (side > 0 and 1 or 0) + leg) % 2 == 0) and 0.6 or -0.6
+            if hop then fwd = -0.8 end
+            limb(parts, x, 1.6, side * 0.9, x + fwd, side * 2.6, 0.6, 0.25, R.ink, 5)
+        end
+    end
+    return parts
+end
+
+function M.springtail(h, leg, hop)
+    local hs = step(h, 16)
+    return kept("spring" .. hs .. leg .. (hop and "h" or ""), function()
+        return place(springtailParts(leg, hop), heading(hs / 16 * TAU), A.scale(1.3, 1.3, 1.3))
+    end)
+end
+
 --- the bosses: the big bugs ---------------------------------------------------------------
 
 -- The Queen Ant: an ant made heavy, with a swollen banded gaster, a broad
@@ -1188,6 +1228,55 @@ function M.bombardier(h, leg, spray)
     end)
 end
 
+-- The Click Beetle: long and narrow, wing cases grooved end to end, a domed
+-- pronotum whose back corners run out in spines, saw-toothed feelers. It
+-- walks (`pose` nil), lies on its back kicking (`"belly"`), or turns over in
+-- the air as it leaps (`"leap"`, `spin` 0..3 a quarter turn each).
+local function clickParts(leg)
+    local parts = {
+        { id = 1, ramp = R.click, at = ell(-2.6, 3.2, 0, 5.2, 2.2, 2.8),
+            print = function(ux, uy, uz)
+                if uy > 0 and abs(uz) < 0.04 then return IDX.o end
+                if uy > 0.1 and abs((abs(uz) * 6) % 1 - 0.5) < 0.08 then return IDX.u end -- the grooves
+            end },
+        { id = 2, ramp = R.click, at = ell(3.0, 3.4, 0, 2.4, 2.1, 2.7),
+            print = function(ux, uy, uz) if uy > 0.6 and abs(uz) < 0.15 then return IDX.t end end },
+        { id = 3, ramp = R.click, at = ell(5.6, 2.8, 0, 1.3, 1.3, 1.7),
+            print = function(ux, uy, uz) if ux > 0.3 and abs(uz) > 0.6 and uy > -0.2 then return IDX.o end end },
+    }
+    for _, side in ipairs({ -1, 1 }) do
+        -- The spines at the pronotum's back corners: the click is there.
+        parts[#parts + 1] = seg(2.0, 3.2, side * 2.2, 0.6, 3.0, side * 3.2, 0.45, R.click, 4)
+        -- Feelers, toothed.
+        parts[#parts + 1] = seg(6.4, 3.2, side * 0.8, 8.4, 4.0, side * 2.4, 0.3, R.jaw, 5)
+        parts[#parts + 1] = seg(8.4, 4.0, side * 2.4, 10, 3.4, side * 3.4, 0.28, R.jaw, 5)
+    end
+    for n, x in ipairs({ 3.2, 0.8, -1.6 }) do
+        for _, side in ipairs({ -1, 1 }) do
+            local fwd = ((n + (side > 0 and 1 or 0) + leg) % 2 == 0) and 1.1 or -1.1
+            limb(parts, x, 2.4, side * 1.6, x + (n - 2) * 1.8 + fwd, side * 4.8, 1.4, 0.38, R.ink, 6)
+        end
+    end
+    return parts
+end
+
+function M.click(h, leg, pose, spin)
+    local hs = step(h, 16)
+    local key = "click" .. hs .. leg .. (pose or "") .. (spin or "")
+    return kept(key, function()
+        local parts = clickParts(leg)
+        local s = A.scale(2.2, 2.2, 2.2)
+        if pose == "belly" then
+            -- On its back, legs in the air.
+            parts = place(parts, A.move(0, 6.6, 0), A.rotX(math.pi))
+        elseif pose == "leap" then
+            -- Turning over about its length as it flies.
+            parts = place(parts, A.move(0, 3.2, 0), A.rotX(math.pi * (spin or 0) / 2), A.move(0, -3.2, 0))
+        end
+        return place(parts, heading(hs / 16 * TAU), s)
+    end)
+end
+
 --- what is left -----------------------------------------------------------------------
 
 local function fruit(parts, x, y)
@@ -1247,6 +1336,12 @@ function M.corpse(kind, h, fruited)
         elseif kind == "bombardier" then
             parts = flip(bombardierParts(0), 9, 2.3)
             top = 11
+        elseif kind == "springtail" then
+            parts = flip(springtailParts(0), 3.4, 1.3)
+            top = 2
+        elseif kind == "click" then
+            parts = flip(clickParts(0), 7, 2.2)
+            top = 9
         elseif kind == "ball" then
             -- A broken ball is a heap.
             parts = {}
