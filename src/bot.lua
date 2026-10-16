@@ -284,38 +284,62 @@ local function run(seed, lv, generic, challenge, endless)
         error("no pocket " .. p[1] .. "," .. p[2])
     end
     local step = 1
+    -- Builds and lays of a species not come yet, and the upgrades of their pockets: put
+    -- by while the rest of the plan goes on, and taken up again once it comes.
+    local later, waits = {}, {}
+    local function try(s)
+        local done = false
+        if s[1] == "link" then
+            local a, b = node(s[2]), node(s[3])
+            if g:linkBetween(a, b) then done = true
+            elseif g:canLink(a, b) then local l = g:grow(a, b); done = l and true end
+        elseif s[1] == "build" then
+            local n = node(s[3])
+            if s.link and not g:linkBetween(n, node(s.link)) then
+                if g:canLink(node(s.link), n) then g:grow(node(s.link), n) else return end
+            end
+            if n.tower and n.tower.kind == s[2] then done = true
+            elseif not g:unlocked(s[2]) then return "later"
+            elseif g:canBuild(s[2], n) then done = g:build(s[2], n) and true end
+        elseif s[1] == "lay" then
+            local m = g:matAt(s[3][1], s[3][2])
+            if m then done = true
+            elseif not g:unlocked(s[2]) then return "later"
+            else
+                local ok, why = g:canLay(s[2], s[3][1], s[3][2])
+                if ok then done = g:lay(s[2], s[3][1], s[3][2]) and true
+                elseif why == "TILE TAKEN" then done = true end
+            end
+        elseif s[1] == "up" then
+            local n = node(s[2])
+            local t = n.tower
+            if not t and waits[n] then return "later"
+            elseif not t or not g:upgrades(t)[1] then done = true
+            elseif g:canUpgrade(t, s[3]) or g:canUpgrade(t, t.branch or s[3]) then
+                done = g:upgrade(t, t.branch or s[3])
+            end
+        end
+        return done
+    end
     local function act()
+        -- What was put by comes first, in plan order, once it can be done.
+        local k = 1
+        while later[k] do
+            local s = later[k]
+            local done = try(s)
+            if done == "later" then k = k + 1
+            elseif done then
+                table.remove(later, k)
+                if s[1] == "build" then waits[node(s[3])] = nil end
+            else return end
+        end
         while PLAN[step] do
             local s = PLAN[step]
-            local done = false
-            if s[1] == "link" then
-                local a, b = node(s[2]), node(s[3])
-                if g:linkBetween(a, b) then done = true
-                elseif g:canLink(a, b) then local l = g:grow(a, b); done = l and true end
-            elseif s[1] == "build" then
-                local n = node(s[3])
-                if s.link and not g:linkBetween(n, node(s.link)) then
-                    if g:canLink(node(s.link), n) then g:grow(node(s.link), n) else return end
-                end
-                if n.tower and n.tower.kind == s[2] then done = true
-                elseif g:canBuild(s[2], n) then done = g:build(s[2], n) and true
-                elseif not g:unlocked(s[2]) then done = false end
-            elseif s[1] == "lay" then
-                local m = g:matAt(s[3][1], s[3][2])
-                if m then done = true
-                else
-                    local ok, why = g:canLay(s[2], s[3][1], s[3][2])
-                    if ok then done = g:lay(s[2], s[3][1], s[3][2]) and true
-                    elseif why == "TILE TAKEN" then done = true end
-                end
-            elseif s[1] == "up" then
-                local t = node(s[2]).tower
-                if not t or not g:upgrades(t)[1] then done = true
-                elseif g:canUpgrade(t, s[3]) or g:canUpgrade(t, t.branch or s[3]) then
-                    done = g:upgrade(t, t.branch or s[3])
-                end
-            end
-            if not done then return end
+            local done = try(s)
+            if done == "later" then
+                later[#later + 1] = s
+                if s[1] == "build" then waits[node(s[3])] = true end
+            elseif not done then return end
             step = step + 1
         end
     end

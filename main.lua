@@ -3301,8 +3301,8 @@ local function drawLoadout()
         love.graphics.setScissor()
         wrap(t.name, c.x + 22, c.y + 3, c.w - 24, inn and "w" or "s")
         text(tostring(t.cost), c.x + 22, c.y + c.h - 7, inn and "l" or "k")
-        -- On the Crack a species still comes when its wave is cleared.
-        local at = lv.unlock and lv.unlock[t.id] or (not lv.open and t.unlock) or 0
+        -- The wave it comes in, given what else is brought.
+        local at = D.unlockAt(lv, t.id, pick.set)
         if at > 0 then
             local s = "W" .. at
             text(s, c.x + c.w - Font.width(s) - 2, c.y + c.h - 7, "k")

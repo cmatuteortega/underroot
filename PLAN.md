@@ -51,6 +51,7 @@ the game; the numbers behind every ticked item are rows in `src/defs.lua`.
 - [x] A turn button that takes the board round the other way; a weather tooltip; the pockets a species in hand can grow on outlined
 - [x] Cricket Nymph, the small Mole Cricket (the Pond Edge and the Lawn: burrows off the trail to a link, a heave in the soil, comes up beside it and cuts it, twice)
 - [x] Centipede, the small one (the Lawn: a head and four segments, every one gnawing the links it runs along; splits where broken)
+- [x] Species unlock by wave on every level, not just the Crack; a loadout with nothing at wave 0 gets its earliest species from the start
 
 ## Next
 

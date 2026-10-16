@@ -536,12 +536,7 @@ end
 function Game:maxHp(t) return self:stat(t, "hp") or 30 end
 
 -- The wave that has to be cleared before a species can be grown, on this level.
-function Game:unlockAt(kind)
-    local l = self.level
-    if l.unlock and l.unlock[kind] then return l.unlock[kind] end
-    if l.open then return 0 end
-    return D.TOWER[kind].unlock or 0
-end
+function Game:unlockAt(kind) return D.unlockAt(self.level, kind, self.loadout) end
 
 -- Was this species brought on the run?
 function Game:brought(kind)

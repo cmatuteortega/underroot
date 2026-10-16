@@ -483,9 +483,9 @@ local LAWN = {
 }
 
 -- The levels, in the order they open: each is won to open the next. `map`
--- names a map in src/world.lua. `open` grows every species from wave one
--- (the player met them all on the Crack); `unlock` overrides that per
--- species. `loadout` is the species brought the first time it is played,
+-- names a map in src/world.lua. Species come as the waves are cleared on
+-- every level (see D.unlockAt); `unlock`, if given, overrides a species'
+-- wave there. `loadout` is the species brought the first time it is played,
 -- before the player has picked their own. `growth` is how much tougher each wave's enemies are than the
 -- last's, if not HP_GROWTH. `ringNodes` is how few fed nodes close a Fairy
 -- Ring there, if not RING.nodes. They come in the design doc's order; the
@@ -495,28 +495,25 @@ D.LEVELS = {
         mutateAfter = { [3] = true, [5] = true, [8] = true, [10] = true, [12] = true },
         loadout = { "puffer", "needle", "mat", "mane", "relay", "mortar" },
         idea = "A SIDEWALK CRACK. LEARN THE NETWORK", boss = "QUEEN, STAG, DUNG BEETLE" },
-    { id = "flowerpot", name = "THE FLOWERPOT", map = "flowerpot", waves = FLOWERPOT, start = 130, heart = 20, open = true,
-        growth = 0.42, unlock = { giant = 4 },
+    { id = "flowerpot", name = "THE FLOWERPOT", map = "flowerpot", waves = FLOWERPOT, start = 130, heart = 20,
+        growth = 0.42,
         mutateAfter = { [2] = true, [4] = true, [7] = true, [9] = true },
         loadout = { "puffer", "needle", "mat", "mane", "relay", "mortar" },
         idea = "A CRACKED POT. CUT AND REGROW, AND WATCH THE HOLE", boss = "DUNG, MOLE, QUEEN ANT" },
-    { id = "shed", name = "THE SHED FLOOR", map = "shed", waves = SHED, start = 160, heart = 23, open = true, growth = 0.08,
-        unlock = { giant = 5 },
+    { id = "shed", name = "THE SHED FLOOR", map = "shed", waves = SHED, start = 160, heart = 23, growth = 0.08,
         mutateAfter = { [3] = true, [5] = true, [8] = true, [10] = true, [12] = true },
         loadout = { "puffer", "needle", "mat", "mane", "shelf", "stink" },
         idea = "BOARDS AND LEGO. HOLD THE CHOKEPOINT", boss = "DUNG, QUEEN, STAG BEETLE" },
-    { id = "log", name = "THE ROTTING LOG", map = "log", waves = LOG, start = 130, heart = 20, open = true, growth = 0.2,
-        ringNodes = 3, unlock = { giant = 4 },
+    { id = "log", name = "THE ROTTING LOG", map = "log", waves = LOG, start = 130, heart = 20, growth = 0.2,
+        ringNodes = 3,
         mutateAfter = { [2] = true, [4] = true, [7] = true, [9] = true, [11] = true },
         loadout = { "puffer", "needle", "mane", "lamp", "inky", "mortar" },
         idea = "DARK AND DAMP. THREE NODES CLOSE A RING", boss = "QUEEN, MOLE, CLICK BEETLE" },
-    { id = "pond", name = "THE POND EDGE", map = "pond", waves = POND, start = 150, heart = 20, open = true, growth = 0.08,
-        unlock = { giant = 4 },
+    { id = "pond", name = "THE POND EDGE", map = "pond", waves = POND, start = 150, heart = 20, growth = 0.08,
         mutateAfter = { [2] = true, [4] = true, [7] = true, [9] = true },
         loadout = { "puffer", "needle", "mat", "mane", "stink", "lamp" },
         idea = "WATER AND REEDS. BUILD ON HIGH GROUND", boss = "QUEEN, STAG, GIANT WATER BUG" },
-    { id = "lawn", name = "THE LAWN", map = "lawn", waves = LAWN, start = 140, heart = 20, open = true, growth = 0.2,
-        unlock = { giant = 5 },
+    { id = "lawn", name = "THE LAWN", map = "lawn", waves = LAWN, start = 140, heart = 20, growth = 0.2,
         mutateAfter = { [3] = true, [5] = true, [8] = true, [10] = true, [12] = true },
         loadout = { "puffer", "needle", "mat", "mane", "mortar", "stink" },
         idea = "OPEN GRASS, THREE GATES. EVERYTHING AT ONCE", boss = "QUEEN, STAG, GIANT CENTIPEDE" },
@@ -533,6 +530,21 @@ D.CHALLENGE = { weather = "night", { "bombardier", 1, 1, 1, 0 }, { "knight", 4, 
 -- of them. The rest stay home, off the toolbar. Hyphae, prune and the pulse
 -- always come.
 D.LOADOUT = 6
+
+-- The wave that has to be cleared on `level` before a species can be grown.
+-- `set`, the loadout brought ({ id = true }), makes sure a run starts with
+-- something to grow: if nothing in it comes at wave 0, the one of it that
+-- comes first (toolbar order breaks a tie) is there from the start.
+function D.unlockAt(level, kind, set)
+    local function at(id) return level.unlock and level.unlock[id] or D.TOWER[id].unlock or 0 end
+    if not (set and set[kind]) then return at(kind) end
+    local first
+    for _, t in ipairs(D.TOWERS) do
+        if set[t.id] and (not first or at(t.id) < at(first)) then first = t.id end
+    end
+    if at(first) > 0 and kind == first then return 0 end
+    return at(kind)
+end
 
 D.HP_GROWTH = 0.1 -- each wave's enemies are this much tougher than the last's (bosses aside)
 

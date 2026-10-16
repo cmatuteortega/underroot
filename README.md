@@ -54,9 +54,10 @@ it blink. The first time you play a level it suggests six; after that it starts
 from what you brought last time, which is kept in the save directory. Tap a
 species card to read all about it in a side panel: what it does, its network
 twist, its numbers and both upgrade branches. Tap it again (or the panel's button)
-to bring it or leave it, and tap anywhere else to close the panel. On the
-Crack a species you bring still opens when its wave is cleared (the `W` number on
-its card).
+to bring it or leave it, and tap anywhere else to close the panel. A species
+you bring opens when its wave is cleared (the `W` number on its card), on every
+level. A run always starts with something to grow: if nothing brought comes at
+wave 0, the one that comes first is there from the start.
 
 You start with the sprout (the Heart) and 110 nutrients (more on the later
 levels). Grow hyphae out from it to pockets (a leaf, a crumb, a pebble, a dead
@@ -167,8 +168,7 @@ two tiers each. Every tier is a new model, not a recolour: a toxin puffer goes
 green and grows satellites, a lance-tipped enoki clump stands a head taller than
 the rest, a bramble shelf bristles. Each one breathes or sways on its own beat,
 kicks when it fires and comes up out of the ground when it is grown or upgraded.
-On the Crack the last seven species unlock as the waves are cleared; on the later
-levels everything grows from the start but the Humongous Fungus.
+On every level the last seven species unlock as the waves are cleared.
 
 | tower | cost | does | network twist | branch A | branch B |
 | --- | --- | --- | --- | --- | --- |
