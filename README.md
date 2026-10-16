@@ -55,7 +55,7 @@ chew through any thread they cross.
 | --- | --- |
 | drag from a fed node to a pocket | grow a link (a click on a node only selects what is on it); cost grows with length, the far end glows if it is in reach |
 | `1`, or the bottom-left button | regrow every cut link, nearest the sprout first, until the nutrients run out (each at the same 40% a hand regrow costs). The button shows how many are cut and what it all costs |
-| `2`–`9`, `0`, `T`, `G`, `H` then click a linked pocket (the species you brought) | Spore Puffer, Enoki Needle, Lion's Mane, Relay, Inky Cap, Puffball Mortar, Cordyceps Bloom, Stinkhorn, Ghost Lamp, Humongous Fungus; Slime Mat (`4`) and Shelf Fungus (`8`) go on a trail tile |
+| `2`–`9`, `0`, `T`, `G`, `H` then click a linked pocket (the species you brought) | Spore Puffer, Enoki Needle, Lion's Mane, Relay, Inky Cap, Puffball Mortar, Cordyceps Bloom, Stinkhorn, Ghost Lamp, Humongous Fungus; Slime Mat (`4`) and Shelf Fungus (`8`) go on a trail tile. A fruiting body planted puts the species down and selects the new tower |
 | a species in hand | every pocket it could grow on now is lined in one pixel, as a selected tower is |
 | click the species in hand on the toolbar again | open its panel (again to shut it); it stays in hand |
 | click a tower, mat or shelf (pressed and let go on it: pulling a link from it does not select it) | select it: a panel tells about it as it has grown (live numbers, what is wrong with it, both branches), and the upgrades it can grow now are buttons in it. On a wide screen the camera eases it to a third of the way across and half way down, with the panel on the right; upright, the panel goes across the top. Click elsewhere to close it |
@@ -90,7 +90,7 @@ keeps clear of the notch and home bar:
 | touch | what it does |
 | --- | --- |
 | drag from a node to a pocket | grow a link; letting go anywhere else cancels it. A tap on a node only selects what is on it |
-| tap a tool, then tap where it goes | build, prune, lay a mat, pulse; tap a species' tool again to open its panel (again to shut it), tap the ground to put it down |
+| tap a tool, then tap where it goes | build, prune, lay a mat, pulse (a planted species is put down, and the new tower selected); tap a species' tool again to open its panel (again to shut it), tap the ground to put it down |
 | tap a tower, mat or shelf, then an upgrade in its panel | upgrade it |
 | drag on open ground | pan |
 | pinch | zoom: the board follows the fingers, with the whole board drawn so nothing is cut off at the edges, then settles on the nearest sharp (whole-pixel) zoom when they lift; it starts one step in, and the toolbar keeps its size at any zoom |

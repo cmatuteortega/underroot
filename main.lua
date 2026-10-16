@@ -1185,7 +1185,9 @@ local function click(b)
     else
         if hover.node then
             local t = game:build(mode, hover.node)
-            if t then selected, peek = t, nil else deny() end
+            -- Planted, the species is put down: back to growing, with the new
+            -- tower selected.
+            if t then selected, peek, mode = t, nil, "grow" else deny() end
         else
             sound("back")
             letGo()
