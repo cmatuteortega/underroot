@@ -192,6 +192,17 @@ D.TOWERS = {
 }
 D.TOWER = {}
 for _, t in ipairs(D.TOWERS) do D.TOWER[t.id] = t end
+
+-- The Spore Bank. The first six species are grown from the start; each of the
+-- other six is put up for sale by winning a level (its `prize`, below) and
+-- bought for good with spores at its `price`. A run pays a spore for every
+-- wave it clears and more for a win.
+D.STARTERS = 6
+for k, t in ipairs(D.TOWERS) do t.starter = k <= D.STARTERS end
+for id, price in pairs({ stink = 20, shelf = 25, mortar = 30, lamp = 35, cordyceps = 40, giant = 50 }) do
+    D.TOWER[id].price = price
+end
+D.SPORES = { wave = 1, win = 10 }
 D.SELL = 0.6
 
 -- Enemies. `chew` is damage a second to a link it stops on; `bite` is damage a
@@ -485,35 +496,36 @@ local LAWN = {
 -- The levels, in the order they open: each is won to open the next. `map`
 -- names a map in src/world.lua. Species come as the waves are cleared on
 -- every level (see D.unlockAt); `unlock`, if given, overrides a species'
--- wave there. `loadout` is the species brought the first time it is played,
+-- wave there. `prize` is the species its first win puts up for sale in the
+-- Spore Bank. `loadout` is the species brought the first time it is played,
 -- before the player has picked their own. `growth` is how much tougher each wave's enemies are than the
 -- last's, if not HP_GROWTH. `ringNodes` is how few fed nodes close a Fairy
 -- Ring there, if not RING.nodes. They come in the design doc's order; the
 -- Crack is its first level and has the three bosses the later ones each bring.
 D.LEVELS = {
-    { id = "crack", name = "THE CRACK", map = "crack", waves = CRACK, start = 110, heart = 20,
+    { id = "crack", prize = "stink", name = "THE CRACK", map = "crack", waves = CRACK, start = 110, heart = 20,
         mutateAfter = { [3] = true, [5] = true, [8] = true, [10] = true, [12] = true },
         loadout = { "puffer", "needle", "mat", "mane", "relay", "mortar" },
         idea = "A SIDEWALK CRACK. LEARN THE NETWORK", boss = "QUEEN, STAG, DUNG BEETLE" },
-    { id = "flowerpot", name = "THE FLOWERPOT", map = "flowerpot", waves = FLOWERPOT, start = 130, heart = 20,
+    { id = "flowerpot", prize = "shelf", name = "THE FLOWERPOT", map = "flowerpot", waves = FLOWERPOT, start = 130, heart = 20,
         growth = 0.42,
         mutateAfter = { [2] = true, [4] = true, [7] = true, [9] = true },
         loadout = { "puffer", "needle", "mat", "mane", "relay", "mortar" },
         idea = "A CRACKED POT. CUT AND REGROW, AND WATCH THE HOLE", boss = "DUNG, MOLE, QUEEN ANT" },
-    { id = "shed", name = "THE SHED FLOOR", map = "shed", waves = SHED, start = 160, heart = 23, growth = 0.08,
+    { id = "shed", prize = "mortar", name = "THE SHED FLOOR", map = "shed", waves = SHED, start = 160, heart = 23, growth = 0.08,
         mutateAfter = { [3] = true, [5] = true, [8] = true, [10] = true, [12] = true },
         loadout = { "puffer", "needle", "mat", "mane", "shelf", "stink" },
         idea = "BOARDS AND LEGO. HOLD THE CHOKEPOINT", boss = "DUNG, QUEEN, STAG BEETLE" },
-    { id = "log", name = "THE ROTTING LOG", map = "log", waves = LOG, start = 130, heart = 20, growth = 0.2,
+    { id = "log", prize = "lamp", name = "THE ROTTING LOG", map = "log", waves = LOG, start = 130, heart = 20, growth = 0.2,
         ringNodes = 3,
         mutateAfter = { [2] = true, [4] = true, [7] = true, [9] = true, [11] = true },
         loadout = { "puffer", "needle", "mane", "lamp", "inky", "mortar" },
         idea = "DARK AND DAMP. THREE NODES CLOSE A RING", boss = "QUEEN, MOLE, CLICK BEETLE" },
-    { id = "pond", name = "THE POND EDGE", map = "pond", waves = POND, start = 150, heart = 20, growth = 0.08,
+    { id = "pond", prize = "cordyceps", name = "THE POND EDGE", map = "pond", waves = POND, start = 150, heart = 20, growth = 0.08,
         mutateAfter = { [2] = true, [4] = true, [7] = true, [9] = true },
         loadout = { "puffer", "needle", "mat", "mane", "stink", "lamp" },
         idea = "WATER AND REEDS. BUILD ON HIGH GROUND", boss = "QUEEN, STAG, GIANT WATER BUG" },
-    { id = "lawn", name = "THE LAWN", map = "lawn", waves = LAWN, start = 140, heart = 20, growth = 0.2,
+    { id = "lawn", prize = "giant", name = "THE LAWN", map = "lawn", waves = LAWN, start = 140, heart = 20, growth = 0.2,
         mutateAfter = { [3] = true, [5] = true, [8] = true, [10] = true, [12] = true },
         loadout = { "puffer", "needle", "mat", "mane", "mortar", "stink" },
         idea = "OPEN GRASS, THREE GATES. EVERYTHING AT ONCE", boss = "QUEEN, STAG, GIANT CENTIPEDE" },

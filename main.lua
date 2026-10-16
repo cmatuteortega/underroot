@@ -57,6 +57,9 @@ local loadouts = {} -- each level's last loadout, saved between runs: { crack = 
 local challenge = false -- challenge mode chosen in the picker
 local won = {} -- levels won, saved between runs: { crack = true, ... }
 local records = {} -- the most waves held in endless on each level, saved: { crack = 21, ... }
+-- The Spore Bank, saved: spores to spend and the species bought. `offer` is the
+-- species a first win put up for sale, shown on the way on: { kind, after = button, bought }.
+local bank = { spores = 0, owned = {} }
 
 -- What has been won lives in the save directory, one level id a line.
 -- How loud: 1, 0.5 or 0 (the V key goes round them), kept between runs.
@@ -120,6 +123,46 @@ local function saveLoadouts()
         if loadouts[l.id] then lines[#lines + 1] = l.id .. " " .. table.concat(loadouts[l.id], " ") end
     end
     love.filesystem.write("loadout.txt", table.concat(lines, "\n") .. "\n")
+end
+
+-- The Spore Bank as well: the spores to spend, then the species bought.
+function bank.load()
+    bank.spores, bank.owned = 0, {}
+    local data = love.filesystem.getInfo("bank.txt") and love.filesystem.read("bank.txt")
+    if not data then return end
+    bank.spores = tonumber(data:match("spores%s+(%d+)")) or 0
+    for id in (data:match("owned([^\n]*)") or ""):gmatch("%S+") do
+        if D.TOWER[id] then bank.owned[id] = true end
+    end
+end
+
+function bank.save()
+    local ids = {}
+    for _, t in ipairs(D.TOWERS) do if bank.owned[t.id] then ids[#ids + 1] = t.id end end
+    love.filesystem.write("bank.txt", "spores " .. bank.spores .. "\nowned " .. table.concat(ids, " ") .. "\n")
+end
+
+-- Can it be brought? The first six always, the rest once bought.
+function bank.owns(id) return D.TOWER[id].starter or bank.owned[id] == true end
+
+-- The level whose first win puts a species up for sale.
+function bank.prizeOf(id)
+    for _, l in ipairs(D.LEVELS) do if l.prize == id then return l end end
+end
+
+function bank.forSale(id)
+    local l = bank.prizeOf(id)
+    return not bank.owns(id) and l ~= nil and won[l.id] == true
+end
+
+-- Bought for good, if it is for sale and the spores are there.
+function bank.buy(id)
+    local price = D.TOWER[id].price
+    if not bank.forSale(id) or bank.spores < price then return false end
+    bank.spores = bank.spores - price
+    bank.owned[id] = true
+    bank.save()
+    return true
 end
 
 -- A level is open once the one before it is won; challenge mode once the last is.
@@ -801,9 +844,36 @@ end
 
 -- A species in or out of the loadout. Full, it says so rather than drop one.
 local function toggleSpecies(id)
+    -- Not had yet: its panel says how to get it.
+    if not bank.owns(id) then pick.info = id; deny() return end
     if pick.set[id] then pick.set[id] = nil; sound("off")
     elseif #picked() >= D.LOADOUT then pick.full = 1.5; sound("deny")
     else pick.set[id] = true; sound("on") end
+end
+
+-- The panel's button: brings or leaves what is had, buys what is for sale.
+function bank.bringOrBuy(id)
+    if bank.owns(id) then toggleSpecies(id)
+    elseif bank.buy(id) then sound("unlock")
+    else deny() end
+end
+
+-- The Spore Bank after a first win: the species it put up for sale, BUY and
+-- ON (LATER until it is bought) under it, all down the middle.
+function bank.layout()
+    local mid = floor(vw / 2)
+    local w = min(200, vw - inset.l - inset.r - 8)
+    local top = floor(vh / 2) - 60
+    local card = { x = floor(mid - w / 2), y = top + 24, w = w, h = 48 }
+    local by = card.y + card.h + 20
+    local L = { mid = mid, top = top, card = card }
+    if bank.offer.bought then
+        L.on = { x = mid - 32, y = by, w = 64, h = 16 }
+    else
+        L.buy = { x = mid - 68, y = by, w = 64, h = 16 }
+        L.on = { x = mid + 4, y = by, w = 64, h = 16 }
+    end
+    return L
 end
 
 local function nodeScreen(n)
@@ -814,6 +884,12 @@ end
 local function findHover()
     hover = {}
     local mx, my = mouse.x, mouse.y
+    if menu == "bank" then
+        local L = bank.layout()
+        if L.buy and inside(mx, my, L.buy.x, L.buy.y, L.buy.w, L.buy.h) then hover.buy = true end
+        if inside(mx, my, L.on.x, L.on.y, L.on.w, L.on.h) then hover.on = true end
+        return
+    end
     if menu == "loadout" then
         local P = info()
         if P then
@@ -932,6 +1008,15 @@ local openLoadout
 
 -- Won: one of the buttons, or its key.
 local function afterWin(id)
+    -- A first win put a species up for sale: the Spore Bank shows it first.
+    if game.offer then
+        bank.offer = { kind = game.offer, after = id }
+        game.offer = nil
+        menu = "bank"
+        mode, drag, selected = "grow", nil, nil
+        sound("offer")
+        return
+    end
     if id == "endless" then sound("go"); game:goEndless()
     elseif id == "again" then sound("go"); start()
     elseif id == "levels" then sound("back"); openMenu()
@@ -942,12 +1027,32 @@ local function afterWin(id)
     end
 end
 
+-- Out of the Spore Bank, on to what the won level's button was for.
+function bank.leave()
+    local id = bank.offer.after
+    bank.offer, menu = nil, nil
+    afterWin(id)
+end
+
+function bank.buyOffer()
+    if bank.offer.bought then return end
+    if bank.buy(bank.offer.kind) then bank.offer.bought = true; sound("unlock") else deny() end
+end
+
 function openLoadout(n)
     local lv = D.LEVELS[n]
     menu = "loadout"
     mode, drag, selected = "grow", nil, nil
     pick = { n = n, set = {}, full = 0 }
-    for _, id in ipairs(loadouts[lv.id] or lv.loadout or {}) do pick.set[id] = true end
+    local dropped = false
+    for _, id in ipairs(loadouts[lv.id] or lv.loadout or {}) do
+        if bank.owns(id) then pick.set[id] = true else dropped = true end
+    end
+    -- A species not had yet stays home, and the next one had takes its place.
+    for _, t in ipairs(D.TOWERS) do
+        if not dropped or #picked() >= D.LOADOUT then break end
+        if bank.owns(t.id) then pick.set[t.id] = true end
+    end
 end
 
 -- Off into the level with what was picked, remembered for next time.
@@ -969,6 +1074,7 @@ function love.load(args)
     loadProgress()
     loadLoadouts()
     loadRecords()
+    bank.load()
     for _, a in ipairs(args or {}) do
         if a == "--shots" then script = require("src.script") end
         if a == "--bot" then
@@ -1077,6 +1183,12 @@ end
 -- Whatever is under the pointer that lights up when pressed: how to find its
 -- box again (the layout can move under it while it is lit).
 function flair.under()
+    if menu == "bank" then
+        local L = bank.layout()
+        local b = hover.buy and L.buy or (hover.on and L.on)
+        if b then return function() return b.x, b.y, b.w, b.h end end
+        return
+    end
     if menu == "loadout" then
         local L = loadoutLayout()
         if hover.back then return function() return L.back.x, L.back.y, L.back.w, L.back.h end end
@@ -1128,10 +1240,15 @@ end
 local function click(b)
     local r = b == 1 and flair.under()
     if r then flair.pressed = { t = 0.18, rect = r } end
+    if menu == "bank" then
+        if hover.buy then bank.buyOffer()
+        elseif hover.on or b == 2 then sound("click"); bank.leave() end
+        return
+    end
     if menu == "loadout" then
         -- A card opens its panel; the same card again (or the panel's button)
-        -- brings it or leaves it. Anywhere else shuts the panel.
-        if hover.bring then toggleSpecies(pick.info) return end
+        -- brings it or leaves it, or buys it. Anywhere else shuts the panel.
+        if hover.bring then bank.bringOrBuy(pick.info) return end
         if hover.info then return end
         if b == 2 then
             sound("back")
@@ -1458,6 +1575,11 @@ function love.keypressed(key)
         return
     end
     if painter then return end
+    if menu == "bank" then
+        if key == "b" then bank.buyOffer()
+        elseif key == "return" or key == "kpenter" or key == "space" or key == "escape" then sound("click"); bank.leave() end
+        return
+    end
     if menu == "loadout" then
         if key == "escape" or key == "backspace" then
             if pick.info then pick.info = nil else openMenu() end
@@ -1524,8 +1646,11 @@ function love.keypressed(key)
     if key == "e" then turnCamera(love.keyboard.isDown("lshift", "rshift") and -1 or 1) end
     if key == "q" then turnCamera(-1) end
     if key == "p" then paused = not paused; sound(paused and "pause" or "unpause") end
-    if key == "r" and (game.phase == "won" or game.phase == "lost" or love.keyboard.isDown("lshift")) then sound("go"); start() end
-    if key == "m" then sound("back"); openMenu() end
+    if key == "r" and game.phase == "won" then afterWin("again")
+    elseif key == "r" and (game.phase == "lost" or love.keyboard.isDown("lshift")) then sound("go"); start() end
+    if key == "m" then
+        if game.phase == "won" then afterWin("levels") else sound("back"); openMenu() end
+    end
     -- Won: on to the next level.
     if key == "n" and game.phase == "won" then afterWin("next") end
 end
@@ -1555,7 +1680,7 @@ end
 function audio.hover()
     local k = hover.button or hover.wave or hover.turn or (hover.up and hover.up.branch + 100) or hover.mutation
         or hover.level or hover.challenge or hover.sound or hover.species or hover.back or hover.go or hover.enemy
-        or hover.bring or hover.weather or hover.won
+        or hover.bring or hover.weather or hover.won or (hover.buy and "buy") or (hover.on and "on")
     if k ~= nil then k = tostring(k) .. (hover.up and "u" or hover.mutation and "m" or hover.level and "l" or "") end
     if k and k ~= flair.lastHover and not touch then sound("hover") end
     flair.lastHover = k
@@ -1766,9 +1891,17 @@ function love.update(dt)
         records[level.id] = game.best
         saveRecords()
     end
+    -- Spores go into the bank as they are earned, so a run left half way keeps them.
+    if game.spores > (game.banked or 0) and not script then
+        bank.spores = bank.spores + game.spores - (game.banked or 0)
+        game.banked = game.spores
+        bank.save()
+    end
     if game.phase == "won" and not game.recorded then
         game.recorded = true
         if not script then
+            -- The first win puts the level's species up for sale, shown on the way on.
+            if not won[level.id] and level.prize and not bank.owns(level.prize) then game.offer = level.prize end
             won[level.id] = true
             saveProgress()
         end
@@ -3153,6 +3286,8 @@ local function drawHud()
         end
         local y = buttons.bottom + 1
         if records[level.id] then centred("ENDLESS BEST: " .. records[level.id] .. " WAVES", y, "t"); y = y + 10 end
+        centred("+" .. game.spores .. " SPORES   " .. bank.spores .. " IN THE BANK", y, "t"); y = y + 10
+        if game.offer then centred("NEW IN THE SPORE BANK: " .. D.TOWER[game.offer].name, y, "g"); y = y + 10 end
         if last and not game.challenge then centred("CHALLENGE MODE IS OPEN", y, "r") end
     elseif game.phase == "lost" then
         centred("THE SPROUT HAS WILTED", floor(vh / 2) - 24, "r")
@@ -3163,6 +3298,7 @@ local function drawHud()
             centred("YOU HELD " .. (game.wave - 1) .. " WAVES OF " .. #game.waves, floor(vh / 2) - 12, "w")
         end
         centred(say("R: TRY AGAIN   M: LEVELS", "TAP FOR THE LEVELS"), floor(vh / 2), "l")
+        centred("+" .. game.spores .. " SPORES   " .. bank.spores .. " IN THE BANK", floor(vh / 2) + 24, "t")
     end
 end
 
@@ -3214,6 +3350,7 @@ local function drawMenu()
             centred("A LAST WAVE ON ANY LEVEL: THE BOMBARDIER BEETLE", c.y + c.h + 6, "r", "o")
         end
     end
+    text("SPORES " .. bank.spores, inset.l + 4, inset.t + 7, "t")
     local sw = audio.switch()
     local lv = Sfx.level >= 1 and "LOUD" or (Sfx.level > 0 and "QUIET" or "OFF")
     box(sw.x, sw.y, sw.w, sw.h, hover.sound and "n" or "u", Sfx.level > 0 and "c" or "k")
@@ -3255,7 +3392,20 @@ function drawInfo(P)
     end
     love.graphics.setScissor()
     local b = P.button
-    if b then
+    if b and not bank.owns(P.kind) then
+        -- Not had yet: bought here once a win has put it up for sale.
+        local price = D.TOWER[P.kind].price
+        local s, edge, k
+        if bank.forSale(P.kind) then
+            local can = bank.spores >= price
+            s = can and ("BUY IT: " .. price .. " SPORES") or (price .. " SPORES. YOU HAVE " .. bank.spores)
+            edge, k = can and "t" or "k", can and "t" or "r"
+        else
+            s, edge, k = "WIN " .. bank.prizeOf(P.kind).name .. " FOR IT", "k", "k"
+        end
+        box(b.x, b.y, b.w, b.h, hover.bring and "n" or "u", edge)
+        text(s, b.x + floor((b.w - Font.width(s)) / 2), b.y + 4, k)
+    elseif b then
         local inn = pick.set[P.kind]
         local full = not inn and #picked() >= D.LOADOUT
         local s = inn and "LEAVE IT AT HOME" or (full and "SIX ALREADY: DROP ONE" or "BRING IT")
@@ -3272,6 +3422,7 @@ local function drawLoadout()
     local list = picked()
     local clock = love.timer.getTime()
     centred(lv.name .. (challenge and " (CHALLENGE)" or ""), L.top, "g", "o", L.mid)
+    text("SPORES " .. bank.spores, inset.l + 4, inset.t + 7, "t")
     local count = #list .. "/" .. D.LOADOUT
     centred("PICK THE SPECIES TO BRING  " .. count, L.top + 11, #list == D.LOADOUT and "l" or "t", "o", L.mid)
     text("COMING", floor(L.mid - Font.width("COMING") / 2), L.chipsY - 9, "s")
@@ -3299,11 +3450,18 @@ local function drawLoadout()
         love.graphics.setScissor(c.x, c.y, 21, c.h)
         blit(pic, c.x + 11, t.id == "mat" and c.y + c.h - 8 or c.y + c.h - 3, not inn and T.DARKER2 or nil)
         love.graphics.setScissor()
-        wrap(t.name, c.x + 22, c.y + 3, c.w - 24, inn and "w" or "s")
-        text(tostring(t.cost), c.x + 22, c.y + c.h - 7, inn and "l" or "k")
+        local own = bank.owns(t.id)
+        wrap(t.name, c.x + 22, c.y + 3, c.w - 24, inn and "w" or (own and "s" or "k"))
+        -- Not had yet: its price once it is for sale, else locked.
+        if not own then
+            local sale = bank.forSale(t.id)
+            text(sale and (t.price .. " SPORES") or "LOCKED", c.x + 22, c.y + c.h - 7, sale and "t" or "k")
+        else
+            text(tostring(t.cost), c.x + 22, c.y + c.h - 7, inn and "l" or "k")
+        end
         -- The wave it comes in, given what else is brought.
         local at = D.unlockAt(lv, t.id, pick.set)
-        if at > 0 then
+        if own and at > 0 then
             local s = "W" .. at
             text(s, c.x + c.w - Font.width(s) - 2, c.y + c.h - 7, "k")
         end
@@ -3329,6 +3487,10 @@ local function drawLoadout()
     local tip, k
     if pick.full > 0 then
         tip, k = "ONLY " .. D.LOADOUT .. " COME. DROP ONE FIRST", "r"
+    elseif hover.species and not bank.owns(hover.species) then
+        local t = D.TOWER[hover.species]
+        if bank.forSale(t.id) then tip, k = t.name .. ": FOR SALE, " .. t.price .. " SPORES. YOU HAVE " .. bank.spores, "t"
+        else tip, k = t.name .. ": WIN " .. bank.prizeOf(t.id).name .. " TO PUT IT UP FOR SALE", "k" end
     elseif hover.species then
         local t = D.TOWER[hover.species]
         tip, k = t.name .. ": " .. t.blurb, "w"
@@ -3417,6 +3579,44 @@ function flair.draw()
     end
 end
 
+-- The Spore Bank after a first win: the species it put up for sale, and BUY.
+function bank.draw()
+    color("o")
+    love.graphics.rectangle("fill", 0, 0, vw, vh)
+    local L = bank.layout()
+    local t = D.TOWER[bank.offer.kind]
+    centred("THE SPORE BANK", L.top, "g", "o", L.mid)
+    centred(level.name .. " WON: A NEW SPECIES FOR SALE", L.top + 11, "t", "o", L.mid)
+    local c = L.card
+    box(c.x, c.y, c.w, c.h, "u", bank.offer.bought and "g" or "t")
+    local pic = icon(t.id, nil, 0, (love.timer.getTime() * 0.7) % 1)
+    love.graphics.setScissor(c.x, c.y, 24, c.h)
+    blit(pic, c.x + 12, t.id == "mat" and c.y + c.h - 8 or c.y + c.h - 6)
+    love.graphics.setScissor()
+    text(t.name, c.x + 26, c.y + 4, "w")
+    text(t.role, c.x + 26, c.y + 12, "t")
+    love.graphics.setScissor(c.x, c.y, c.w, c.h - 2)
+    wrap(t.about, c.x + 26, c.y + 21, c.w - 30, "s")
+    love.graphics.setScissor()
+    local y = c.y + c.h + 6
+    if bank.offer.bought then
+        centred(t.name .. " IS YOURS. BRING IT FROM THE LOADOUT", y, "g", "o", L.mid)
+    else
+        local can = bank.spores >= t.price
+        centred("PRICE " .. t.price .. " SPORES   YOU HAVE " .. bank.spores, y, can and "w" or "r", "o", L.mid)
+        local b = L.buy
+        box(b.x, b.y, b.w, b.h, hover.buy and "n" or (can and "d" or "u"), can and "t" or "k")
+        local s = say("B: BUY IT", "BUY IT")
+        text(s, b.x + floor((b.w - Font.width(s)) / 2), b.y + 5, can and "t" or "k")
+        centred(can and "OR BUY IT LATER, BEFORE ANY LEVEL" or "NOT ENOUGH YET: IT WAITS IN THE LOADOUT",
+            b.y + b.h + 6, "s", "o", L.mid)
+    end
+    local b = L.on
+    box(b.x, b.y, b.w, b.h, hover.on and "n" or "u", "c")
+    local s = bank.offer.bought and say("ENTER: ON", "ON") or say("ENTER: LATER", "LATER")
+    text(s, b.x + floor((b.w - Font.width(s)) / 2), b.y + 5, "w")
+end
+
 function love.draw()
     -- The HUD's picture starts empty each frame (nothing where the board shows
     -- through) and everything on it is drawn solid, so laying it over the board
@@ -3427,6 +3627,8 @@ function love.draw()
         drawLoading()
     elseif menu == "loadout" then
         drawLoadout()
+    elseif menu == "bank" then
+        bank.draw()
     elseif menu then
         drawMenu()
     else

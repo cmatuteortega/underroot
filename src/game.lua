@@ -82,6 +82,7 @@ function Game.new(world, level, opts)
         self.challenge = true
     end
     self.best = opts.best or 0 -- the endless record, raised as it is beaten
+    self.spores = 0 -- earned for the Spore Bank: a spore a wave cleared, more for a win
     self.uniques = {} -- the one-per-run species already grown
     if opts.loadout then
         self.loadout = {}
@@ -1143,6 +1144,7 @@ function Game:update(dt)
         self:shock(self.heart.x, self.heart.z, 30, 1, "r", "d")
     elseif self.phase == "wave" and not self.queue[1] and not self.enemies[1] then
         self.cleared = self.wave
+        self.spores = self.spores + D.SPORES.wave
         self.inks, self.clouds, self.tunnels = {}, {}, {}
         self.weather = nil
         if self.endless then
@@ -1150,6 +1152,7 @@ function Game:update(dt)
         end
         if self.wave >= #self.waves and not self.endless then
             self.phase = "won"
+            self.spores = self.spores + D.SPORES.win
             self:cue("won")
             self:shock(self.heart.x, self.heart.z, 50, 1.2, "g", "l")
             self:motes(self.heart.x, 4, self.heart.z, 40, { "g", "l", "w" }, 26, 26, 1.6)

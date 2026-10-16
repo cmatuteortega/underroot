@@ -64,7 +64,7 @@ the game; the numbers behind every ticked item are rows in `src/defs.lua`.
 - [ ] Pocket kinds: rotting log, leaf litter (lily pad and stone are in)
 
 ### Progression
-- [ ] Spore Bank (meta progression between levels)
+- [x] Spore Bank: spores for waves cleared and wins; six species to start, each level's first win puts one of the other six up for sale, bought with spores
 - [ ] Sprout seeds: oak, tomato, dandelion, bean
 - [ ] Colony traits
 

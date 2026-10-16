@@ -47,6 +47,31 @@ level's own, one more every 10 waves. The most waves held in endless on
 each level is kept in the save directory (`endless.txt`) and shown at the bottom
 left of its card in the level picker.
 
+**The Spore Bank.** A run pays a spore for every wave it clears, endless
+included, and 10 more for a win; they go into the bank as they come, so a
+lost run keeps them. Only the first six species (Spore Puffer, Enoki Needle,
+Slime Mat, Lion's Mane, Relay, Inky Cap) can be grown at first. Each level's
+first win puts one of the other six up for sale, and once it is bought it is
+yours for good:
+
+| level won | species for sale | price |
+| --- | --- | --- |
+| The Crack | Stinkhorn | 20 |
+| The Flowerpot | Shelf Fungus | 25 |
+| The Shed Floor | Puffball Mortar | 30 |
+| The Rotting Log | Ghost Lamp | 35 |
+| The Pond Edge | Cordyceps Bloom | 40 |
+| The Lawn | Humongous Fungus | 50 |
+
+The won screen says how many spores the run made and what went up for sale.
+Whichever way on is picked, the Spore Bank comes first, showing the new species
+with BUY (`B`) and LATER (`Enter`). Bought later, it is bought from its card in
+the loadout picker: a species not had yet is dark there, with its price once it
+is for sale (`LOCKED` before), and its panel's button buys it. The spores
+and what was bought are kept in the save directory (`bank.txt`), and the
+level picker and the loadout show the spores in the bank, top left. The
+prices and the pay are `price` in `src/defs.lua` and `D.SPORES`.
+
 Before a level starts you pick the species to bring: six of the twelve. The rest
 stay home and stay off the toolbar. The picker shows every enemy the level sends,
 with bosses in red. Point at one (tap it on a phone) and the species that answer
@@ -54,7 +79,7 @@ it blink. The first time you play a level it suggests six; after that it starts
 from what you brought last time, which is kept in the save directory. Tap a
 species card to read all about it in a side panel: what it does, its network
 twist, its numbers and both upgrade branches. Tap it again (or the panel's button)
-to bring it or leave it, and tap anywhere else to close the panel. A species
+to bring it or leave it (or buy it), and tap anywhere else to close the panel. A species
 you bring opens when its wave is cleared (the `W` number on its card), on every
 level. A run always starts with something to grow: if nothing brought comes at
 wave 0, the one that comes first is there from the start.
@@ -327,7 +352,7 @@ before they have a build order, not for tuning.
 
 ### Not in yet
 
-Green Mold; elite modifiers, props, the Spore Bank, sprout seeds and the Compost
+Green Mold; elite modifiers, props, sprout seeds and the Compost
 Heap. Each of those is a row and a model more, below.
 
 ## How it sounds
