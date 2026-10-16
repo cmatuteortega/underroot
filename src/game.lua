@@ -68,6 +68,7 @@ end
 --- setting up -------------------------------------------------------------------------
 
 -- A run of one level. `opts.challenge` adds the challenge wave at the end;
+-- `opts.best` is the most waves held in endless on this level so far;
 -- `opts.loadout`, a list of species ids, is all that can be grown (every
 -- species when it is not given: the bot and the shots bring them all).
 function Game.new(world, level, opts)
@@ -80,6 +81,7 @@ function Game.new(world, level, opts)
         self.waves[#self.waves + 1] = D.CHALLENGE
         self.challenge = true
     end
+    self.best = opts.best or 0 -- the endless record, raised as it is beaten
     self.uniques = {} -- the one-per-run species already grown
     if opts.loadout then
         self.loadout = {}
@@ -709,7 +711,61 @@ end
 
 --- waves ---------------------------------------------------------------------------------
 
-function Game:nextWave() return self.waves[self.wave + 1] end
+-- In endless the waves never run out: each one past the last is made when it
+-- is first asked for.
+function Game:nextWave()
+    if self.endless and not self.waves[self.wave + 1] then self.waves[self.wave + 1] = self:endlessWave(self.wave + 1) end
+    return self.waves[self.wave + 1]
+end
+
+-- Endless: after the level is won the run goes on. Wave n past the last is
+-- one of the level's own later waves (one with a boss every fifth), more of
+-- everything, closer together, and the enemies tougher each wave than the
+-- last, bosses too.
+function Game:goEndless()
+    if self.phase ~= "won" then return end
+    self.endless = true
+    self.endlessFrom = #self.waves
+    self.phase = "build"
+    local bonus = D.WAVE_BONUS + 4 * self.wave
+    self.nutrients = self.nutrients + bonus
+    self:say("ENDLESS +" .. bonus, self.heart.x, 26, self.heart.z, "r")
+    self:cue("clear")
+end
+
+-- How many waves past the level's last this one is (0 before endless).
+function Game:endlessDepth(wave)
+    if not self.endless then return 0 end
+    return max(0, (wave or self.wave) - self.endlessFrom)
+end
+
+function Game:endlessWave(n)
+    local k = n - self.endlessFrom
+    local plain, bossy = {}, {}
+    local waves = self.level.waves
+    for i = max(1, floor(#waves / 2)), #waves do
+        local boss = false
+        for _, g in ipairs(waves[i]) do if D.ENEMIES[g[1]].boss then boss = true end end
+        if boss then bossy[#bossy + 1] = waves[i] else plain[#plain + 1] = waves[i] end
+    end
+    if not bossy[1] then
+        for _, w in ipairs(waves) do
+            for _, g in ipairs(w) do if D.ENEMIES[g[1]].boss then bossy[#bossy + 1] = w; break end end
+        end
+    end
+    local from = (k % 5 == 0 and bossy[1]) and bossy[random(#bossy)] or plain[random(#plain)] or waves[#waves]
+    local more, closer = 1 + 0.12 * k, 1 / (1 + 0.06 * k)
+    local weathers = { false, "rain", "night", "drought", "frost" }
+    local w = { weather = from.weather }
+    if random() < 0.5 then w.weather = weathers[random(#weathers)] or nil end
+    for _, g in ipairs(from) do
+        local boss = D.ENEMIES[g[1]].boss
+        local count = boss and g[2] or max(1, floor(g[2] * more + 0.5))
+        local every = boss and g[3] or max(0.25, g[3] * closer)
+        w[#w + 1] = { g[1], count, every, g[4], g[5] * closer }
+    end
+    return w
+end
 
 function Game:startWave()
     if self.phase ~= "build" or not self:nextWave() then return end
@@ -741,6 +797,9 @@ end
 function Game:spawnAt(kind, x, z, c, r)
     local d = D.ENEMIES[kind]
     local scale = d.boss and 1 or 1 + (self.level.growth or D.HP_GROWTH) * (self.wave - 1)
+    -- Endless: everything tougher each wave than the last, bosses too.
+    local deep = self:endlessDepth()
+    if deep > 0 then scale = scale * 1.07 ^ deep * (d.boss and 1 + 0.05 * deep or 1) end
     local hp = d.hp * scale
     local en = { kind = kind, x = x, z = z, y = 0, c = c, r = r, tc = c, tr = r,
         hp = hp, maxHp = hp, h = 0, flash = 0, slow = 1, off = (random() - 0.5) * 6,
@@ -1065,7 +1124,10 @@ function Game:update(dt)
         self.cleared = self.wave
         self.inks, self.clouds = {}, {}
         self.weather = nil
-        if self.wave >= #self.waves then
+        if self.endless then
+            if self.cleared > self.best then self.best, self.record = self.cleared, true end
+        end
+        if self.wave >= #self.waves and not self.endless then
             self.phase = "won"
             self:cue("won")
             self:shock(self.heart.x, self.heart.z, 50, 1.2, "g", "l")
@@ -1084,7 +1146,9 @@ function Game:update(dt)
                     self:cue("unlock")
                 end
             end
-            if self.level.mutateAfter[self.wave] then self:offerMutations() end
+            if self.level.mutateAfter[self.wave] or (self:endlessDepth() > 0 and self:endlessDepth() % 4 == 0) then
+                self:offerMutations()
+            end
         end
     end
 end

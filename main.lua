@@ -56,6 +56,7 @@ local chosen -- the species the run brings, a list; nil brings them all (the sho
 local loadouts = {} -- each level's last loadout, saved between runs: { crack = { "puffer", ... } }
 local challenge = false -- challenge mode chosen in the picker
 local won = {} -- levels won, saved between runs: { crack = true, ... }
+local records = {} -- the most waves held in endless on each level, saved: { crack = 21, ... }
 
 -- What has been won lives in the save directory, one level id a line.
 -- How loud: 1, 0.5 or 0 (the V key goes round them), kept between runs.
@@ -77,6 +78,24 @@ local function saveProgress()
     local ids = {}
     for _, l in ipairs(D.LEVELS) do if won[l.id] then ids[#ids + 1] = l.id end end
     love.filesystem.write("progress.txt", table.concat(ids, "\n") .. "\n")
+end
+
+-- The endless records too, a line a level: its id and the most waves held.
+local function loadRecords()
+    records = {}
+    local data = love.filesystem.getInfo("endless.txt") and love.filesystem.read("endless.txt")
+    if not data then return end
+    for id, n in data:gmatch("(%S+)%s+(%d+)") do
+        if D.LEVEL[id] then records[id] = tonumber(n) end
+    end
+end
+
+local function saveRecords()
+    local lines = {}
+    for _, l in ipairs(D.LEVELS) do
+        if records[l.id] then lines[#lines + 1] = l.id .. " " .. records[l.id] end
+    end
+    love.filesystem.write("endless.txt", table.concat(lines, "\n") .. "\n")
 end
 
 -- Each level's loadout lives in the save directory too, a line a level: its id
@@ -673,6 +692,41 @@ local function levelCards()
     return cards, switch
 end
 
+-- What a won level offers, a button each across the middle under the words:
+-- the next level (if there is one), endless, again, the levels. Two rows if
+-- one does not fit across.
+local function wonButtons()
+    local list = {}
+    local last = level == D.LEVELS[#D.LEVELS]
+    if not last then list[#list + 1] = { id = "next", text = "NEXT LEVEL", key = "N" } end
+    list[#list + 1] = { id = "endless", text = "GO ENDLESS", key = "E" }
+    list[#list + 1] = { id = "again", text = "AGAIN", key = "R" }
+    list[#list + 1] = { id = "levels", text = "LEVELS", key = "M" }
+    local gap = 4
+    local function width(from, to)
+        local w = gap * (to - from)
+        for k = from, to do w = w + list[k].w end
+        return w
+    end
+    for _, b in ipairs(list) do
+        if not touch then b.text = b.key .. ": " .. b.text end
+        b.w, b.h = Font.width(b.text) + 10, 15
+    end
+    local rows = { { 1, #list } }
+    if width(1, #list) > vw - inset.l - inset.r - 8 then
+        local half = ceil(#list / 2)
+        rows = { { 1, half }, { half + 1, #list } }
+    end
+    local y = floor(vh / 2) - 1
+    for _, row in ipairs(rows) do
+        local x = floor((vw - width(row[1], row[2])) / 2)
+        for k = row[1], row[2] do list[k].x, list[k].y = x, y; x = x + list[k].w + gap end
+        y = y + 15 + gap
+    end
+    list.bottom = y
+    return list
+end
+
 -- The level picker's sound switch, top right: a finger has no V key.
 function audio.switch() return { x = vw - inset.r - 62, y = inset.t + 4, w = 58, h = 12 } end
 
@@ -787,6 +841,11 @@ local function findHover()
         if inside(mx, my, sw.x, sw.y, sw.w, sw.h) then hover.sound = true end
         return
     end
+    if game.phase == "won" then
+        for _, b in ipairs(wonButtons()) do
+            if inside(mx, my, b.x, b.y, b.w, b.h) then hover.won = b.id return end
+        end
+    end
     if game.phase == "mutate" then
         for k, c in ipairs(mutationCards()) do
             if inside(mx, my, c.x, c.y, c.w, c.h) then hover.mutation = k return end
@@ -838,7 +897,7 @@ end
 --- the run ---------------------------------------------------------------------------
 
 local function start()
-    game = Game.new(world, level, { challenge = challenge, loadout = chosen })
+    game = Game.new(world, level, { challenge = challenge, loadout = chosen, best = records[level.id] })
     layTools(game)
     mode, drag, panx, pany, selected = "grow", nil, 0, 0, nil
     focus, focused = nil, nil
@@ -869,7 +928,21 @@ end
 
 -- Before level `n`: pick what to bring, starting from what was brought last
 -- time (or the level's own suggestion the first time).
-local function openLoadout(n)
+local openLoadout
+
+-- Won: one of the buttons, or its key.
+local function afterWin(id)
+    if id == "endless" then sound("go"); game:goEndless()
+    elseif id == "again" then sound("go"); start()
+    elseif id == "levels" then sound("back"); openMenu()
+    elseif id == "next" then
+        for k, l in ipairs(D.LEVELS) do
+            if l == level and D.LEVELS[k + 1] then sound("select"); openLoadout(k + 1) return end
+        end
+    end
+end
+
+function openLoadout(n)
     local lv = D.LEVELS[n]
     menu = "loadout"
     mode, drag, selected = "grow", nil, nil
@@ -895,6 +968,7 @@ function love.load(args)
     fit()
     loadProgress()
     loadLoadouts()
+    loadRecords()
     for _, a in ipairs(args or {}) do
         if a == "--shots" then script = require("src.script") end
         if a == "--bot" then
@@ -1033,6 +1107,13 @@ function flair.under()
         local c = mutationCards()[hover.mutation]
         return function() return c.x, c.y, c.w, c.h end
     end
+    if hover.won then
+        local id = hover.won
+        return function()
+            for _, b in ipairs(wonButtons()) do if b.id == id then return b.x, b.y, b.w, b.h end end
+            return 0, 0, 0, 0
+        end
+    end
     if hover.button then
         local n = hover.button
         return function() return buttonRect(n) end
@@ -1123,7 +1204,11 @@ local function click(b)
         return
     end
     if hover.turn then turnCamera(hover.turn) return end
-    if game.phase == "won" or game.phase == "lost" then sound("click"); openMenu() return end
+    if game.phase == "won" then
+        if hover.won then afterWin(hover.won) end
+        return
+    end
+    if game.phase == "lost" then sound("click"); openMenu() return end
     if hover.weather then
         -- Not the pause: on a phone a tap opens what the weather does, and
         -- another shuts it. With a mouse, hovering is enough.
@@ -1435,17 +1520,14 @@ function love.keypressed(key)
         end
     end
     if key == "f" then speed = speed % 3 + 1; sound("speed", 0.8 + 0.2 * speed) end
+    if key == "e" and game.phase == "won" then afterWin("endless") return end
     if key == "e" then turnCamera(love.keyboard.isDown("lshift", "rshift") and -1 or 1) end
     if key == "q" then turnCamera(-1) end
     if key == "p" then paused = not paused; sound(paused and "pause" or "unpause") end
     if key == "r" and (game.phase == "won" or game.phase == "lost" or love.keyboard.isDown("lshift")) then sound("go"); start() end
     if key == "m" then sound("back"); openMenu() end
     -- Won: on to the next level.
-    if key == "n" and game.phase == "won" then
-        for k, l in ipairs(D.LEVELS) do
-            if l == level and D.LEVELS[k + 1] then openLoadout(k + 1) return end
-        end
-    end
+    if key == "n" and game.phase == "won" then afterWin("next") end
 end
 
 -- Where the camera should go to show `s` (a tower, mat or shelf) beside the
@@ -1473,7 +1555,7 @@ end
 function audio.hover()
     local k = hover.button or hover.wave or hover.turn or (hover.up and hover.up.branch + 100) or hover.mutation
         or hover.level or hover.challenge or hover.sound or hover.species or hover.back or hover.go or hover.enemy
-        or hover.bring or hover.weather
+        or hover.bring or hover.weather or hover.won
     if k ~= nil then k = tostring(k) .. (hover.up and "u" or hover.mutation and "m" or hover.level and "l" or "") end
     if k and k ~= flair.lastHover and not touch then sound("hover") end
     flair.lastHover = k
@@ -1680,6 +1762,10 @@ function love.update(dt)
     flair.beat = b
     heartFlash = max(0, heartFlash - dt)
     shake = max(0, shake - dt)
+    if game.best > (records[level.id] or 0) and not script then
+        records[level.id] = game.best
+        saveRecords()
+    end
     if game.phase == "won" and not game.recorded then
         game.recorded = true
         if not script then
@@ -2771,6 +2857,7 @@ local function drawHud()
     s = "SPROUT " .. math.ceil(game.heartHp) .. "/" .. game.heartMax
     text(s, x + 8, ty, game.heartHp < game.heartMax * 0.4 and "r" or "g")
     local w = "WAVE " .. game.wave .. "/" .. #game.waves
+    if game.endless then w = "ENDLESS WAVE " .. game.wave .. "  BEST " .. max(game.best, game.cleared) end
     local nxt = game:nextWave()
     local right = w
     if nxt and game.phase == "build" then right = "NEXT: " .. waveSummary(nxt) .. "   " .. w end
@@ -3000,11 +3087,24 @@ local function drawHud()
         local last = level == D.LEVELS[#D.LEVELS]
         centred(level.name .. (game.challenge and " (CHALLENGE)" or "") .. ": THE SPROUT LIVES", floor(vh / 2) - 24, "g")
         centred("KILLS " .. game.stats.kills .. "   BOSSES " .. game.stats.bosses .. "   DRUNK " .. floor(game.stats.drunk) .. "   CUTS " .. game.stats.cuts, floor(vh / 2) - 12, "w")
-        centred(say((last and "" or "N: NEXT LEVEL   ") .. "R: AGAIN   M: LEVELS", "TAP FOR THE LEVELS"), floor(vh / 2), "l")
-        if last and not game.challenge then centred("CHALLENGE MODE IS OPEN", floor(vh / 2) + 12, "r") end
+        local buttons = wonButtons()
+        for _, b in ipairs(buttons) do
+            local on = hover.won == b.id
+            local endless = b.id == "endless"
+            box(b.x, b.y, b.w, b.h, on and "n" or "u", endless and "r" or (on and "l" or "c"))
+            text(b.text, b.x + 5, b.y + 5, endless and "r" or "w")
+        end
+        local y = buttons.bottom + 1
+        if records[level.id] then centred("ENDLESS BEST: " .. records[level.id] .. " WAVES", y, "t"); y = y + 10 end
+        if last and not game.challenge then centred("CHALLENGE MODE IS OPEN", y, "r") end
     elseif game.phase == "lost" then
         centred("THE SPROUT HAS WILTED", floor(vh / 2) - 24, "r")
-        centred("YOU HELD " .. (game.wave - 1) .. " WAVES OF " .. #game.waves, floor(vh / 2) - 12, "w")
+        if game.endless then
+            centred("ENDLESS: YOU HELD " .. game.cleared .. " WAVES", floor(vh / 2) - 12, "w")
+            centred(game.record and "A NEW RECORD!" or ("BEST " .. game.best), floor(vh / 2) + 12, game.record and "g" or "t")
+        else
+            centred("YOU HELD " .. (game.wave - 1) .. " WAVES OF " .. #game.waves, floor(vh / 2) - 12, "w")
+        end
         centred(say("R: TRY AGAIN   M: LEVELS", "TAP FOR THE LEVELS"), floor(vh / 2), "l")
     end
 end
@@ -3044,6 +3144,8 @@ local function drawMenu()
             wrap("BOSS: " .. l.boss, c.x + 4, y + 1, c.w - 8, "r")
             local tag = won[l.id] and "WON" or (#l.waves .. " WAVES")
             text(tag, c.x + c.w - Font.width(tag) - 4, c.y + c.h - 8, won[l.id] and "g" or "s")
+            -- The endless record, bottom left, once there is one.
+            if records[l.id] then text("BEST " .. records[l.id], c.x + 4, c.y + c.h - 8, "r") end
         end
     end
     if challengeOpen() then

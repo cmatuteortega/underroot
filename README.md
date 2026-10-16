@@ -25,7 +25,8 @@ love . --sheet         # dev: every look of every model on one sheet (sheet.png)
 love . --sounds        # dev: every sound and loop written as a .wav (sounds/), to listen to
 love . --bot 10        # dev: plays the Crack headless 10 times, prints how it went
 love . --bot 10 lawn   # dev: another level; add `challenge`, or `generic` for the
-                       # map-agnostic player instead of the level's build order
+                       # map-agnostic player instead of the level's build order,
+                       # or `endless` to play on past the win until the sprout falls
 ```
 
 ## Playing it
@@ -33,6 +34,15 @@ love . --bot 10 lawn   # dev: another level; add `challenge`, or `generic` for t
 It opens on the level picker. The Crack is open; winning a level opens the next
 (what is won is kept in the save directory), and winning the Lawn opens challenge
 mode, which adds a last wave with the Bombardier Beetle to any level.
+
+A level won offers four ways on: the next level (`N`), endless (`E`), the same
+level again (`R`) or the levels (`M`). Endless keeps the run going past the last
+wave for as long as the sprout lives: each wave is one of the level's later
+waves with more enemies, closer together and tougher than the last (7% a wave,
+on top of the level's own growth), its weather now and then shuffled, a boss
+wave every fifth and a Mutation every fourth. The most waves held in endless on
+each level is kept in the save directory (`endless.txt`) and shown at the bottom
+left of its card in the level picker.
 
 Before a level starts you pick the species to bring: six of the twelve. The rest
 stay home and stay off the toolbar. The picker shows every enemy the level sends,

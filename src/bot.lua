@@ -254,7 +254,14 @@ function B.generic(g)
     end
 end
 
-local function run(seed, lv, generic, challenge)
+-- Still playing? With `endless` a win goes on into endless, until the sprout
+-- falls (or the clock runs out).
+local function going(g, endless, clock)
+    if endless and g.phase == "won" then g:goEndless() end
+    return g.phase ~= "won" and g.phase ~= "lost" and clock < (endless and 7200 or 3600)
+end
+
+local function run(seed, lv, generic, challenge, endless)
     love.math.setRandomSeed(seed)
     local world = World.new(lv.map)
     local g = Game.new(world, lv, { challenge = challenge })
@@ -262,7 +269,7 @@ local function run(seed, lv, generic, challenge)
     if generic or not PLAN then
         local act = B.generic(g)
         local clock = 0
-        while g.phase ~= "won" and g.phase ~= "lost" and clock < 3600 do
+        while going(g, endless, clock) do
             act()
             g:update(1 / 30)
             clock = clock + 1 / 30
@@ -313,7 +320,7 @@ local function run(seed, lv, generic, challenge)
         end
     end
     local clock = 0
-    while g.phase ~= "won" and g.phase ~= "lost" and clock < 3600 do
+    while going(g, endless, clock) do
         if g.phase == "mutate" then g:mutate(1) end
         act()
         -- Rebuild what slugs ate and brine sterilised: walk the plan again from the top.
@@ -349,18 +356,20 @@ end
 
 function B.run(args)
     local runs = tonumber(args[1]) or 4
-    local lv, generic, challenge = D.LEVELS[1], false, false
+    local lv, generic, challenge, endless = D.LEVELS[1], false, false, false
     for _, a in ipairs(args) do
         if D.LEVEL[a] then lv = D.LEVEL[a] end
         if a == "generic" then generic = true end
         if a == "challenge" then challenge = true end
+        if a == "endless" then endless = true end
     end
     print(lv.name .. (challenge and " (challenge)" or "") .. ((generic or not PLANS[lv.id]) and ", generic player" or ""))
     local won = 0
     for seed = 1, runs do
         local t0 = love.timer.getTime()
-        local g = run(seed, lv, generic, challenge)
-        if g.phase == "won" then won = won + 1 end
+        local g = run(seed, lv, generic, challenge, endless)
+        if g.phase == "won" or g.endless then won = won + 1 end
+        if g.endless then print("   endless: held " .. g.cleared .. " waves") end
         local leaks = {}
         for k, v in pairs(g.stats.leaked) do leaks[#leaks + 1] = k .. "=" .. v end
         print("   leaked: " .. table.concat(leaks, " ") .. "  bosses through at:" .. (g.stats.bossLeft or ""))
