@@ -159,6 +159,12 @@ local speed, paused = 1, false
 local weatherBox, weatherTip = nil, nil
 local heartFlash = 0
 local shake = 0 -- seconds of shaking left: a boss charging, a ball breaking
+-- The weather coming in or going: the board's picture for the old sky giving
+-- way to the new one's through an ordered dither, a few more pixels a frame,
+-- so nothing is ever blended. `from` and `to` are weather kinds or false
+-- (clear), `t` the seconds since the change.
+-- (One table, shader and all: this file is near Lua's 200 locals.)
+local skyFade = { from = false, to = false, t = 0, TIME = 1.6 }
 -- The HUD's own flourishes: the last thing pressed lighting up, the nutrients
 -- going red when they fall short (bright when a lot comes in at once), the
 -- edge of the screen going red when the sprout is hit, and a word across the
@@ -903,6 +909,7 @@ local function start()
     focus, focused = nil, nil
     paused, speed = false, 1
     menu = nil
+    skyFade.from, skyFade.to, skyFade.t = false, game.weather or false, skyFade.TIME
 end
 
 -- Plays level `n` with the species in `chosen`: its board if it is painted
@@ -1741,6 +1748,15 @@ function love.update(dt)
     end
     centre()
 
+    -- The sky changed: the new picture dithers in over the old. Changed again
+    -- before it was done, the picture mostly showing is the one it leaves.
+    local sky = game.weather or false
+    if sky ~= skyFade.to then
+        local from = skyFade.t >= skyFade.TIME / 2 and skyFade.to or skyFade.from
+        skyFade.from, skyFade.to, skyFade.t = from, sky, 0
+    end
+    skyFade.t = min(skyFade.TIME, skyFade.t + dt)
+
     if script then script.update(game, dt) end
     findHover()
     audio.hover()
@@ -2074,29 +2090,63 @@ local function lightPool(x, z, r)
 end
 
 -- The weather, drawn over everything on the board in screen pixels: rain in
--- streaks, frost as drifting flakes, drought as dust in the heat.
-local function drawWeather(kind)
+-- streaks, frost as drifting flakes, drought as dust in the heat. `amount`, 0
+-- to 1, is how much of it there is while it comes in or goes.
+local function drawWeather(kind, amount)
     local t = game.clock
+    amount = amount or 1
     if kind == "rain" then
-        for k = 1, floor(cw * ch / 260) do
+        for k = 1, floor(cw * ch / 260 * amount) do
             local x = floor((k * 7919 + floor(t * 50) * 31) % cw)
             local y = floor((k * 104729 + t * 260) % (ch + 8)) - 4
             for s = 0, 2 do putS(IDX.s, x, y + s) end
         end
     elseif kind == "frost" then
-        for k = 1, floor(cw * ch / 900) do
+        for k = 1, floor(cw * ch / 900 * amount) do
             local y = floor((k * 104729 + t * 14) % ch)
             local x = floor((k * 7919 + math.sin(t * 0.8 + k) * 6) % cw)
             putS(IDX.w, x, y)
             if k % 4 == 0 then putS(IDX.w, x + 1, y); putS(IDX.w, x, y + 1) end
         end
     elseif kind == "drought" then
-        for k = 1, floor(cw * ch / 1800) do
+        for k = 1, floor(cw * ch / 1800 * amount) do
             local x = floor((k * 7919 + t * 9) % cw)
             local y = floor((k * 104729 + math.sin(t + k) * 3) % ch)
             putS(IDX.t, x, y)
         end
     end
+end
+
+-- Draws the board's picture `img` over another only where a Bayer matrix says:
+-- `amount` 0 leaves none of it, 1 all of it, and in between 64 steps of an
+-- 8x8 pattern pinned to the picture's own pixels (so it holds still under a
+-- pan or a shake). Every pixel is the one picture's or the other's: chosen,
+-- never mixed. False if the shader will not build, and the sky just changes.
+function skyFade.draw(img, x, y, amount)
+    if skyFade.shader == nil then
+        local ok, sh = pcall(love.graphics.newShader, [[
+            extern vec2 size;
+            extern float amount;
+            float bayer2(vec2 b) { return 2.0 * abs(b.x - b.y) + b.y; }
+            vec4 effect(vec4 colour, Image tex, vec2 uv, vec2 sc) {
+                vec2 p = floor(uv * size);
+                float v = 16.0 * bayer2(mod(p, 2.0))
+                        + 4.0 * bayer2(mod(floor(p / 2.0), 2.0))
+                        + bayer2(mod(floor(p / 4.0), 2.0));
+                if ((v + 0.5) / 64.0 > amount) discard;
+                return Texel(tex, uv) * colour;
+            }
+        ]])
+        skyFade.shader = ok and sh or false
+    end
+    local dither = skyFade.shader
+    if not dither then return false end
+    dither:send("size", { img:getDimensions() })
+    dither:send("amount", amount)
+    love.graphics.setShader(dither)
+    love.graphics.draw(img, x, y)
+    love.graphics.setShader()
+    return true
 end
 
 -- Ink on the ground: the board under it goes dark, in a checker so the soil shows.
@@ -2242,17 +2292,33 @@ local function drawBoard()
     end
     love.graphics.clear(unpack(T.RGB[IDX.o]))
     love.graphics.setColor(1, 1, 1)
+    -- The sky's picture of the board, or two dithering between them while the
+    -- weather turns.
+    local function skyImage(kind) return kind and world:variant(kind) or world.image end
+    local fade = skyFade.t / skyFade.TIME
     local sky = game.weather
-    love.graphics.draw(sky and world:variant(sky) or world.image, -floor(camx), -floor(camy))
+    local bx, by = -floor(camx), -floor(camy)
+    if fade < 1 and skyFade.from ~= skyFade.to then
+        love.graphics.draw(skyImage(skyFade.from), bx, by)
+        if not skyFade.draw(skyImage(skyFade.to), bx, by, fade) then fade = 1; love.graphics.draw(skyImage(sky), bx, by) end
+    else
+        fade = 1
+        love.graphics.draw(skyImage(sky), bx, by)
+    end
     ffi.fill(opx, cw * ch * 4, 0)
-    local night = sky == "night"
+    -- Bugs go dark once the night is mostly in, and are themselves again once
+    -- it is mostly gone. A lamp's pool is the daytime ground, which is right
+    -- both ways, so it shows all the while night comes or goes.
+    local shown = fade >= 0.5 and skyFade.to or (fade < 1 and skyFade.from) or sky
+    local night = shown == "night"
+    local nightPools = night or (fade < 1 and (skyFade.from == "night" or skyFade.to == "night"))
     -- At night a lamp lights the ground round it.
     local lamps = {}
     for _, n in ipairs(game.nodes) do
         local t = n.tower
         if t and t.kind == "lamp" and (t.glow or 0) > 0 then
             lamps[#lamps + 1] = n
-            if night then lightPool(n.x, n.z, min(34, t.glow * 0.45)) end
+            if nightPools then lightPool(n.x, n.z, min(34, t.glow * 0.45)) end
         end
     end
     local function lit(x, z)
@@ -2626,7 +2692,12 @@ local function drawBoard()
         end
     end
 
-    if sky then drawWeather(sky) end
+    if fade < 1 then
+        if skyFade.from then drawWeather(skyFade.from, 1 - fade) end
+        if skyFade.to then drawWeather(skyFade.to, fade) end
+    elseif sky then
+        drawWeather(sky)
+    end
 
     overlayImage:replacePixels(overlay)
     love.graphics.setColor(1, 1, 1)
