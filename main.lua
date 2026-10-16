@@ -160,11 +160,34 @@ local weatherBox, weatherTip = nil, nil
 local heartFlash = 0
 local shake = 0 -- seconds of shaking left: a boss charging, a ball breaking
 -- The weather coming in or going: the board's picture for the old sky giving
--- way to the new one's through an ordered dither, a few more pixels a frame,
--- so nothing is ever blended. `from` and `to` are weather kinds or false
--- (clear), `t` the seconds since the change.
+-- way to the new one's a few more pixels a frame, so nothing is ever blended.
+-- `from` and `to` are weather kinds or false (clear), `t` the seconds since the
+-- change, `time` how long this one takes and `w` the weather whose way of
+-- arriving it is (`out`: going, so the same way backwards).
 -- (One table, shader and all: this file is near Lua's 200 locals.)
-local skyFade = { from = false, to = false, t = 0, TIME = 1.6 }
+local skyFade = { from = false, to = false, t = 0, time = 1, w = "night", out = false }
+-- How each weather settles on the board. Night falls evenly, an ordered dither
+-- all over. Rain, frost and drought come in patches: the first wet spots, the
+-- first drifts of snow, the first dry earth, then more round them until the
+-- ground is covered, and they go the same way backwards, the last spots to
+-- come in the first to go. `blob` is a patch's size in board pixels, `rough`
+-- how much the patches lead over the plain dither (the dither always
+-- breaks up their edges), `lag` how much of the change passes before the
+-- ground starts to turn (the rain is falling a moment before anything is wet).
+skyFade.STYLE = {
+    night = { time = 2.5, blob = 1, rough = 0, lag = 0, seed = 0 },
+    rain = { time = 4.5, blob = 10, rough = 0.75, lag = 0.2, seed = 1 },
+    frost = { time = 5.5, blob = 7, rough = 0.7, lag = 0.25, seed = 2 },
+    drought = { time = 4.5, blob = 16, rough = 0.7, lag = 0.1, seed = 3 },
+}
+
+-- The sky is now `to`: start the change from what mostly shows.
+function skyFade.change(to)
+    local from = skyFade.t >= skyFade.time / 2 and skyFade.to or skyFade.from
+    local w = (to and to ~= "night" and to) or (from and from ~= "night" and from) or "night"
+    skyFade.from, skyFade.to, skyFade.t = from, to, 0
+    skyFade.w, skyFade.out, skyFade.time = w, w ~= to, skyFade.STYLE[w].time
+end
 -- The HUD's own flourishes: the last thing pressed lighting up, the nutrients
 -- going red when they fall short (bright when a lot comes in at once), the
 -- edge of the screen going red when the sprout is hit, and a word across the
@@ -909,7 +932,8 @@ local function start()
     focus, focused = nil, nil
     paused, speed = false, 1
     menu = nil
-    skyFade.from, skyFade.to, skyFade.t = false, game.weather or false, skyFade.TIME
+    skyFade.change(game.weather or false)
+    skyFade.t = skyFade.time
 end
 
 -- Plays level `n` with the species in `chosen`: its board if it is painted
@@ -1751,11 +1775,8 @@ function love.update(dt)
     -- The sky changed: the new picture dithers in over the old. Changed again
     -- before it was done, the picture mostly showing is the one it leaves.
     local sky = game.weather or false
-    if sky ~= skyFade.to then
-        local from = skyFade.t >= skyFade.TIME / 2 and skyFade.to or skyFade.from
-        skyFade.from, skyFade.to, skyFade.t = from, sky, 0
-    end
-    skyFade.t = min(skyFade.TIME, skyFade.t + dt)
+    if sky ~= skyFade.to then skyFade.change(sky) end
+    skyFade.t = min(skyFade.time, skyFade.t + dt)
 
     if script then script.update(game, dt) end
     findHover()
@@ -2117,23 +2138,36 @@ local function drawWeather(kind, amount)
     end
 end
 
--- Draws the board's picture `img` over another only where a Bayer matrix says:
--- `amount` 0 leaves none of it, 1 all of it, and in between 64 steps of an
--- 8x8 pattern pinned to the picture's own pixels (so it holds still under a
--- pan or a shake). Every pixel is the one picture's or the other's: chosen,
--- never mixed. False if the shader will not build, and the sky just changes.
+-- Draws the board's picture `img` over another, a pixel where it has come in
+-- and none where it has not: `amount` 0 none of it, 1 all of it. Which pixels
+-- come first is the weather's: an 8x8 Bayer dither (64 even steps, for
+-- night), or patches of value noise that grow, their edges broken up by the
+-- same dither. All of it pinned to the picture's own pixels, so it holds
+-- still under a pan or a shake. Every pixel is the one picture's or the
+-- other's: chosen, never mixed. False if the shader will not build, and the
+-- sky just changes.
 function skyFade.draw(img, x, y, amount)
     if skyFade.shader == nil then
         local ok, sh = pcall(love.graphics.newShader, [[
             extern vec2 size;
-            extern float amount;
+            extern float amount, blob, rough, seed, back;
             float bayer2(vec2 b) { return 2.0 * abs(b.x - b.y) + b.y; }
+            float hash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7)) + seed * 17.0) * 43758.5453); }
+            float noise(vec2 p) {
+                vec2 i = floor(p), f = fract(p);
+                f = f * f * (3.0 - 2.0 * f);
+                return mix(mix(hash(i), hash(i + vec2(1.0, 0.0)), f.x),
+                           mix(hash(i + vec2(0.0, 1.0)), hash(i + vec2(1.0, 1.0)), f.x), f.y);
+            }
             vec4 effect(vec4 colour, Image tex, vec2 uv, vec2 sc) {
                 vec2 p = floor(uv * size);
-                float v = 16.0 * bayer2(mod(p, 2.0))
+                float b = (16.0 * bayer2(mod(p, 2.0))
                         + 4.0 * bayer2(mod(floor(p / 2.0), 2.0))
-                        + bayer2(mod(floor(p / 4.0), 2.0));
-                if ((v + 0.5) / 64.0 > amount) discard;
+                        + bayer2(mod(floor(p / 4.0), 2.0)) + 0.5) / 64.0;
+                float n = 0.65 * noise(p / blob) + 0.35 * noise(p / (blob * 0.4) + 19.0);
+                n = clamp((n - 0.2) / 0.6, 0.0, 1.0);
+                if (back > 0.5) n = 1.0 - n;
+                if (mix(b, n, rough) >= amount) discard;
                 return Texel(tex, uv) * colour;
             }
         ]])
@@ -2141,8 +2175,15 @@ function skyFade.draw(img, x, y, amount)
     end
     local dither = skyFade.shader
     if not dither then return false end
+    local st = skyFade.STYLE[skyFade.w]
     dither:send("size", { img:getDimensions() })
     dither:send("amount", amount)
+    dither:send("blob", st.blob)
+    dither:send("rough", st.rough)
+    dither:send("seed", st.seed)
+    -- Going, the same patches backwards: the new picture comes in where the
+    -- old weather came in last.
+    dither:send("back", skyFade.out and 1 or 0)
     love.graphics.setShader(dither)
     love.graphics.draw(img, x, y)
     love.graphics.setShader()
@@ -2295,12 +2336,15 @@ local function drawBoard()
     -- The sky's picture of the board, or two dithering between them while the
     -- weather turns.
     local function skyImage(kind) return kind and world:variant(kind) or world.image end
-    local fade = skyFade.t / skyFade.TIME
+    local fade = skyFade.t / skyFade.time
     local sky = game.weather
     local bx, by = -floor(camx), -floor(camy)
     if fade < 1 and skyFade.from ~= skyFade.to then
+        -- Coming in, the ground waits a moment for the rain or snow to start.
+        local lag = skyFade.out and 0 or skyFade.STYLE[skyFade.w].lag
+        local ground = max(0, (fade - lag) / (1 - lag))
         love.graphics.draw(skyImage(skyFade.from), bx, by)
-        if not skyFade.draw(skyImage(skyFade.to), bx, by, fade) then fade = 1; love.graphics.draw(skyImage(sky), bx, by) end
+        if not skyFade.draw(skyImage(skyFade.to), bx, by, ground) then fade = 1; love.graphics.draw(skyImage(sky), bx, by) end
     else
         fade = 1
         love.graphics.draw(skyImage(sky), bx, by)
@@ -2693,8 +2737,11 @@ local function drawBoard()
     end
 
     if fade < 1 then
-        if skyFade.from then drawWeather(skyFade.from, 1 - fade) end
-        if skyFade.to then drawWeather(skyFade.to, fade) end
+        -- What falls leads the ground: the rain or snow starts in the first
+        -- part of the change, and stops in the first part of its going while
+        -- the ground is still drying or melting.
+        if skyFade.from then drawWeather(skyFade.from, max(0, 1 - fade / 0.3)) end
+        if skyFade.to then drawWeather(skyFade.to, min(1, fade / 0.3)) end
     elseif sky then
         drawWeather(sky)
     end
