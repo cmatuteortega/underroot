@@ -224,6 +224,23 @@ D.ENEMIES = {
         hopEvery = 2.6, hopFor = 0.55, hopSpeed = 52, hopH = 9, snapR = 5,
         heart = 1, corpse = 2, blurb = "HOPS OVER SHELVES AND MATS. ITS FIRST LANDING SNAPS A LINK" },
 
+    -- Walks the trail until a link is in reach off it, then sinks and burrows
+    -- under the board to it (a bump in the soil, nothing can touch it), comes
+    -- up beside it and cuts it. Up, it is still and soft for `surfaceFor`;
+    -- after `cuts` of them it climbs back to the trail and walks on. No
+    -- coming up in water.
+    cricket = { name = "CRICKET NYMPH", short = "CRICKET", hp = 45, speed = 12, armor = 1, bite = 5,
+        sinkEvery = 3, sinkFor = 0.8, reach = 110, burrow = 24, surfaceFor = 2.2, cuts = 2,
+        heart = 2, corpse = 6, blurb = "BURROWS OFF THE TRAIL AND COMES UP BESIDE A LINK TO CUT IT" },
+    -- A small centipede: a head and a train of segments, each its own enemy,
+    -- like the Giant's. It does not cut what it crosses but wears it, `wear`
+    -- a second a body for every link within `wearR`.
+    centi = { name = "CENTIPEDE", hp = 34, speed = 14, armor = 1, segments = 4, gap = 5.5, seg = "centiseg",
+        bite = 4, wear = 7, wearR = 4, heart = 1, corpse = 4, size = 0.9,
+        blurb = "A TRAIN OF SEGMENTS. EVERY ONE GNAWS THE LINKS IT RUNS ALONG" },
+    centiseg = { name = "CENTIPEDE", short = "CENTIPEDE", segment = true, hp = 26, speed = 14, armor = 1, bite = 3,
+        wear = 7, wearR = 4, heart = 0.5, corpse = 2, size = 0.8 },
+
     moth = { name = "NIGHT MOTH", hp = 22, speed = 15, armor = 0, fly = true, moth = true, nibble = 4, bite = 4,
         heart = 1, corpse = 3, blurb = "COMES OUT AT NIGHT. FLIES TO THE BRIGHTEST LIGHT AND EATS IT" },
 
@@ -249,6 +266,7 @@ D.ENEMIES = {
     -- A head and a train of segments, each its own enemy with its own HP. Each
     -- crushes the links it crosses; break one and the one behind leads.
     centipede = { name = "GIANT CENTIPEDE", boss = true, hp = 260, speed = 11, armor = 5, segments = 11, gap = 8.5,
+        seg = "centseg",
         bite = 30, crushR = 4.5, heart = 6, corpse = 14, size = 2,
         blurb = "A TRAIN OF ARMORED SEGMENTS. EACH CUTS WHAT IT CROSSES. IT SPLITS WHERE BROKEN" },
     centseg = { name = "GIANT CENTIPEDE", boss = true, segment = true, hp = 220, speed = 11, armor = 5, bite = 20,
@@ -282,6 +300,7 @@ D.ENEMIES = {
         blurb = "DIGS A TUNNEL AHEAD, AND THE REST FOLLOW. KILL IT AND THE TUNNEL CAVES IN" },
 }
 D.ENEMY_ORDER = { "ant", "pillbug", "mite", "gnat", "moth", "brine", "slug", "spider", "knight", "springtail",
+    "cricket", "centi",
     "queen", "stag", "dung", "click", "waterbug", "centipede", "bombardier", "mole" }
 
 -- What answers each enemy: the species the loadout picker lights up when the
@@ -296,6 +315,8 @@ D.COUNTERS = {
     slug = { "cordyceps", "mortar", "needle" },
     spider = { "mane", "shelf" },
     knight = { "needle", "cordyceps" },
+    cricket = { "mane", "mortar", "needle" },
+    centi = { "puffer", "mortar", "mat" },
     queen = { "puffer", "mortar", "mane" },
     stag = { "mane", "needle", "relay" },
     dung = { "mortar", "needle" },
@@ -420,13 +441,16 @@ local POND = {
     { weather = "rain", { "ant", 8, 1.2, 2, 0 }, { "pillbug", 2, 5, 1, 4 }, { "gnat", 3, 1.5, 1, 8 } },
     { { "ant", 10, 1.1, 1, 0 }, { "brine", 1, 1, 2, 4 }, { "mite", 1, 1, 2, 8 } },
     { weather = "night", { "moth", 5, 1.6, 1, 0 }, { "ant", 10, 1, 2, 2 }, { "queen", 1, 1, 1, 4, MID }, { "spider", 2, 5, 1, 6 } },
-    { weather = "rain", { "slug", 2, 8, 1, 0 }, { "brine", 2, 6, 2, 3 }, { "ant", 12, 0.9, 2, 6 } },
+    { weather = "rain", { "slug", 2, 8, 1, 0 }, { "brine", 2, 6, 2, 3 }, { "ant", 12, 0.9, 2, 6 }, { "cricket", 2, 5, 1, 8 } },
     { weather = "drought", { "knight", 2, 5, 1, 0 }, { "mite", 2, 6, 2, 2 }, { "pillbug", 3, 4, 2, 4 }, { "gnat", 5, 1.2, 1, 8 } },
-    { weather = "night", { "moth", 8, 1.2, 2, 0 }, { "spider", 3, 4, 1, 3 }, { "ant", 12, 0.9, 1, 6 } },
+    { weather = "night", { "moth", 8, 1.2, 2, 0 }, { "spider", 3, 4, 1, 3 }, { "ant", 12, 0.9, 1, 6 }, { "cricket", 2, 5, 2, 8 } },
     { { "ant", 10, 1, 2, 0 }, { "stag", 1, 1, 1, 3, MID }, { "gnat", 6, 1, 2, 10 } },
-    { weather = "rain", { "brine", 3, 6, 1, 0 }, { "knight", 3, 5, 2, 2 }, { "slug", 2, 8, 1, 6 }, { "gnat", 8, 1, 2, 8 } },
-    { weather = "frost", { "pillbug", 5, 3, 1, 0 }, { "knight", 4, 4, 2, 2 }, { "spider", 4, 4, 1, 6 }, { "mite", 3, 5, 2, 8 } },
-    { weather = "night", { "moth", 10, 1, 1, 0 }, { "slug", 3, 6, 2, 2 }, { "ant", 20, 0.6, 1, 6 }, { "brine", 2, 8, 2, 8 } },
+    { weather = "rain", { "brine", 3, 6, 1, 0 }, { "knight", 3, 5, 2, 2 }, { "slug", 2, 8, 1, 6 }, { "gnat", 8, 1, 2, 8 },
+        { "cricket", 3, 4, 2, 10 } },
+    { weather = "frost", { "pillbug", 5, 3, 1, 0 }, { "knight", 4, 4, 2, 2 }, { "spider", 4, 4, 1, 6 }, { "mite", 3, 5, 2, 8 },
+        { "cricket", 3, 4, 1, 10 } },
+    { weather = "night", { "moth", 10, 1, 1, 0 }, { "slug", 3, 6, 2, 2 }, { "ant", 20, 0.6, 1, 6 }, { "brine", 2, 8, 2, 8 },
+        { "cricket", 4, 3, 1, 10 } },
     { weather = "rain", { "ant", 14, 0.8, 2, 0 }, { "waterbug", 1, 1, 1, 4 }, { "knight", 3, 5, 2, 10 }, { "gnat", 8, 1, 1, 14 } },
 }
 
@@ -438,19 +462,24 @@ local LAWN = {
     { weather = "drought", { "mite", 2, 6, 1, 0 }, { "gnat", 4, 1.4, 3, 2 }, { "ant", 10, 1, 2, 4 } },
     { weather = "rain", { "slug", 2, 8, 2, 0 }, { "brine", 2, 6, 1, 2 }, { "ant", 10, 1, 3, 4 } },
     { { "ant", 12, 1, 3, 0 }, { "queen", 1, 1, 2, 4 }, { "spider", 2, 5, 1, 8 } },
-    { weather = "frost", { "knight", 3, 4, 1, 0 }, { "pillbug", 3, 4, 3, 2 }, { "mite", 2, 6, 2, 6 }, { "gnat", 6, 1, 2, 8 } },
-    { weather = "drought", { "spider", 4, 4, 2, 0 }, { "slug", 2, 8, 3, 2 }, { "ant", 14, 0.8, 1, 4 } },
-    { { "knight", 4, 3, 3, 0 }, { "brine", 3, 6, 2, 2 }, { "gnat", 8, 0.9, 1, 4 }, { "ant", 12, 0.8, 2, 8 } },
-    { weather = "night", { "moth", 8, 1.2, 1, 0 }, { "spider", 4, 4, 3, 2 }, { "mite", 3, 5, 2, 4 }, { "ant", 12, 0.8, 3, 8 } },
+    { weather = "frost", { "knight", 3, 4, 1, 0 }, { "pillbug", 3, 4, 3, 2 }, { "mite", 2, 6, 2, 6 }, { "gnat", 6, 1, 2, 8 },
+        { "centi", 1, 1, 2, 10 } },
+    { weather = "drought", { "spider", 4, 4, 2, 0 }, { "slug", 2, 8, 3, 2 }, { "ant", 14, 0.8, 1, 4 }, { "cricket", 2, 5, 1, 6 } },
+    { { "knight", 4, 3, 3, 0 }, { "brine", 3, 6, 2, 2 }, { "gnat", 8, 0.9, 1, 4 }, { "ant", 12, 0.8, 2, 8 },
+        { "centi", 2, 6, 3, 10 } },
+    { weather = "night", { "moth", 8, 1.2, 1, 0 }, { "spider", 4, 4, 3, 2 }, { "mite", 3, 5, 2, 4 }, { "ant", 12, 0.8, 3, 8 },
+        { "cricket", 3, 4, 2, 10 } },
     { { "knight", 3, 5, 1, 0 }, { "stag", 1, 1, 2, 3 }, { "ant", 14, 0.8, 3, 6 } },
-    { weather = "rain", { "slug", 3, 6, 1, 0 }, { "brine", 3, 6, 3, 2 }, { "pillbug", 5, 3, 2, 4 }, { "gnat", 10, 0.7, 1, 8 } },
+    { weather = "rain", { "slug", 3, 6, 1, 0 }, { "brine", 3, 6, 3, 2 }, { "pillbug", 5, 3, 2, 4 }, { "gnat", 10, 0.7, 1, 8 },
+        { "centi", 3, 5, 2, 10 } },
     { weather = "drought", { "knight", 7, 2.5, 2, 0 }, { "spider", 5, 3, 1, 3 }, { "mite", 4, 4, 3, 6 }, { "ant", 18, 0.6, 2, 8 },
-        { "pillbug", 3, 4, 3, 10 } },
-    { weather = "frost", { "pillbug", 6, 2.5, 1, 0 }, { "slug", 4, 5, 3, 2 }, { "knight", 6, 3, 2, 4 }, { "gnat", 12, 0.6, 3, 6 } },
+        { "pillbug", 3, 4, 3, 10 }, { "cricket", 3, 4, 1, 12 } },
+    { weather = "frost", { "pillbug", 6, 2.5, 1, 0 }, { "slug", 4, 5, 3, 2 }, { "knight", 6, 3, 2, 4 }, { "gnat", 12, 0.6, 3, 6 },
+        { "centi", 3, 4, 1, 8 } },
     { weather = "night", { "moth", 14, 0.7, 2, 0 }, { "spider", 7, 3, 1, 2 }, { "brine", 3, 6, 3, 4 }, { "ant", 24, 0.5, 1, 8 },
-        { "knight", 4, 4, 3, 10 } },
+        { "knight", 4, 4, 3, 10 }, { "centi", 3, 4, 2, 12 } },
     { { "ant", 18, 0.6, 3, 0 }, { "centipede", 1, 1, 2, 4 }, { "knight", 6, 3, 1, 8 }, { "gnat", 12, 0.7, 3, 12 },
-        { "slug", 3, 6, 1, 16 } },
+        { "slug", 3, 6, 1, 16 }, { "cricket", 3, 4, 3, 14 } },
 }
 
 -- The levels, in the order they open: each is won to open the next. `map`

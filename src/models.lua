@@ -1180,14 +1180,18 @@ local function centiSegParts(leg)
     return parts
 end
 
-function M.centipede(h, leg)
+-- `s`: how big; the small centipede is the Giant's head and segments, less
+-- than half the size.
+function M.centipede(h, leg, s)
     local hs = step(h, 16)
-    return kept("chead" .. hs .. leg, function() return place(centiHeadParts(leg), heading(hs / 16 * TAU), A.scale(1.7, 1.7, 1.7)) end)
+    s = s or 1.7
+    return kept("chead" .. hs .. leg .. ":" .. s, function() return place(centiHeadParts(leg), heading(hs / 16 * TAU), A.scale(s, s, s)) end)
 end
 
-function M.centseg(h, leg)
+function M.centseg(h, leg, s)
     local hs = step(h, 16)
-    return kept("cseg" .. hs .. leg, function() return place(centiSegParts(leg), heading(hs / 16 * TAU), A.scale(1.6, 1.6, 1.6)) end)
+    s = s or 1.6
+    return kept("cseg" .. hs .. leg .. ":" .. s, function() return place(centiSegParts(leg), heading(hs / 16 * TAU), A.scale(s, s, s)) end)
 end
 
 -- The Bombardier Beetle: a rust head and thorax, black wing cases banded in
@@ -1320,10 +1324,12 @@ local function moleParts(leg, dig)
     return parts
 end
 
-function M.mole(h, leg, dig)
+-- `s`: how big; the cricket nymph is the boss at under two thirds the size.
+function M.mole(h, leg, dig, s)
     local hs = step(h, 16)
-    return kept("mole" .. hs .. leg .. (dig and "d" or ""), function()
-        return place(moleParts(leg, dig), heading(hs / 16 * TAU), A.scale(2.2, 2.2, 2.2))
+    s = s or 2.2
+    return kept("mole" .. hs .. leg .. (dig and "d" or "") .. ":" .. s, function()
+        return place(moleParts(leg, dig), heading(hs / 16 * TAU), A.scale(s, s, s))
     end)
 end
 
@@ -1395,6 +1401,15 @@ function M.corpse(kind, h, fruited)
         elseif kind == "mole" then
             parts = flip(moleParts(0), 7, 2.2)
             top = 9
+        elseif kind == "cricket" then
+            parts = flip(moleParts(0), 4.3, 1.35)
+            top = 5
+        elseif kind == "centi" then
+            parts = flip(centiHeadParts(0), 2.3, 0.9)
+            top = 3
+        elseif kind == "centiseg" then
+            parts = flip(centiSegParts(0), 2.2, 0.85)
+            top = 3
         elseif kind == "ball" then
             -- A broken ball is a heap.
             parts = {}

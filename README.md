@@ -7,7 +7,7 @@ A tower defense where you are the mycelium under a sprout, built from the design
 doc (`DESIGN.md`, 13 oct 2026). Six levels, each its own map and waves (The
 Crack, The Flowerpot, The Shed Floor, The Rotting Log, The Pond Edge, The Lawn),
 weather that changes wave by wave, twelve fruiting bodies that each fork into two
-upgrade branches of two tiers, ten enemies, eight bosses (big bugs: a Queen Ant, a
+upgrade branches of two tiers, twelve enemies, eight bosses (big bugs: a Queen Ant, a
 Stag Beetle, a Dung Beetle with its ball, a Click Beetle, a Mole Cricket, a Giant
 Water Bug, a Giant Centipede and, in challenge mode, a Bombardier Beetle; three
 on every level, the two met part way through it at a third of their health), and
@@ -195,7 +195,15 @@ fruiting body it passes), Wolf Spider (leaves the trail for your deadliest tower
 and webs it shut), Beetle Knight (armor 9: cheap hits glance off), Springtail
 (every few seconds it springs off its tail, and at once when a shelf blocks it or
 a mat is under it: over and on, two tiles down the trail; the first time it comes
-down beside a thread, the thread snaps). Each wave's
+down beside a thread, the thread snaps), Cricket Nymph (the Pond Edge and the
+Lawn: the small Mole Cricket. Every few seconds on the trail it looks for a link
+within 110; with one, it digs in for 0.8 s, then burrows under the board to it,
+unseen and unhurt but for a heave of soil, comes up beside it out of the water and
+cuts it, and stays still and soft for 2.2 s. It cuts two that way, then climbs
+back to the trail; a fed link before a starved one), Centipede (the Lawn: the
+small one, a head and four segments, each its own enemy; every body wears the
+links within 4 at 7 a second as it runs along, and it splits where it is broken;
+not lured, panicked or infected). Each wave's
 enemies have 10% more HP than the last.
 
 **Bosses.** The design doc's human-world bosses became big bugs (see
@@ -252,8 +260,8 @@ shake the board.
 | 2. The Flowerpot | inside a cracked terracotta pot: one trail spirals in from the rim to the sprout in the middle, and from wave 3 bugs come up out of the drainage hole three tiles from it | 12 | cutting and regrowing; a gate behind your lines | Queen Ant |
 | 3. The Shed Floor | dusty floorboards; piles of bricks fix two trails into one chokepoint to the sprout | 13 | chokepoints and blockers, and the Springtail that hops them | Stag Beetle |
 | 4. The Rotting Log | inside a hollow log, dark nearly every wave; two long straights meet at the sprout | 13 | Fairy Rings close with three nodes here; slugs and mites | Click Beetle |
-| 5. The Pond Edge | the two trails meet on the west shore and wade one flooded lane across a pond; lily pads on the water, stones on the banks, reeds round it | 12 | flooding, high ground; rain often | Giant Water Bug |
-| 6. The Lawn | open mown grass, a long dirt path, three gates | 15 | everything at once, each wave 20% tougher than the last (10% elsewhere) | Queen Ant, Stag Beetle, Giant Centipede |
+| 5. The Pond Edge | the two trails meet on the west shore and wade one flooded lane across a pond; lily pads on the water, stones on the banks, reeds round it | 12 | flooding, high ground; rain often; the Cricket Nymph | Giant Water Bug |
+| 6. The Lawn | open mown grass, a long dirt path, three gates | 15 | everything at once, each wave 20% tougher than the last (10% elsewhere); the small Centipede | Queen Ant, Stag Beetle, Giant Centipede |
 
 They come in the design doc's order. The Crack, the first, also brings the
 three bosses the levels after it each have one of. A save from before the
@@ -319,10 +327,8 @@ before they have a build order, not for tuning.
 
 ### Not in yet
 
-Springtail, Mole Cricket, Centipede (the small one) and Green Mold; elite
-modifiers, props, the Spore Bank, sprout seeds, the Flowerpot, Shed Floor, Rotting
-Log and Compost Heap as levels of their own. Each of those is a row and
-a model more, below.
+Green Mold; elite modifiers, props, the Spore Bank, sprout seeds and the Compost
+Heap. Each of those is a row and a model more, below.
 
 ## How it sounds
 

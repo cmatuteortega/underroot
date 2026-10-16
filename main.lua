@@ -1977,6 +1977,13 @@ local function enemyPicture(e)
         return M.centipede(turned(e.h), floor(e.anim * 8) % 2)
     elseif k == "centseg" then
         return M.centseg(turned(e.h), floor(e.anim * 8 + (e.x + e.z) * 0.1) % 2)
+    elseif k == "centi" then
+        return M.centipede(turned(e.h), floor(e.anim * 10) % 2, 0.9)
+    elseif k == "centiseg" then
+        return M.centseg(turned(e.h), floor(e.anim * 10 + (e.x + e.z) * 0.1) % 2, 0.85)
+    elseif k == "cricket" then
+        local dig = e.state == "sink" or e.state == "up"
+        return M.mole(turned(e.h), floor(e.anim * (dig and 7 or 6)) % 2, dig, 1.35)
     elseif k == "bombardier" then
         return M.bombardier(turned(e.h), floor(e.anim * 6) % 2, e.state == "siege")
     elseif k == "springtail" then
@@ -1994,7 +2001,7 @@ end
 
 local SHADOW = { ant = 4, pillbug = 4.5, brine = 3.5, gnat = 2.5, slug = 6, spider = 5, knight = 5,
     queen = 11, stag = 13, dung = 10, moth = 3.5, waterbug = 12, centipede = 6, centseg = 5.5, bombardier = 10,
-    springtail = 3, click = 10, mole = 10 }
+    springtail = 3, click = 10, mole = 10, cricket = 5.5, centi = 3.5, centiseg = 3 }
 
 -- Something under the water: rings spreading on the surface where it is.
 local function ripples(x, z, t)
@@ -2013,10 +2020,12 @@ local function ripples(x, z, t)
 end
 
 -- Something burrowing: the soil heaving up over it, a ridge of loose crumbs.
-function flair.heave(x, z, t)
-    for s = 0, 13 do
+-- `k` scales it for something smaller.
+function flair.heave(x, z, t, k)
+    k = k or 1
+    for s = 0, floor(13 * k) do
         local a = s * 2.39996 + t * 3
-        local r = (s % 4) * 1.6 + math.sin(t * 9 + s) * 0.8
+        local r = ((s % 4) * 1.6 + math.sin(t * 9 + s) * 0.8) * k
         local px, pz = x + math.cos(a) * r, z + math.sin(a) * r
         local i, j, d = world:toImage(px, world:groundAt(px, pz) + 0.5 + (s % 3) * 0.6, pz)
         if visible(floor(i), floor(j), d + 1) then put(s % 3 == 0 and IDX.u or (s % 3 == 1 and IDX.n or IDX.t), i, j) end
@@ -2266,7 +2275,7 @@ local function drawBoard()
         flair.hole(t.a.x, t.a.z, 6)
     end
     for _, e in ipairs(game.enemies) do
-        if e.under and e.kind == "mole" then flair.heave(e.x, e.z, game.clock)
+        if e.under and (e.kind == "mole" or e.kind == "cricket") then flair.heave(e.x, e.z, game.clock, e.kind == "cricket" and 0.5)
         elseif e.under then ripples(e.x, e.z, game.clock)
         elseif SHADOW[e.kind] and not e.hidden then shadow(e.x, e.z, SHADOW[e.kind]) end
         if e.ballHp and e.ballHp > 0 then
@@ -2661,7 +2670,7 @@ local function waveSummary(wave)
     if wave.weather then parts[1] = D.WEATHER[wave.weather].name .. ":" end
     for _, kind in ipairs(D.ENEMY_ORDER) do
         if count[kind] then
-            local name = D.ENEMIES[kind].boss and D.ENEMIES[kind].name or kind:upper()
+            local name = D.ENEMIES[kind].boss and D.ENEMIES[kind].name or D.ENEMIES[kind].short or kind:upper()
             parts[#parts + 1] = (D.ENEMIES[kind].boss and "" or (count[kind] .. " ")) .. name
         end
     end

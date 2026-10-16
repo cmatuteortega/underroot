@@ -33,6 +33,11 @@ function S.run()
     headings("centi", function(h) return M.centipede(h, 0) end, 6)
     headings("seg", function(h) return M.centseg(h, 0) end, 6)
     rows[#rows + 1] = { "centi", M.centipede(0.5, 1), M.centseg(0.5, 1), M.corpse("centipede", 0), M.corpse("centseg", 1) }
+    headings("small", function(h) return M.centipede(h, 0, 0.9) end, 6)
+    rows[#rows + 1] = { "small", M.centseg(0.5, 1, 0.85), M.corpse("centi", 0), M.corpse("centiseg", 1),
+        M.corpse("cricket", 0.4) }
+    headings("nymph", function(h) return M.mole(h, 0, false, 1.35) end, 6)
+    rows[#rows + 1] = { "nymph", M.mole(0.6, 0, true, 1.35), M.mole(0.6, 1, true, 1.35) }
     headings("spring", function(h) return M.springtail(h, 0) end, 6)
     rows[#rows + 1] = { "spring", M.springtail(0.5, 1), M.springtail(0.5, 0, true), M.springtail(3.6, 0, true), M.corpse("springtail", 0) }
     headings("click", function(h) return M.click(h, 0) end, 4)

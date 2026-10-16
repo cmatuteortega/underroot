@@ -835,6 +835,7 @@ function Game:spawnAt(kind, x, z, c, r)
     if d.hopEvery then en.hopCd = d.hopEvery * random() end
     if d.clickEvery then en.clickCd = d.clickEvery * 0.6 end
     if d.digEvery then en.digCd, en.digs = d.digEvery * 0.5, 0 end
+    if d.sinkEvery then en.sinkCd, en.cut = d.sinkEvery * (0.5 + random() * 0.5), 0 end
     if d.moth then en.y = 10 end
     self.enemies[#self.enemies + 1] = en
     return en
@@ -853,11 +854,11 @@ function Game:spawn(kind, gate)
         if d.segments then
             -- The train: each segment waits its turn at the gate, then follows
             -- the one ahead of it.
-            local train = { n = d.segments + 1, max = en.hp }
+            local train = { n = d.segments + 1, max = en.hp, gap = d.gap }
             en.train = train
             local prev = en
             for k = 1, d.segments do
-                local s = self:spawnAt("centseg", x, z, e.c, e.r)
+                local s = self:spawnAt(d.seg, x, z, e.c, e.r)
                 s.leader, s.train, s.hidden, s.h = prev, train, k * d.gap / d.speed, 0
                 train.max = train.max + s.hp
                 prev = s
@@ -992,7 +993,7 @@ function Game:kill(e)
     local boss = d.boss
     if e.train then
         e.train.n = e.train.n - 1
-        boss = e.train.n <= 0
+        boss = boss and e.train.n <= 0
     end
     self:burst(e.x, 2 + e.y, e.z, e.kind == "mite" and 2 or (boss and 30 or 6), { "r", "n", "t" }, boss and 30 or 16)
     local size = d.size or 1
@@ -1038,7 +1039,7 @@ function Game:infectable(x, z, range, maxHp)
     for _, e in ipairs(self.enemies) do
         local d = D.ENEMIES[e.kind]
         if not e.dead and not d.boss and not d.fly and e.kind ~= "brine" and not (e.infected and e.infected > 0)
-            and not e.hidden and e.hp <= maxHp and (e.x - x) ^ 2 + (e.z - z) ^ 2 <= range * range then
+            and not e.hidden and not e.under and not e.train and e.hp <= maxHp and (e.x - x) ^ 2 + (e.z - z) ^ 2 <= range * range then
             if not best or e.hp > best.hp then best = e end
         end
     end
@@ -1527,10 +1528,10 @@ function Game:lure(t)
 end
 
 -- Can a lamp pull this one off its way? Not a boss, not salt, not a mite
--- set on its thread, not a host, and only once.
+-- set on its thread, not a host, not a centipede's train, and only once.
 function Game:lurable(e)
     local d = D.ENEMIES[e.kind]
-    return not e.dead and not d.boss and not e.lured and e.kind ~= "brine" and e.kind ~= "mite"
+    return not e.dead and not d.boss and not e.lured and e.kind ~= "brine" and e.kind ~= "mite" and not e.train
         and not (e.infected and e.infected > 0) and not e.rolling and not e.under and not e.hidden
         and (e.state == "walk" or e.state == "chew")
 end
@@ -1566,7 +1567,7 @@ function Game:stink(n, t, S, power, boost, dt)
                     self:burst(e.x, 3, e.z, 2, { "m", "d" }, 8)
                     self:cue("trip", e.x, e.z)
                 end
-                if panic then e.panic, fled = S("panic"), true end
+                if panic and not e.train then e.panic, fled = S("panic"), true end
             end
             local rot = S("rot")
             if rot then self:hurt(e, rot * power * dt, true, true) end
@@ -2058,6 +2059,7 @@ function Game:move(e, dt)
     end
     -- Burrowing: nothing on the surface touches it.
     if e.under and e.kind == "mole" then return self:mole(e, d, 1, dt) end
+    if e.under and e.kind == "cricket" then return self:cricket(e, d, 1, dt) end
 
     if e.infected and e.infected > 0 then return self:host(e, d, dt) end
 
@@ -2112,6 +2114,7 @@ function Game:move(e, dt)
     end
     if e.leader then return self:follow(e, d, slow, dt) end
     if e.kind == "springtail" and self:springtail(e, d, slow, dt) then return end
+    if e.kind == "cricket" and self:cricket(e, d, slow, dt) then return end
     if e.kind == "click" and self:click(e, d, dt) then return end
     if e.kind == "waterbug" and self:waterbug(e, d, slow, dt) then return end
     if e.kind == "bombardier" and self:bombardier(e, d, slow, dt) then return end
@@ -2164,10 +2167,7 @@ function Game:move(e, dt)
         if self:stag(e, d, slow, dt) then return end
     end
     if e.kind == "dung" then self:dung(e, d, dt) end
-    -- A centipede crushes every thread it runs over.
-    if d.crushR then
-        for _, l in ipairs(self:linksNear(e.x, e.z, d.crushR)) do self:crush(l) end
-    end
+    self:trample(e, d, dt)
 
     if e.kind == "pillbug" then
         if mat and e.rolling then
@@ -2348,7 +2348,20 @@ function Game:lured(e, d, slow, dt)
     e.togo = 200 + dd
 end
 
--- A centipede segment keeps its place behind the one ahead, and crushes what
+-- A centipede, every body of it: the Giant crushes every thread it runs
+-- over, the small one gnaws them.
+function Game:trample(e, d, dt)
+    if d.crushR then
+        for _, l in ipairs(self:linksNear(e.x, e.z, d.crushR)) do self:crush(l) end
+    elseif d.wear then
+        for _, l in ipairs(self:linksNear(e.x, e.z, d.wearR)) do
+            self:biteLink(l, d.wear * dt)
+            if fr() < dt * 3 then self:sparks(e.x, e.y + 1, e.z, 1, { "c", "l" }, 8) end
+        end
+    end
+end
+
+-- A centipede segment keeps its place behind the one ahead, and tramples what
 -- it crosses. When the one ahead is gone it leads what is left behind it.
 function Game:follow(e, d, slow, dt)
     local L = e.leader
@@ -2361,7 +2374,7 @@ function Game:follow(e, d, slow, dt)
     if L.hidden then return end
     local dx, dz = L.x - e.x, L.z - e.z
     local dd = sqrt(dx * dx + dz * dz)
-    local gap = D.ENEMIES.centipede.gap
+    local gap = e.train.gap
     if dd > gap then
         local s = min(dd - gap, d.speed * 1.6 * slow * dt)
         e.x, e.z = e.x + dx / dd * s, e.z + dz / dd * s
@@ -2370,7 +2383,7 @@ function Game:follow(e, d, slow, dt)
     e.togo = (L.togo or 0) + gap
     local c, r = floor(e.x / TILE), floor(e.z / TILE)
     if self.world:distAt(c, r) then e.tc, e.tr = c, r end
-    for _, l in ipairs(self:linksNear(e.x, e.z, d.crushR)) do self:crush(l) end
+    self:trample(e, d, dt)
 end
 
 -- Does a fed Lion's Mane tend this node? Its threads hold what the Water Bug
@@ -2765,6 +2778,113 @@ function Game:stag(e, d, slow, dt)
         self:shock(e.x, e.z, 18, 0.4, "t", "n")
         self:cue("charge", e.x, e.z)
     end
+end
+
+-- The link a cricket nymph would come up beside: the nearest in reach, a fed
+-- one before a starved one, and where beside it, out of the water. Answers
+-- the link and that spot.
+function Game:cricketPrey(e, d)
+    local w = self.world
+    local best, bx, bz, bd
+    for _, l in ipairs(self.links) do
+        if alive(l) then
+            local dd, _, qx, qz = segDist(e.x, e.z, l.a.x, l.a.z, l.b.x, l.b.z)
+            if dd <= d.reach then
+                -- A step short of the thread, on its near side.
+                local k = dd > 4 and 4 / dd or 0
+                local x, z = qx + (e.x - qx) * k, qz + (e.z - qz) * k
+                local score = dd + ((l.a.conn or l.b.conn) and 0 or d.reach)
+                if not w:floodedAt(x, z) and (not bd or score < bd) then best, bx, bz, bd = l, x, z, score end
+            end
+        end
+    end
+    return best, bx, bz
+end
+
+-- The trail tile nearest (x, z), for a cricket nymph climbing back to it.
+function Game:nearestTrail(x, z, c0, r0)
+    local w = self.world
+    local bc, br, bd = c0, r0
+    local mc, mr = floor(x / TILE), floor(z / TILE)
+    for r = mr - 6, mr + 6 do
+        for c = mc - 6, mc + 6 do
+            if w:distAt(c, r) then
+                local d2 = (c * TILE + TILE / 2 - x) ^ 2 + (r * TILE + TILE / 2 - z) ^ 2
+                if not bd or d2 < bd then bc, br, bd = c, r, d2 end
+            end
+        end
+    end
+    return bc, br
+end
+
+-- The cricket nymph: walking, every few seconds it looks for a link in reach
+-- off the trail; with one, it digs in (still, for a moment), burrows to it
+-- under the board -- a bump in the soil, nothing can touch it -- and comes
+-- up beside it and cuts it. Up it is still and soft, then it goes for the
+-- next, and after `cuts` of them climbs back to the trail. Answers true
+-- while it is off its walk.
+function Game:cricket(e, d, slow, dt)
+    local pace = self:pace()
+    if e.state == "sink" then
+        e.sinkT = e.sinkT - dt * pace
+        e.anim = e.anim + dt
+        if fr() < dt * 10 then self:motes(e.x, e.y, e.z, 1, { "t", "n", "u" }, 3, 10, 0.4) end
+        if e.sinkT <= 0 then
+            e.state, e.under = "tunnel", true
+            self:burst(e.x, 2, e.z, 8, { "t", "n", "u" }, 16)
+            self:splat(e.x, e.z, 4, "u", 2)
+            self:cue("burrow", e.x, e.z, 0.5)
+        end
+        return true
+    elseif e.state == "tunnel" then
+        if not alive(e.prey) then
+            -- Its link is gone already: the next, or up where it is.
+            e.prey, e.px, e.pz = self:cricketPrey(e, d)
+            if not e.prey then e.px, e.pz = e.x, e.z end
+        end
+        if fr() < dt * 6 then self:motes(e.x, e.y, e.z, 1, { "t", "n" }, 3, 5, 0.5) end
+        if toward(e, e.px, e.pz, d.burrow * pace, dt) or self.world:floodedAt(e.x, e.z) and not e.prey then
+            e.under, e.state, e.surfaceT = false, "up", d.surfaceFor
+            e.y = self.world:groundAt(e.x, e.z)
+            self:burst(e.x, 2, e.z, 12, { "t", "n", "u" }, 20)
+            self:splat(e.x, e.z, 5, "u", 3)
+            self:cue("surface", e.x, e.z, 0.5)
+            if e.prey then
+                e.h = atan2(e.prey.a.z + e.prey.b.z - 2 * e.z, e.prey.a.x + e.prey.b.x - 2 * e.x)
+                self:crush(e.prey)
+                e.cut = e.cut + 1
+            end
+            e.prey = nil
+        end
+        return true
+    elseif e.state == "up" then
+        e.surfaceT = e.surfaceT - dt
+        if e.surfaceT > 0 then return true end
+        if e.cut < d.cuts then
+            local l, x, z = self:cricketPrey(e, d)
+            if l then
+                e.prey, e.px, e.pz, e.state, e.sinkT = l, x, z, "sink", d.sinkFor
+                self:cue("dig", e.x, e.z, 0.4)
+                return true
+            end
+        end
+        -- Back to the trail, and on along it.
+        e.cut = d.cuts
+        e.tc, e.tr = self:nearestTrail(e.x, e.z, e.tc, e.tr)
+        e.state = "back"
+        return true
+    end
+    if e.state ~= "walk" or e.cut >= d.cuts then return false end
+    e.sinkCd = e.sinkCd - dt
+    if e.sinkCd > 0 or self.world:floodedAt(e.x, e.z) then return false end
+    local l, x, z = self:cricketPrey(e, d)
+    if not l then
+        e.sinkCd = 1 -- nothing in reach from here; try again further on
+        return false
+    end
+    e.prey, e.px, e.pz, e.state, e.sinkT = l, x, z, "sink", d.sinkFor
+    self:cue("dig", e.x, e.z, 0.4)
+    return true
 end
 
 -- A springtail springs off its tail every few seconds, and at once when a

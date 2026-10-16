@@ -49,12 +49,12 @@ the game; the numbers behind every ticked item are rows in `src/defs.lua`.
 - [x] Three bosses on every level, the level's own last (the Crack: Queen, Stag, Dung Beetle)
 - [x] Endless: play on past a level's last wave, bosses coming closer together and more of them; the most waves held is kept a level
 - [x] A turn button that takes the board round the other way; a weather tooltip; the pockets a species in hand can grow on outlined
+- [x] Cricket Nymph, the small Mole Cricket (the Pond Edge and the Lawn: burrows off the trail to a link, a heave in the soil, comes up beside it and cuts it, twice)
+- [x] Centipede, the small one (the Lawn: a head and four segments, every one gnawing the links it runs along; splits where broken)
 
 ## Next
 
 ### Enemies
-- [ ] Mole Cricket, the small one (burrows under the map, soil bumps warn of it, surfaces beside a link and cuts it); the boss that digs a tunnel is in
-- [ ] Centipede, the small one (segments, damages every link it runs along); the Giant Centipede boss is in
 - [ ] Green Mold (grows along links, converts nodes)
 - [ ] Elite modifiers: Fungicidal, Scent-masked, Armored shell, Hive-minded
 
@@ -75,7 +75,7 @@ Floor, the Rotting Log, the Pond Edge and the Lawn. Still to come:
 ### Feel
 - [x] Audio: synthesised at load (`src/sfx.lua`), a sound for every action and bug, the soil, the network's hum rising and falling with links, a loop a weather
 - [x] Effects: hit sparks, stains, shock rings, motes, shot flashes, thread flashes, HUD flashes and banners
-- [ ] Balance by hand: over 20 runs the bot wins the Crack 18, the Flowerpot 17, the Rotting Log 16, the Shed Floor and the Pond Edge 15, the Lawn 12; the Stag Beetle usually gets through (the Shed Floor's sprout has 23 to allow for it), and challenge mode is rarely won anywhere. These runs are from before the loadout, three bosses a level and the Mole Cricket, so they want doing again
+- [ ] Balance by hand: over 20 runs the bot wins the Crack 18, the Flowerpot 17, the Rotting Log 16, the Shed Floor and the Pond Edge 15, the Lawn 12; the Stag Beetle usually gets through (the Shed Floor's sprout has 23 to allow for it), and challenge mode is rarely won anywhere. These runs are from before the loadout, three bosses a level, the Mole Cricket and the small Cricket Nymph and Centipede, so they want doing again
 
 ## Open questions (as answered so far)
 
