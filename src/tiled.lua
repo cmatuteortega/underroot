@@ -184,8 +184,9 @@ function Tiled.paint(world, view)
     local dep = ffi.new("float[?]", n)
     local wx, wy, wz = ffi.new("float[?]", n), ffi.new("float[?]", n), ffi.new("float[?]", n)
     local up = ffi.new("uint8_t[?]", n)
+    local part = ffi.new("int16_t[?]", n) -- 0 for a tile: only the traced props have parts
     for p = 0, n - 1 do dep[p], wy[p] = -1e9, -1e9 end
-    view.rgb, view.dep, view.wx, view.wy, view.wz, view.up = rgb, dep, wx, wy, wz, up
+    view.rgb, view.dep, view.wx, view.wy, view.wz, view.up, view.part = rgb, dep, wx, wy, wz, up, part
 
     -- Lays tile `t` with its top-face centre over room point (cx, top, cz) --
     -- `drop` pixels lower for a tile whose face sits down inside its block --
@@ -308,6 +309,7 @@ function Tiled.paint(world, view)
             rgb[p * 3], rgb[p * 3 + 1], rgb[p * 3 + 2] = c[1] * 255 + 0.5, c[2] * 255 + 0.5, c[3] * 255 + 0.5
             dep[p] = props.dep[p]
             wx[p], wy[p], wz[p], up[p] = props.wx[p], props.wy[p], props.wz[p], props.up[p]
+            part[p] = props.part[p]
         end
     end
 

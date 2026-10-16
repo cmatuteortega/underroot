@@ -56,6 +56,7 @@ chew through any thread they cross.
 | drag from a fed node to a pocket | grow a link (a click on a node only selects what is on it); cost grows with length, the far end glows if it is in reach |
 | `1`, or the bottom-left button | regrow every cut link, nearest the sprout first, until the nutrients run out (each at the same 40% a hand regrow costs). The button shows how many are cut and what it all costs |
 | `2`–`9`, `0`, `T`, `G`, `H` then click a linked pocket (the species you brought) | Spore Puffer, Enoki Needle, Lion's Mane, Relay, Inky Cap, Puffball Mortar, Cordyceps Bloom, Stinkhorn, Ghost Lamp, Humongous Fungus; Slime Mat (`4`) and Shelf Fungus (`8`) go on a trail tile |
+| a species in hand | every pocket it could grow on now is lined in one pixel, as a selected tower is |
 | click the species in hand on the toolbar again | open its panel (again to shut it); it stays in hand |
 | click a tower, mat or shelf (pressed and let go on it: pulling a link from it does not select it) | select it: a panel tells about it as it has grown (live numbers, what is wrong with it, both branches), and the upgrades it can grow now are buttons in it. On a wide screen the camera eases it to a third of the way across and half way down, with the panel on the right; upright, the panel goes across the top. Click elsewhere to close it |
 | click on nothing (no pocket, plant or thread, or off the board) | put everything down: the tool in hand, a thread being pulled, the selection |
@@ -94,6 +95,7 @@ keeps clear of the notch and home bar:
 | drag on open ground | pan |
 | pinch | zoom: the board follows the fingers, with the whole board drawn so nothing is cut off at the edges, then settles on the nearest sharp (whole-pixel) zoom when they lift; it starts one step in, and the toolbar keeps its size at any zoom |
 | tap START / SPEED | start the next wave / game speed |
+| tap the weather's name in the top bar | what the weather does, in a tip under it; tap it again (or anywhere) to shut it |
 | tap the top bar | pause and resume (the game also pauses when it is sent to the background) |
 | tap a level card, or the challenge switch | play it / challenge on or off |
 | tap anywhere after a win or loss | back to the level picker |
@@ -240,7 +242,8 @@ on it has no minimum range). A leaf lies low too. Every board is built from the
 tileset's tiles alone; only the pockets and the sprout's mound are modelled.
 
 **Weather.** A wave can come with weather; the forecast says so before it starts
-(and the top bar while it lasts). Each is a row in `D.WEATHER`, and each has its
+(and the top bar while it lasts). Point at its name there (tap it on a phone)
+and a tip says what it does. Each is a row in `D.WEATHER`, and each has its
 own picture of the board.
 
 - **Rain**: flow +50%, but towers on low pockets lose 0.3 reserve a second, and

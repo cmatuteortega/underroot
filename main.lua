@@ -134,6 +134,10 @@ local zoomStep = UI_STEP
 local ZOOM_STEPS = 4
 local fingers, pinch = {}, nil -- the touches down, and the two being pinched
 local speed, paused = 1, false
+-- The weather's word in the top strip, where the last HUD drawn put it:
+-- { x, y, w, h, kind, next }. A finger has no hover, so a tap pins its tip
+-- open (`weatherTip`, the kind) and a second tap shuts it.
+local weatherBox, weatherTip = nil, nil
 local heartFlash = 0
 local shake = 0 -- seconds of shaking left: a boss charging, a ball breaking
 -- The HUD's own flourishes: the last thing pressed lighting up, the nutrients
@@ -802,6 +806,8 @@ local function findHover()
     if inside(mx, my, waveRect()) then hover.wave = true return end
     if inside(mx, my, turnRect(1)) then hover.turn = 1 return end
     if inside(mx, my, turnRect(-1)) then hover.turn = -1 return end
+    local wb = weatherBox
+    if wb and inside(mx, my, wb.x, wb.y, wb.w, wb.h) then hover.weather = wb.kind return end
     if my < inset.t + TOP then hover.strip = true return end
     local ci, cj = cursor()
     local best, bd = nil, 9
@@ -1072,6 +1078,7 @@ local function click(b)
         elseif hover.sound then Sfx.cycle(); audio.save(); sound("on") end
         return
     end
+    if weatherTip and not hover.weather then weatherTip = nil end
     if b == 2 then
         if mode ~= "grow" or drag or selected then sound("back") end
         mode, drag, selected = "grow", nil, nil
@@ -1117,6 +1124,15 @@ local function click(b)
     end
     if hover.turn then turnCamera(hover.turn) return end
     if game.phase == "won" or game.phase == "lost" then sound("click"); openMenu() return end
+    if hover.weather then
+        -- Not the pause: on a phone a tap opens what the weather does, and
+        -- another shuts it. With a mouse, hovering is enough.
+        if touch then
+            weatherTip = weatherTip ~= hover.weather and hover.weather or nil
+            sound(weatherTip and "panel" or "back")
+        end
+        return
+    end
     if hover.strip then
         -- No P key on a phone: the top strip is the pause button.
         if touch then paused = not paused; sound(paused and "pause" or "unpause") end
@@ -1455,7 +1471,7 @@ end
 function audio.hover()
     local k = hover.button or hover.wave or hover.turn or (hover.up and hover.up.branch + 100) or hover.mutation
         or hover.level or hover.challenge or hover.sound or hover.species or hover.back or hover.go or hover.enemy
-        or hover.bring
+        or hover.bring or hover.weather
     if k ~= nil then k = tostring(k) .. (hover.up and "u" or hover.mutation and "m" or hover.level and "l" or "") end
     if k and k ~= flair.lastHover and not touch then sound("hover") end
     flair.lastHover = k
@@ -2160,6 +2176,20 @@ local function drawBoard()
     -- caps comes up along the loop.
     for _, r in ipairs(game.rings) do drawRing(r) end
 
+    -- A species in hand: every pocket it could grow on, lined in one pixel
+    -- as a selected tower is.
+    if D.TOWER[mode] and not D.TOWER[mode].onTrail then
+        local rims = world:rims()
+        for k in ipairs(world.pockets) do
+            local r = rims[k]
+            if r and game:canBuild(mode, game.nodes[k + 1]) then
+                for q = 1, #r, 3 do
+                    if visible(r[q], r[q + 1], r[q + 2]) then put(IDX.w, r[q], r[q + 1]) end
+                end
+            end
+        end
+    end
+
     -- While a thread is being pulled, every pocket it could reach shows it.
     if mode == "grow" and drag then
         for _, n in ipairs(game.nodes) do
@@ -2754,6 +2784,21 @@ local function drawHud()
     -- gates still say how many come in at each.
     if rx < leftEnd and right ~= w then right = w; rx = vw - inset.r - Font.width(w) - 3 end
     text(right, rx, ty, "w")
+    -- Where the weather's name landed, if it is there: the whole strip's
+    -- height and a little either side, to be easy to hover or tap.
+    weatherBox = nil
+    local sky = game.phase == "wave" and game.weather or (game.phase == "build" and nxt and nxt.weather)
+    if sky and right ~= w then
+        local name = D.WEATHER[sky].name
+        local nx = game.phase == "build" and rx + Font.width("NEXT: ") or rx
+        weatherBox = { x = nx - 3, y = 0, w = Font.width(name) + 6, h = inset.t + TOP, kind = sky, next = game.phase == "build" }
+    end
+    if weatherTip and not (weatherBox and weatherBox.kind == weatherTip) then weatherTip = nil end
+    if weatherBox and (weatherTip or (not touch and hover.weather)) then
+        local wb = weatherBox
+        local nm = D.WEATHER[wb.kind].name
+        text(nm, wb.x + 3, ty, "t")
+    end
     if paused then
         if touch then centred("PAUSED. TAP THE TOP BAR TO GO ON", floor(vh / 2) - 40, "r")
         else text("PAUSED", floor((vw - Font.width("PAUSED")) / 2), ty, "r") end
@@ -2910,6 +2955,22 @@ local function drawHud()
 
     local P = info()
     if P then drawInfo(P) end
+
+    -- What the weather does, dropped from its name in the top strip.
+    local wb = weatherBox
+    if wb and (weatherTip or (not touch and hover.weather)) then
+        local d = D.WEATHER[wb.kind]
+        local tw = min(150, vw - inset.l - inset.r - 8)
+        local lines = wrapLines(d.blurb, tw - 8)
+        local head = d.name .. (wb.next and " NEXT WAVE" or "")
+        local th = 13 + 7 * #lines
+        local tx = max(inset.l + 4, min(vw - inset.r - 4 - tw, wb.x + floor(wb.w / 2) - floor(tw / 2)))
+        local ty = inset.t + TOP + 3
+        box(tx, ty, tw, th, "u", "t")
+        text(head, tx + 4, ty + 3, "t")
+        for n, l in ipairs(lines) do text(l, tx + 4, ty + 6 + 7 * n, "w") end
+        if touch then text("X", tx + tw - 7, ty + 3, "s") end
+    end
 
     if game.phase == "mutate" then
         local cs = mutationCards()

@@ -369,6 +369,7 @@ function World.new(id)
     self.turn, self.views = 0, {}
     self.tiled = TILED[self.id] or false
     self.solids, self.pockets = {}, {}
+    self.partPocket = {} -- each pocket's solids' parts, to the pocket's index
     self.rows, self.cols = #MAP, #MAP[1]
     for r, row in ipairs(MAP) do assert(#row == self.cols, "map row " .. r .. " is the wrong length") end
     self.entrances = {}
@@ -433,6 +434,7 @@ function World.new(id)
             lift = self.tiled and Tiled.ground(self, ch, c, r) or 0
             if pk then
                 local top
+                local firstPart = nextPart
                 local turn = A.rotY(seed * 0.785)
                 if pk.kind == "leaf" then
                     add("ell", MAT.leaf, { at = ell(cx, 0.2, cz, 8, 1.3, 4.6, A.rotZ(0.08), turn) })
@@ -466,6 +468,7 @@ function World.new(id)
                 end
                 self.pockets[#self.pockets + 1] = { x = cx, z = cz, y = top + lift, c = c, r = r,
                     kind = pk.kind, quality = pk.quality, low = pk.low, high = pk.high, wet = pk.wet }
+                for part = firstPart, nextPart - 1 do self.partPocket[part] = #self.pockets end
             elseif ch == "H" then
                 add("ell", MAT.mound, { at = ell(cx, -0.5, cz, 7, 3, 7) })
                 self.heart = { x = cx, z = cz, y = 2.2 + lift, c = c, r = r }
@@ -591,6 +594,37 @@ end
 
 -- What the paint keeps of a view, worn by the board while it is the one shown.
 local WORN = { "image", "key", "dep", "wx", "wy", "wz", "up", "rgb", "variants", "i0", "j0", "w", "h" }
+
+-- The pixels round each pocket in the view shown, for lining the ones a
+-- species could grow on: pocket index -> a flat list of i, j, and the depth of
+-- the pocket pixel each borders (so whatever stands in front still hides it).
+-- Found once per view, the first time it is wanted.
+local NEAR = { { 1, 0 }, { -1, 0 }, { 0, 1 }, { 0, -1 } }
+function World:rims()
+    local v = self.views[self.turn]
+    if v.rims then return v.rims end
+    local rims, own = {}, self.partPocket
+    local w, h, part, dep = v.w, v.h, v.part, v.dep
+    for j = 0, h - 1 do
+        for i = 0, w - 1 do
+            local me = own[part[j * w + i]]
+            for _, o in ipairs(NEAR) do
+                local ni, nj = i + o[1], j + o[2]
+                if ni >= 0 and nj >= 0 and ni < w and nj < h then
+                    local m = nj * w + ni
+                    local k = own[part[m]]
+                    if k and k ~= me then
+                        local r = rims[k]
+                        if not r then r = {}; rims[k] = r end
+                        r[#r + 1], r[#r + 2], r[#r + 3] = i, j, dep[m]
+                    end
+                end
+            end
+        end
+    end
+    v.rims = rims
+    return rims
+end
 
 -- Is view q painted yet?
 function World:painted(q) return self.views[q] ~= nil end
@@ -742,7 +776,7 @@ function World:paint(q)
     else
         local w, h = v.w, v.h
         local b = self:trace(v, function(pj) coroutine.yield(pj / h) end)
-        v.key, v.dep = b.key, b.dep
+        v.key, v.dep, v.part = b.key, b.dep, b.part
         v.wx, v.wy, v.wz, v.up = b.wx, b.wy, b.wz, b.up
 
         -- Off the board is the dark under the patio.
