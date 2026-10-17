@@ -36,6 +36,13 @@ local IDX = T.IDX
 
 local S = require "src.ui.state"
 local SHORT, TOP, BOTTOM, UI_STEP, ZOOM_STEPS, TURN_TIME = S.SHORT, S.TOP, S.BOTTOM, S.UI_STEP, S.ZOOM_STEPS, S.TURN_TIME
+local Draw = require "src.ui.draw"
+local color, box, text, label, centred, wrap, wrapLines, number, say, inside, wide =
+    Draw.color, Draw.box, Draw.text, Draw.label, Draw.centred, Draw.wrap, Draw.wrapLines, Draw.number, Draw.say, Draw.inside, Draw.wide
+local Pixels = require "src.ui.pixels"
+local putS, put, putGround, visible, screenBox, turned, stamp, outline, blit, icon, shadow, line3, ring, CUT =
+    Pixels.putS, Pixels.put, Pixels.putGround, Pixels.visible, Pixels.screenBox, Pixels.turned, Pixels.stamp,
+    Pixels.outline, Pixels.blit, Pixels.icon, Pixels.shadow, Pixels.line3, Pixels.ring, Pixels.CUT
 -- The Spore Bank's screen (what it has and sells is src/profile.lua). `offer` is the
 -- species a first win put up for sale, shown on the way on: { kind, after = button, bought }.
 local bank = {}
@@ -166,163 +173,10 @@ function love.visible(v)
     Sfx.hide(not (audio.shown.focus and audio.shown.visible))
 end
 
-local RGB8 = {}
-for k, c in ipairs(T.RGB) do RGB8[k] = { floor(c[1] * 255 + 0.5), floor(c[2] * 255 + 0.5), floor(c[3] * 255 + 0.5) } end
-
--- Put key k at screen pixel (x, y).
-local function putS(k, x, y)
-    if k == 0 or x < 0 or y < 0 or x >= S.cw or y >= S.ch then return end
-    local p = (y * S.cw + x) * 4
-    local c = RGB8[k]
-    S.opx[p], S.opx[p + 1], S.opx[p + 2], S.opx[p + 3] = c[1], c[2], c[3], 255
-end
--- Put key k at board-image pixel (i, j).
-local function put(k, i, j) putS(k, floor(i - floor(S.camx)), floor(j - floor(S.camy))) end
-
--- Put the board's own pixel back at board-image pixel (i, j), a step darker if
--- `dark`. A tiled board is colours, not keys: darker is a shade, not a ramp step.
-local function putGround(i, j, dark)
-    local n = j * S.world.w + i
-    if not S.world.rgb then return put(dark and T.DARKER[S.world.key[n]] or S.world.key[n], i, j) end
-    local x, y = floor(i - floor(S.camx)), floor(j - floor(S.camy))
-    if x < 0 or y < 0 or x >= S.cw or y >= S.ch then return end
-    local p, f = (y * S.cw + x) * 4, dark and 0.6 or 1
-    local rgb = S.world.rgb
-    S.opx[p], S.opx[p + 1], S.opx[p + 2], S.opx[p + 3] = rgb[n * 3] * f, rgb[n * 3 + 1] * f, rgb[n * 3 + 2] * f, 255
-end
-
--- Is room depth d nearer than the board at image pixel (i, j)?
-local function visible(i, j, d)
-    if i < 0 or j < 0 or i >= S.world.w or j >= S.world.h then return true end
-    return d >= S.world.dep[j * S.world.w + i] - 0.6
-end
-
--- The board-image pixels a box of the room can cover, whichever way the board
--- is turned: i0, i1, j0, j1.
-local function screenBox(x0, x1, y0, y1, z0, z1)
-    local i0, i1, j0, j1 = math.huge, -math.huge, math.huge, -math.huge
-    for _, x in ipairs({ x0, x1 }) do
-        for _, y in ipairs({ y0, y1 }) do
-            for _, z in ipairs({ z0, z1 }) do
-                local i, j = S.world:toImage(x, y, z)
-                i0, i1, j0, j1 = min(i0, i), max(i1, i), min(j0, j), max(j1, j)
-            end
-        end
-    end
-    return floor(i0) - 1, ceil(i1) + 1, floor(j0), ceil(j1)
-end
-
--- A heading in the room as it is seen in the view shown.
-local function turned(h) return h + S.world.turn * math.pi / 2 end
-
--- A picture laid down with its pivot at a room point, through a remap.
-local function stamp(pic, x, y, z, remap)
-    remap = remap or T.SAME
-    local si, sj, d = S.world:toImage(x, y, z)
-    local bi, bj = floor(si) - pic.oi, floor(sj) - pic.oj
-    local w = pic.w
-    for pj = 0, pic.h - 1 do
-        for pi = 0, w - 1 do
-            local n = pj * w + pi
-            local k = pic.key[n]
-            if k ~= 0 and visible(bi + pi, bj + pj, d + pic.dep[n]) then put(remap[k], bi + pi, bj + pj) end
-        end
-    end
-end
-
--- A one-pixel line in key k round a picture stamped as above: every empty pixel
--- next to one of its own, as near as the pixel it borders, so the board in front
--- still hides it.
-local function outline(pic, x, y, z, k)
-    local si, sj, d = S.world:toImage(x, y, z)
-    local bi, bj = floor(si) - pic.oi, floor(sj) - pic.oj
-    local w, h, key, dep = pic.w, pic.h, pic.key, pic.dep
-    local function at(pi, pj)
-        if pi < 0 or pj < 0 or pi >= w or pj >= h then return nil end
-        local n = pj * w + pi
-        if key[n] ~= 0 then return dep[n] end
-    end
-    for pj = -1, h do
-        for pi = -1, w do
-            if not at(pi, pj) then
-                local near = at(pi - 1, pj) or at(pi + 1, pj) or at(pi, pj - 1) or at(pi, pj + 1)
-                if near and visible(bi + pi, bj + pj, d + near) then put(k, bi + pi, bj + pj) end
-            end
-        end
-    end
-end
-
--- The same picture flat on the screen, for the toolbar and the upgrade cards.
--- Made into an image once per picture and remap, then drawn whole.
-local blits = setmetatable({}, { __mode = "k" })
-local function blit(pic, x, y, remap)
-    remap = remap or T.SAME
-    local per = blits[pic]
-    if not per then per = {}; blits[pic] = per end
-    local img = per[remap]
-    if not img then
-        local data = love.image.newImageData(pic.w, pic.h)
-        for pj = 0, pic.h - 1 do
-            for pi = 0, pic.w - 1 do
-                local k = pic.key[pj * pic.w + pi]
-                if k ~= 0 then
-                    local c = T.RGB[remap[k]]
-                    data:setPixel(pi, pj, c[1], c[2], c[3], 1)
-                end
-            end
-        end
-        img = love.graphics.newImage(data)
-        img:setFilter("nearest", "nearest")
-        per[remap] = img
-    end
-    love.graphics.setColor(1, 1, 1)
-    love.graphics.draw(img, x - pic.oi, y - pic.oj)
-end
-
--- A shadow straight down onto whatever faces up under (x, z): each pixel there
--- goes one step darker.
-local function shadow(x, z, r)
-    local g = S.world:groundAt(x, z)
-    local i0, i1, j0, j1 = screenBox(x - r, x + r, g - 1, g + 4, z - r, z + r)
-    for j = max(0, j0), min(S.world.h - 1, j1) do
-        for i = max(0, i0), min(S.world.w - 1, i1) do
-            local n = j * S.world.w + i
-            if S.world.up[n] == 1 and (S.world.wx[n] - x) ^ 2 + (S.world.wz[n] - z) ^ 2 <= r * r then
-                putGround(i, j, true)
-            end
-        end
-    end
-end
-
--- A line plotted through the room, a pixel at a time, depth tested along it.
-local function line3(x0, y0, z0, x1, y1, z1, k)
-    local i0, j0, d0 = S.world:toImage(x0, y0, z0)
-    local i1, j1, d1 = S.world:toImage(x1, y1, z1)
-    local steps = max(1, ceil(max(abs(i1 - i0), abs(j1 - j0))))
-    for s = 0, steps do
-        local t = s / steps
-        local i, j = floor(i0 + (i1 - i0) * t), floor(j0 + (j1 - j0) * t)
-        if visible(i, j, d0 + (d1 - d0) * t + 1) then put(k, i, j) end
-    end
-end
-
 local function members(set)
     local k = 0
     for _ in pairs(set or {}) do k = k + 1 end
     return k
-end
-
--- A ring on the ground: a tower's reach.
-local function ring(x, z, r, k, dash)
-    local n = max(24, floor(r * 1.6))
-    for s = 0, n - 1 do
-        if not dash or s % 2 == 0 then
-            local a = s / n * 2 * math.pi
-            local px, pz = x + math.cos(a) * r, z + math.sin(a) * r
-            local i, j, d = S.world:toImage(px, S.world:groundAt(px, pz) + 0.3, pz)
-            if visible(floor(i), floor(j), d + 1) then put(k, i, j) end
-        end
-    end
 end
 
 --- the board's camera ----------------------------------------------------------------
@@ -408,35 +262,11 @@ local function turnRect(d)
     local x = d == -1 and S.inset.l + 2 or S.vw - S.inset.r - 2 - RW
     return x, barTop() - RH - 5, RW, RH
 end
-local function inside(x, y, rx, ry, rw, rh) return x >= rx and y >= ry and x < rx + rw and y < ry + rh end
-
 -- The info panel: everything about one species, or one fruiting body as it
 -- has grown. Down the right side on a wide screen; across the top of the board
 -- (or the bottom of the loadout) on a narrow one. Shown for whatever is
 -- selected in a run, and for the card tapped in the loadout.
-local function wide() return S.vw > S.vh end
 local function infoWidth() return wide() and min(150, floor(S.vw * 0.36)) or S.vw - S.inset.l - S.inset.r - 6 end
-
--- Words broken into lines no wider than w.
-local function wrapLines(str, w)
-    local lines, line = {}, ""
-    for word in str:gmatch("%S+") do
-        local try = line == "" and word or line .. " " .. word
-        if Font.width(try) > w and line ~= "" then
-            lines[#lines + 1] = line
-            line = word
-        else
-            line = try
-        end
-    end
-    if line ~= "" then lines[#lines + 1] = line end
-    return lines
-end
-
-local function number(v)
-    if v == floor(v) then return tostring(v) end
-    return string.format("%.1f", v)
-end
 
 -- The panel's lines, each { s, k (colour), x, h }: the name and role beside
 -- the picture, the long account, the numbers (live, for one on the board),
@@ -2094,12 +1924,6 @@ local function towerLook(t, seed)
     return M.tower(t.kind, t.branch, t.tier, idle, t.squash, t.grown)
 end
 
--- A fruiting body flat on a button or a card. The Humongous Fungus is shown
--- as it is coming up, or it would not fit.
-local function icon(kind, branch, tier, idle)
-    return M.tower(kind, branch, tier, idle, 0, kind == "giant" and 0.34 or nil)
-end
-
 local function remapFor(t)
     if t.hunger == "dormant" then return T.DARKER2 end
     if t.hunger == "starved" or (t.webbed or 0) > 0 or (t.stun or 0) > 0 then return T.DARKER end
@@ -2891,30 +2715,6 @@ end
 
 --- lettering and the HUD -----------------------------------------------------------------
 
-local function color(k) love.graphics.setColor(T.RGB[IDX[k]]) end
-
-local function box(x, y, w, h, fill, edge)
-    color(edge or "o")
-    love.graphics.rectangle("fill", x - 1, y - 1, w + 2, h + 2)
-    color(fill or "u")
-    love.graphics.rectangle("fill", x, y, w, h)
-end
-
-local function text(s, x, y, k)
-    color(k or "w")
-    Font.print(s, x, y)
-end
-
-local function label(s, x, y, k, fill)
-    box(x - 2, y - 2, Font.width(s) + 4, 9, fill or "u")
-    text(s, x, y, k)
-end
-
--- Centred across the screen, or about `mid`.
-local function centred(s, y, k, fill, mid)
-    label(s, floor((mid or S.vw / 2) - Font.width(s) / 2), y, k, fill)
-end
-
 local function waveSummary(wave)
     local count, order = {}, {}
     for _, g in ipairs(wave) do
@@ -2931,9 +2731,6 @@ local function waveSummary(wave)
     end
     return table.concat(parts, "  ")
 end
-
--- The same help in a finger's words: no keys, no right button, tap not click.
-local function say(m, t) return S.touch and t or m end
 
 -- A tower's name at its tier: the upgrade's, once it has one.
 local function towerName(t)
@@ -3442,22 +3239,6 @@ local function drawHud()
     end
 end
 
--- Words broken into lines `w` wide, from (x, y) down, seven pixels a line.
-local function wrap(s, x, y, w, k)
-    local line = ""
-    for word in s:gmatch("%S+") do
-        local try = line == "" and word or line .. " " .. word
-        if Font.width(try) > w then
-            text(line, x, y, k)
-            line, y = word, y + 7
-        else
-            line = try
-        end
-    end
-    text(line, x, y, k)
-    return y + 7
-end
-
 local function drawMenu()
     color("o")
     love.graphics.rectangle("fill", 0, 0, S.vw, S.vh)
@@ -3515,7 +3296,7 @@ function drawInfo(P)
     -- The sprout is taller than the corner: its leaves and the top of its stem,
     -- the top few pixels cut off, fewer for a low one (the flytrap).
     blit(pic, P.x + 12, P.seed and P.y + pic.oj - min(7, max(0, pic.h - 24))
-        or (P.kind == "mat" and P.y + 16 or P.y + 22), P.locked and codex.CUT or nil)
+        or (P.kind == "mat" and P.y + 16 or P.y + 22), P.locked and CUT or nil)
     love.graphics.setScissor(P.x, P.y, P.w, P.h - (P.button and 20 or 0))
     for _, l in ipairs(P.lines) do
         local y = l.y
@@ -3627,7 +3408,7 @@ local function drawLoadout()
         local pic = icon(t.id, nil, 0, inn and (clock * 0.7) % 1 or 0)
         love.graphics.setScissor(c.x, c.y, 21, c.h)
         local known = Profile.known(t.id)
-        blit(pic, c.x + 11, t.id == "mat" and c.y + c.h - 8 or c.y + c.h - 3, not known and codex.CUT or (not inn and T.DARKER2 or nil))
+        blit(pic, c.x + 11, t.id == "mat" and c.y + c.h - 8 or c.y + c.h - 3, not known and CUT or (not inn and T.DARKER2 or nil))
         love.graphics.setScissor()
         local own = Profile.owns(t.id)
         wrap(known and t.name or "???", c.x + 22, c.y + 3, c.w - 24, inn and "w" or (own and "s" or "k"))
@@ -3927,9 +3708,6 @@ function codex.init()
     -- A centipede's segments are enemies of their own: met, they are the centipede.
     codex.whole = {}
     for kind, d in pairs(D.ENEMIES) do if d.seg then codex.whole[d.seg] = kind end end
-    -- What is not found yet: the picture in ink, a cutout.
-    codex.CUT = {}
-    for k = 1, #T.KEYS do codex.CUT[k] = IDX.o end
     -- Every glossary word's forms, longest first (CUT OFF before CUT), and the
     -- phrases that only look like one.
     codex.forms, codex.skips = {}, {}
@@ -4052,7 +3830,7 @@ function codex.drawFigure(tab, id, x, y, w, h, most, spin, heading, a, dark)
     local sx, sy, sw, sh = love.graphics.getScissor()
     love.graphics.intersectScissor(x, y, w, h)
     for _, l in ipairs(codex.figure(tab, id, f.s, heading, a)) do
-        blit(l[1], px + l[2], py + l[3], dark and codex.CUT or nil)
+        blit(l[1], px + l[2], py + l[3], dark and CUT or nil)
     end
     love.graphics.setScissor(sx, sy, sw, sh)
 end
