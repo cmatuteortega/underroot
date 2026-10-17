@@ -79,6 +79,25 @@ Every tower has two upgrade branches.
 network has, a nod to the real organism that covers square miles. It is slow to
 grow and cripplingly expensive, so it is a bet on surviving long enough.
 
+### Proposed: six more
+
+Not built yet. Each answers a threat the roster above handles thinly (fliers,
+burrowers, armor, link-cutters) or widens a thin role (economy, support), and
+each claims a place in the graph no other tower wants.
+
+| Tower | Role | What it does | Network twist | Upgrade fork |
+| --- | --- | --- | --- | --- |
+| Fly Agaric | Anti-air | Fast, light shots at fliers only, double damage to them. A flier it hits is dazed and drifts slowly | Strongest on a bridge: a node with exactly two links, the middle of a chain. Weaker at a dead end or a hub | Fly Bane, Muscaria (more damage, the poison spreads to fliers near the target) / Muscimol, Ibotenic (walkers in its cloud are confused and wander backwards) |
+| Earthstar | Anti-burrow | Thumps the ground: a burrowed or submerged enemy in reach shows as a marker | Its reach grows with the total length of its links, since it hears through the threads. Gives long, costly links a use | Deep Listener, Seismic (everything can hit what it reveals, more reach) / Puff Quake, Cave-in (forces burrowers up stunned and hurt; collapses a Mole Cricket's tunnel on whatever is inside) |
+| Oyster Mushroom | Armor breaker | Sticky droplets strip armor, -2 a hit, stacking and slowly growing back. The target is briefly held | Strongest one hop from the Heart, weaker each hop out: the inner guard round the sprout | Nematode Trap, Lasso (holds longer, lifts small bugs off the trail) / Corrode, Dissolve (armor loss lasts longer, spreads down a centipede's train) |
+| Bleeding Tooth | Link defense | No attack. Its links ooze sap: anything that chews, crushes or snaps a sapped link is hurt, slowed and stuck. Mites die on contact | The sap runs round any loop of links it is part of, so a second route to the Heart is sapped end to end | Clotting, Scab (cut sapped links regrow much faster) / Hemotoxin, Thorn Sap (more damage, and a cutter keeps bleeding after it moves on) |
+| Truffle | Economy | No attack. At the end of each wave pays interest on the bank, about 8%, capped at 25 | Grows richer every wave its links go uncut (+3% a wave, up to +15%); one cut resets it. Its smell draws passing Worker Ants and Slugs off the trail to dig, and each mouthful steals some of its payout | Aged, Black Diamond (more interest, higher cap) / Truffle Scent, Truffle Hound (lures ants away from corpses so Inky Caps get them; ants it draws are stuck digging) |
+| Turkey Tail | Support | No attack. Towers within 2 links fire faster and shake off stuns and webs faster | +6% fire rate for every different species within 2 links, up to 5: it rewards a mixed cluster | Mycelial Pump, Capillary (pumps flow x1.5 like a weak relay, so a Mortar beside it fires at full pace) / Versicolor, Rainbow (3 links out, +8% a species, and a Spore Pulse lasts longer on the towers it boosts) |
+
+Inky Cap earns from kills, out front; the Truffle earns from keeping its links
+whole, at the back. With both, and the Turkey Tail beside the Relay, neither
+economy nor support rests on one species, and a Mortar no longer needs a Relay.
+
 ## Enemies
 
 Twelve enemies, designed so that each one pressures the network in a different way
