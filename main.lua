@@ -190,6 +190,11 @@ function bank.seedForSale(id)
     return not bank.ownsSeed(id) and (not sd.after or won[sd.after] == true)
 end
 
+-- Known: had, or up for sale. Anything else is only "???" in the loadout
+-- until a win puts it up for sale.
+function bank.known(id) return bank.owns(id) or bank.forSale(id) end
+function bank.seedKnown(id) return bank.ownsSeed(id) or bank.seedForSale(id) end
+
 function bank.buySeed(id)
     local sd = D.SEED[id]
     if not bank.seedForSale(id) or bank.spores < sd.price then return false end
@@ -640,6 +645,7 @@ end
 -- and both upgrade branches with what is grown, open or shut.
 local function infoLines(kind, t, w)
     local d = D.TOWER[kind]
+    if not t and not bank.known(kind) then return bank.lockedLines("SPECIES", bank.prizeOf(kind).name, w) end
     local out, height = {}, 0
     local function add(str, k, x, h)
         x = x or 0
@@ -719,9 +725,27 @@ local function infoLines(kind, t, w)
     return out, height
 end
 
+-- The panel of one still locked: no name, no numbers, only how to get it.
+function bank.lockedLines(what, by, w)
+    local out, height = {}, 0
+    local function add(str, k, x, h)
+        x = x or 0
+        for _, l in ipairs(wrapLines(str, w - x)) do
+            out[#out + 1] = { s = l, k = k, x = x, h = h or 7 }
+            height = height + (h or 7)
+        end
+    end
+    add("???", "k", 24, 8)
+    add(what .. "   LOCKED", "k", 24)
+    if height < 22 then out[#out + 1] = { h = 22 - height }; height = 22 end
+    add("WIN " .. by .. " TO PUT IT UP FOR SALE.", "s")
+    return out, height
+end
+
 -- A seed's panel in the loadout: what it changes, and the mutations it brings.
 function bank.seedLines(id, w)
     local sd = D.SEED[id]
+    if not bank.seedKnown(id) then return bank.lockedLines("SEED", D.LEVEL[sd.after].name, w) end
     local out, height = {}, 0
     local function add(str, k, x, h)
         x = x or 0
@@ -761,7 +785,8 @@ local function info()
     local w = infoWidth()
     local lines, h
     if seed then lines, h = bank.seedLines(seed, w - 8) else lines, h = infoLines(kind, t, w - 8) end
-    local P = { kind = kind, seed = seed, t = t, lines = lines, w = w }
+    local P = { kind = kind, seed = seed, t = t, lines = lines, w = w,
+        locked = menu == "loadout" and not (seed and bank.seedKnown(seed) or (not seed and bank.known(kind))) }
     if menu == "loadout" then
         if wide() then
             P.x, P.y, P.h = vw - inset.r - w - 3, inset.t + 3, vh - inset.t - inset.b - 6
@@ -903,7 +928,8 @@ local function loadoutLayout()
     -- The chips, flowed into rows as wide as the cards.
     local width = max(cols * SW + (cols - 1) * 4, min(avail, 300))
     local chips, lines, x, line = {}, 1, 0, {}
-    local function name(kind) return D.ENEMIES[kind].name end
+    -- One not met yet has no name until it is faced.
+    local function name(kind) return codex.seen[kind] and D.ENEMIES[kind].name or "???" end
     for _, kind in ipairs(enemiesOf(lv)) do
         local w = Font.width(name(kind)) + 6
         if x > 0 and x + w > width then lines, x = lines + 1, 0 end
@@ -914,7 +940,7 @@ local function loadoutLayout()
     local seeds, seedRows = {}, 1
     x = 0
     for _, sd in ipairs(D.SEEDS) do
-        local s = sd.short
+        local s = bank.seedKnown(sd.id) and sd.short or "???"
         if not bank.ownsSeed(sd.id) and bank.seedForSale(sd.id) then s = s .. " " .. sd.price end
         local w = Font.width(s) + 8
         if x > 0 and x + w > width then seedRows, x = seedRows + 1, 0 end
@@ -3691,7 +3717,7 @@ function drawInfo(P)
     -- The sprout is taller than the corner: its leaves and the top of its stem,
     -- the top few pixels cut off, fewer for a low one (the flytrap).
     blit(pic, P.x + 12, P.seed and P.y + pic.oj - min(7, max(0, pic.h - 24))
-        or (P.kind == "mat" and P.y + 16 or P.y + 22))
+        or (P.kind == "mat" and P.y + 16 or P.y + 22), P.locked and codex.CUT or nil)
     love.graphics.setScissor(P.x, P.y, P.w, P.h - (P.button and 20 or 0))
     for _, l in ipairs(P.lines) do
         local y = l.y
@@ -3782,13 +3808,14 @@ local function drawLoadout()
 
     -- The enemy pointed at (or pinned) lights up what answers it.
     local enemy = hover.enemy or pick.enemy
+    local met = enemy and codex.seen[enemy]
     local answers = {}
-    for _, id in ipairs(enemy and D.COUNTERS[enemy] or {}) do answers[id] = true end
+    for _, id in ipairs(met and D.COUNTERS[enemy] or {}) do answers[id] = true end
     for _, c in ipairs(L.chips) do
-        local boss = D.ENEMIES[c.kind].boss
+        local boss = D.ENEMIES[c.kind].boss and codex.seen[c.kind]
         local on = enemy == c.kind
         box(c.x, c.y, c.w, c.h, on and "n" or "u", on and "w" or (boss and "r" or "k"))
-        text(c.name, c.x + 3, c.y + 2, boss and "r" or "w")
+        text(c.name, c.x + 3, c.y + 2, boss and "r" or (codex.seen[c.kind] and "w" or "k"))
     end
 
     for _, c in ipairs(L.cards) do
@@ -3801,10 +3828,11 @@ local function drawLoadout()
         -- The picture kept to its corner of the card: a shelf or the giant is wider.
         local pic = icon(t.id, nil, 0, inn and (clock * 0.7) % 1 or 0)
         love.graphics.setScissor(c.x, c.y, 21, c.h)
-        blit(pic, c.x + 11, t.id == "mat" and c.y + c.h - 8 or c.y + c.h - 3, not inn and T.DARKER2 or nil)
+        local known = bank.known(t.id)
+        blit(pic, c.x + 11, t.id == "mat" and c.y + c.h - 8 or c.y + c.h - 3, not known and codex.CUT or (not inn and T.DARKER2 or nil))
         love.graphics.setScissor()
         local own = bank.owns(t.id)
-        wrap(t.name, c.x + 22, c.y + 3, c.w - 24, inn and "w" or (own and "s" or "k"))
+        wrap(known and t.name or "???", c.x + 22, c.y + 3, c.w - 24, inn and "w" or (own and "s" or "k"))
         -- Not had yet: its price once it is for sale, else locked.
         if not own then
             local sale = bank.forSale(t.id)
@@ -3844,14 +3872,16 @@ local function drawLoadout()
         local sd = D.SEED[hover.seed]
         if bank.ownsSeed(sd.id) then tip, k = sd.name .. ": " .. sd.blurb, "w"
         elseif bank.seedForSale(sd.id) then tip, k = sd.name .. ": FOR SALE, " .. sd.price .. " SPORES. YOU HAVE " .. bank.spores, "t"
-        else tip, k = sd.name .. ": WIN " .. D.LEVEL[sd.after].name .. " TO PUT IT UP FOR SALE", "k" end
+        else tip, k = "???: WIN " .. D.LEVEL[sd.after].name .. " TO PUT IT UP FOR SALE", "k" end
     elseif hover.species and not bank.owns(hover.species) then
         local t = D.TOWER[hover.species]
         if bank.forSale(t.id) then tip, k = t.name .. ": FOR SALE, " .. t.price .. " SPORES. YOU HAVE " .. bank.spores, "t"
-        else tip, k = t.name .. ": WIN " .. bank.prizeOf(t.id).name .. " TO PUT IT UP FOR SALE", "k" end
+        else tip, k = "???: WIN " .. bank.prizeOf(t.id).name .. " TO PUT IT UP FOR SALE", "k" end
     elseif hover.species then
         local t = D.TOWER[hover.species]
         tip, k = t.name .. ": " .. t.blurb, "w"
+    elseif enemy and not met then
+        tip, k = "???: NOT MET YET. FACE IT TO LEARN WHAT ANSWERS IT", "k"
     elseif enemy then
         local names = {}
         for _, id in ipairs(D.COUNTERS[enemy] or {}) do names[#names + 1] = D.TOWER[id].name end
