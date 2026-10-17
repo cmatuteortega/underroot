@@ -554,14 +554,17 @@ to see every size.
 
 - **A tower**: a row in `D.TOWERS` (`src/defs.lua`) with its `up` branches, a
   look function in `src/models.lua` (in `TOWER`, with its animation steps in
-  `STEPS`), and its behaviour as a branch in `Game:fire`. It gets a card in the
-  loadout picker by being in the list, and a toolbar button when brought. Name it
-  in `D.COUNTERS` for the enemies it answers. Check every tier with `love . --sheet`.
+  `STEPS`), and its behaviour as a `Game` method named in `SHOOTS` in
+  `src/game.lua` (or, for one that works all round it, a method of its own name
+  listed in `AURAS`). It gets a card in the loadout picker by being in the list,
+  and a toolbar button when brought. Name it in `D.COUNTERS` for the enemies it
+  answers. Check every tier with `love . --sheet`.
 - **An enemy**: a row in `D.ENEMIES` and `D.ENEMY_ORDER`, a model, a line in
-  `enemyPicture` in `src/ui/board.lua` and in `codex.POSE` (`src/ui/codex.lua`), its page
-  text as an `about`, and a branch in `Game:move` if it does something to
-  the network nothing else does. Put it in a wave in `D.WAVES`, and give it its
-  answers in `D.COUNTERS`.
+  `PICTURE` in `src/ui/board.lua` and in `codex.POSE` (`src/ui/codex.lua`), its
+  page text as an `about`, and, if it does something to the network nothing else
+  does, a `Game` method of its own name listed in `MOVES` under when in its move
+  it acts. Put it in a wave in `D.WAVES`, and give it its answers in
+  `D.COUNTERS`.
 - **A map**: a row in `MAPS` in `src/world.lua`. `E` gates (off the left edge, a
   hole in the floor), `=` trail to `H`, `~` flooded trail, `o` water, pocket
   letters `p L C P S B`, `#` raised patio or skirting, `T` the pot's rim, `X`

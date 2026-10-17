@@ -169,60 +169,53 @@ do
     for k, key in ipairs(T.KEYS) do INFECT[k] = IDX[map[key]] end
 end
 
-local function enemyPicture(e)
-    local k = e.kind
-    if k == "ant" then
+-- Each enemy's picture this frame: its model, facing as it goes in the view
+-- shown, on the step of its walk (or its roll, its leap, its dig).
+local PICTURE = {
+    ant = function(e)
         local rate = (e.state == "chew" or e.state == "gnawShelf") and 14 or 8
         return M.ant(turned(e.h), floor(e.anim * rate) % 2)
-    elseif k == "pillbug" then
+    end,
+    pillbug = function(e)
         if e.rolling then return M.pillbug(turned(e.h), true, floor(e.anim * 12) % 4) end
         return M.pillbug(turned(e.h), false)
-    elseif k == "mite" then
-        return M.mite(turned(e.h))
-    elseif k == "gnat" then
-        return M.gnat(turned(e.h), floor(e.anim * 20) % 2)
-    elseif k == "slug" then
-        return M.slug(turned(e.h), floor(e.anim * (e.state == "eat" and 4 or 2)) % 2)
-    elseif k == "spider" then
-        return M.spider(turned(e.h), floor(e.anim * 10) % 2)
-    elseif k == "knight" then
-        return M.knight(turned(e.h), floor(e.anim * 6) % 2)
-    elseif k == "queen" then
-        return M.queen(turned(e.h), floor(e.anim * 5) % 2)
-    elseif k == "stag" then
-        return M.stag(turned(e.h), floor(e.anim * (e.charging and 14 or 6)) % 2, e.charging ~= nil)
-    elseif k == "dung" then
+    end,
+    mite = function(e) return M.mite(turned(e.h)) end,
+    gnat = function(e) return M.gnat(turned(e.h), floor(e.anim * 20) % 2) end,
+    slug = function(e) return M.slug(turned(e.h), floor(e.anim * (e.state == "eat" and 4 or 2)) % 2) end,
+    spider = function(e) return M.spider(turned(e.h), floor(e.anim * 10) % 2) end,
+    knight = function(e) return M.knight(turned(e.h), floor(e.anim * 6) % 2) end,
+    queen = function(e) return M.queen(turned(e.h), floor(e.anim * 5) % 2) end,
+    stag = function(e) return M.stag(turned(e.h), floor(e.anim * (e.charging and 14 or 6)) % 2, e.charging ~= nil) end,
+    dung = function(e)
         -- It walks backwards, pushing: its picture faces away from the way it goes.
         return M.dung(turned(e.h + math.pi), floor(e.anim * 5) % 2)
-    elseif k == "moth" then
-        return M.moth(turned(e.h), floor(e.anim * 12) % 2)
-    elseif k == "waterbug" then
-        return M.waterbug(turned(e.h), floor(e.anim * 5) % 2, e.state == "grab" or e.state == "lunge")
-    elseif k == "centipede" then
-        return M.centipede(turned(e.h), floor(e.anim * 8) % 2)
-    elseif k == "centseg" then
-        return M.centseg(turned(e.h), floor(e.anim * 8 + (e.x + e.z) * 0.1) % 2)
-    elseif k == "centi" then
-        return M.centipede(turned(e.h), floor(e.anim * 10) % 2, 0.9)
-    elseif k == "centiseg" then
-        return M.centseg(turned(e.h), floor(e.anim * 10 + (e.x + e.z) * 0.1) % 2, 0.85)
-    elseif k == "cricket" then
+    end,
+    moth = function(e) return M.moth(turned(e.h), floor(e.anim * 12) % 2) end,
+    waterbug = function(e) return M.waterbug(turned(e.h), floor(e.anim * 5) % 2, e.state == "grab" or e.state == "lunge") end,
+    centipede = function(e) return M.centipede(turned(e.h), floor(e.anim * 8) % 2) end,
+    centseg = function(e) return M.centseg(turned(e.h), floor(e.anim * 8 + (e.x + e.z) * 0.1) % 2) end,
+    centi = function(e) return M.centipede(turned(e.h), floor(e.anim * 10) % 2, 0.9) end,
+    centiseg = function(e) return M.centseg(turned(e.h), floor(e.anim * 10 + (e.x + e.z) * 0.1) % 2, 0.85) end,
+    cricket = function(e)
         local dig = e.state == "sink" or e.state == "up"
         return M.mole(turned(e.h), floor(e.anim * (dig and 7 or 6)) % 2, dig, 1.35)
-    elseif k == "bombardier" then
-        return M.bombardier(turned(e.h), floor(e.anim * 6) % 2, e.state == "siege")
-    elseif k == "springtail" then
-        return M.springtail(turned(e.h), floor(e.anim * 9) % 2, e.hopT ~= nil)
-    elseif k == "click" then
+    end,
+    bombardier = function(e) return M.bombardier(turned(e.h), floor(e.anim * 6) % 2, e.state == "siege") end,
+    springtail = function(e) return M.springtail(turned(e.h), floor(e.anim * 9) % 2, e.hopT ~= nil) end,
+    click = function(e)
         if e.state == "belly" then return M.click(turned(e.h), floor(e.anim * 8) % 2, "belly") end
         if e.state == "leap" then return M.click(turned(e.h), 0, "leap", floor((e.spin or 0) * 4) % 4) end
         return M.click(turned(e.h), floor(e.anim * 5) % 2)
-    elseif k == "mole" then
+    end,
+    mole = function(e)
         local dig = e.state == "dig" or e.state == "surface"
         return M.mole(turned(e.h), floor(e.anim * (dig and 7 or 5)) % 2, dig)
-    end
-    return M.brine(floor(e.anim * 4) % 2)
-end
+    end,
+    brine = function(e) return M.brine(floor(e.anim * 4) % 2) end,
+}
+
+local function enemyPicture(e) return (PICTURE[e.kind] or PICTURE.brine)(e) end
 
 local SHADOW = { ant = 4, pillbug = 4.5, brine = 3.5, gnat = 2.5, slug = 6, spider = 5, knight = 5,
     queen = 11, stag = 13, dung = 10, moth = 3.5, waterbug = 12, centipede = 6, centseg = 5.5, bombardier = 10,

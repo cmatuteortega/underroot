@@ -1542,6 +1542,15 @@ function Game:targets(n, range, air, minRange)
     return list
 end
 
+-- The towers that work all round them rather than fire: a Game method of
+-- the kind's name, taking (n, t, S, power, boost, dt).
+local AURAS = { mane = true, inky = true, stink = true, lamp = true }
+
+-- The ones that fire, the Game method that fires each: what it looks and
+-- sounds like leaving, and what it sends. Each takes (n, t, d, S, power,
+-- range, list), the list its targets, nearest first.
+local SHOOTS = { puffer = "puff", needle = "skewer", mortar = "lob", giant = "quake", cordyceps = "spit" }
+
 function Game:fire(n, t, d, dt)
     local hunger = self:hunger(t)
     t.hunger = hunger
@@ -1553,10 +1562,7 @@ function Game:fire(n, t, d, dt)
     local boost = t.boost and D.PULSE.rate or 1
     if t.boost then power = power * D.PULSE.damage end
     boost = boost * self:pace()
-    if t.kind == "mane" then return self:mane(n, t, S, power, boost, dt) end
-    if t.kind == "inky" then return self:inky(n, t, S, power, boost, dt) end
-    if t.kind == "stink" then return self:stink(n, t, S, power, boost, dt) end
-    if t.kind == "lamp" then return self:lamp(n, t, S, dt) end
+    if AURAS[t.kind] then return self[t.kind](self, n, t, S, power, boost, dt) end
     if t.kind == "giant" and t.grown < 1 then return end
 
     local rate = (hunger == "starved" and 0.5 or 1) * boost
@@ -1567,7 +1573,8 @@ function Game:fire(n, t, d, dt)
     if t.cool > 0 then return end
     local range = self:towerRange(t)
     local list
-    if t.kind == "cordyceps" then
+    if d.infect then
+        -- A host: the biggest it can take, not the nearest.
         local e = self:infectable(n.x, n.z, range, S("maxHp"))
         list = { e }
     else
@@ -1580,82 +1587,82 @@ function Game:fire(n, t, d, dt)
     t.fired = 0
     local e = list[1]
     t.aim = atan2(e.z - n.z, e.x - n.x)
-    self:muzzle(n, t, d)
-    if t.kind == "puffer" then
-        local puffs = max(1, min(4, self:degree(n))) + (S("extraPuff") or 0)
-        for k = 1, puffs do
-            local o = list[(k - 1) % #list + 1]
-            self.shots[#self.shots + 1] = { kind = "spore", x0 = n.x, y0 = n.y + 9, z0 = n.z,
-                tx = o.x, tz = o.z, t = 0, flight = 0.45 + 0.05 * k, damage = d.damage * power, splash = S("splash"),
-                linger = S("linger"), toxin = (S("toxin") or 0) * power }
-        end
-    elseif t.kind == "needle" then
-        local deadEnd = self:degree(n) == 1
-        local dmg = S("damage") * power * (deadEnd and d.deadEnd or 1)
-        -- Down the line through its target, as far as its reach, for a skewer.
-        local hits = { e }
-        local pierce = S("pierce") or 1
-        if pierce > 1 then
-            local dx, dz = e.x - n.x, e.z - n.z
-            local l = max(1, sqrt(dx * dx + dz * dz))
-            local fx, fz = n.x + dx / l * range, n.z + dz / l * range
-            local line = {}
-            for _, o in ipairs(list) do
-                if o ~= e and segDist(o.x, o.z, n.x, n.z, fx, fz) < 6 then line[#line + 1] = o end
-            end
-            table.sort(line, function(a, b) return dist(a, n) < dist(b, n) end)
-            for k = 1, pierce - 1 do hits[#hits + 1] = line[k] end
-        end
-        local far = hits[#hits]
-        for _, o in ipairs(hits) do
-            local mark = S("mark")
-            if mark then
-                o.mark, o.markMul = S("markFor"), mark
-                local ms = S("markSplash")
-                if ms then
-                    for _, p in ipairs(self.enemies) do
-                        if not p.dead and dist(p, o) <= ms then p.mark, p.markMul = S("markFor"), mark end
-                    end
-                end
-            end
-            self:hurt(o, dmg, true)
-        end
-        self.shots[#self.shots + 1] = { kind = "needle", x0 = n.x, y0 = n.y + 12, z0 = n.z,
-            x1 = far.x, y1 = far.y + 3, z1 = far.z, t = 0, flight = 0.12, big = deadEnd, mark = S("mark") }
-    elseif t.kind == "mortar" then
-        self.shots[#self.shots + 1] = { kind = "shell", x0 = n.x, y0 = n.y + 10, z0 = n.z, tx = e.x, tz = e.z,
-            t = 0, flight = 1.1, damage = S("damage") * power, splash = S("splash"),
-            cluster = S("cluster"), clusterDamage = (S("clusterDamage") or 0) * power, smoke = S("smoke") }
-    elseif t.kind == "giant" then
-        self:quake(n, t, S, power, range, list)
-    elseif t.kind == "cordyceps" then
-        local dur = S("infect") * self:deepHold(t) * (t.boost and 1.5 or 1)
-        self.shots[#self.shots + 1] = { kind = "cordy", x0 = n.x, y0 = n.y + 10, z0 = n.z, target = e,
-            tx = e.x, tz = e.z, t = 0, flight = 0.6, infect = dur, spread = S("spread") or 0, bite = S("bite") * power,
-            maxHp = S("maxHp") }
+    self[SHOOTS[t.kind]](self, n, t, d, S, power, range, list)
+end
+
+-- A puffer: a spore lobbed for every link it has (up to four), splashing.
+function Game:puff(n, t, d, S, power, range, list)
+    self:motes(n.x, n.y + 8, n.z, 4, { "w", "t" }, 3, 8, 0.4)
+    self:cue("puff", n.x, n.z)
+    local puffs = max(1, min(4, self:degree(n))) + (S("extraPuff") or 0)
+    for k = 1, puffs do
+        local o = list[(k - 1) % #list + 1]
+        self.shots[#self.shots + 1] = { kind = "spore", x0 = n.x, y0 = n.y + 9, z0 = n.z,
+            tx = o.x, tz = o.z, t = 0, flight = 0.45 + 0.05 * k, damage = d.damage * power, splash = S("splash"),
+            linger = S("linger"), toxin = (S("toxin") or 0) * power }
     end
 end
 
--- What a shot sounds and looks like as it leaves.
-function Game:muzzle(n, t, d)
-    local k = t.kind
-    if k == "puffer" then
-        self:motes(n.x, n.y + 8, n.z, 4, { "w", "t" }, 3, 8, 0.4)
-        self:cue("puff", n.x, n.z)
-    elseif k == "needle" then
-        local big = self:degree(n) == 1 or (self:stat(t, "pierce") or 1) > 1
-        self.fx[#self.fx + 1] = { star = true, x = n.x, y = n.y + 12, z = n.z, k = big and "l" or "w", life = 0.08, max = 0.08 }
-        self:cue(big and "lance" or "zip", n.x, n.z)
-    elseif k == "mortar" then
-        self:motes(n.x, n.y + 9, n.z, 7, { "s", "k", "t" }, 4, 12, 0.7)
-        self:cue("thump", n.x, n.z)
-    elseif k == "cordyceps" then
-        self:motes(n.x, n.y + 9, n.z, 3, { "t", "r" }, 2, 8, 0.4)
-        self:cue("spit", n.x, n.z)
-    elseif k == "giant" then
-        self:motes(n.x, n.y + 2, n.z, 10, { "n", "t" }, 14, 10, 0.6)
-        self:cue("quake", n.x, n.z)
+-- A needle: a line of light straight through what it aims at, harder from
+-- a dead end, and on through more behind it once upgraded.
+function Game:skewer(n, t, d, S, power, range, list)
+    local e = list[1]
+    local big = self:degree(n) == 1 or (self:stat(t, "pierce") or 1) > 1
+    self.fx[#self.fx + 1] = { star = true, x = n.x, y = n.y + 12, z = n.z, k = big and "l" or "w", life = 0.08, max = 0.08 }
+    self:cue(big and "lance" or "zip", n.x, n.z)
+    local deadEnd = self:degree(n) == 1
+    local dmg = S("damage") * power * (deadEnd and d.deadEnd or 1)
+    -- Down the line through its target, as far as its reach, for a skewer.
+    local hits = { e }
+    local pierce = S("pierce") or 1
+    if pierce > 1 then
+        local dx, dz = e.x - n.x, e.z - n.z
+        local l = max(1, sqrt(dx * dx + dz * dz))
+        local fx, fz = n.x + dx / l * range, n.z + dz / l * range
+        local line = {}
+        for _, o in ipairs(list) do
+            if o ~= e and segDist(o.x, o.z, n.x, n.z, fx, fz) < 6 then line[#line + 1] = o end
+        end
+        table.sort(line, function(a, b) return dist(a, n) < dist(b, n) end)
+        for k = 1, pierce - 1 do hits[#hits + 1] = line[k] end
     end
+    local far = hits[#hits]
+    for _, o in ipairs(hits) do
+        local mark = S("mark")
+        if mark then
+            o.mark, o.markMul = S("markFor"), mark
+            local ms = S("markSplash")
+            if ms then
+                for _, p in ipairs(self.enemies) do
+                    if not p.dead and dist(p, o) <= ms then p.mark, p.markMul = S("markFor"), mark end
+                end
+            end
+        end
+        self:hurt(o, dmg, true)
+    end
+    self.shots[#self.shots + 1] = { kind = "needle", x0 = n.x, y0 = n.y + 12, z0 = n.z,
+        x1 = far.x, y1 = far.y + 3, z1 = far.z, t = 0, flight = 0.12, big = deadEnd, mark = S("mark") }
+end
+
+-- A mortar: a shell high over everything, bursting where it lands.
+function Game:lob(n, t, d, S, power, range, list)
+    local e = list[1]
+    self:motes(n.x, n.y + 9, n.z, 7, { "s", "k", "t" }, 4, 12, 0.7)
+    self:cue("thump", n.x, n.z)
+    self.shots[#self.shots + 1] = { kind = "shell", x0 = n.x, y0 = n.y + 10, z0 = n.z, tx = e.x, tz = e.z,
+        t = 0, flight = 1.1, damage = S("damage") * power, splash = S("splash"),
+        cluster = S("cluster"), clusterDamage = (S("clusterDamage") or 0) * power, smoke = S("smoke") }
+end
+
+-- A cordyceps: a spore spat into a host, which turns on its own.
+function Game:spit(n, t, d, S, power, range, list)
+    local e = list[1]
+    self:motes(n.x, n.y + 9, n.z, 3, { "t", "r" }, 2, 8, 0.4)
+    self:cue("spit", n.x, n.z)
+    local dur = S("infect") * self:deepHold(t) * (t.boost and 1.5 or 1)
+    self.shots[#self.shots + 1] = { kind = "cordy", x0 = n.x, y0 = n.y + 10, z0 = n.z, target = e,
+        tx = e.x, tz = e.z, t = 0, flight = 0.6, infect = dur, spread = S("spread") or 0, bite = S("bite") * power,
+        maxHp = S("maxHp") }
 end
 
 -- A cordyceps holds its host longer the further out along the network it
@@ -1818,7 +1825,7 @@ end
 
 -- Ghost Lamp: whatever walks or flies into its glow comes for it first, and
 -- chews at it until it gives up (`hold`) or the lamp goes out.
-function Game:lamp(n, t, S, dt)
+function Game:lamp(n, t, S, _, _, dt)
     local regen = S("regen")
     if regen then t.hp = min(self:maxHp(t), t.hp + regen * dt) end
     t.glow = self:lure(t)
@@ -1908,7 +1915,11 @@ function Game:touches(t)
     end
 end
 
-function Game:quake(n, t, S, power, range, list)
+-- The Humongous Fungus: the ground heaves all round it, harder for every
+-- fed node rooted near it.
+function Game:quake(n, t, d, S, power, range, list)
+    self:motes(n.x, n.y + 2, n.z, 10, { "n", "t" }, 14, 10, 0.6)
+    self:cue("quake", n.x, n.z)
     local dmg = (S("damage") + S("perNode") * (self:rooted(t))) * power
     local stick, quake = S("stick"), S("quake")
     for _, e in ipairs(list) do
@@ -2263,6 +2274,18 @@ function Game:chewing(e)
     end
 end
 
+-- Each kind's own part of its move, by when in the move it comes: a Game
+-- method of the kind's name taking (e, d, slow, dt), true when it took the
+-- whole frame.
+--   burrowed  under the ground, instead of everything else
+--   first     before chewing and shelves (it digs, leaps, hops or swims past both)
+--   own       after them, before it tramples, bites into a link or walks on
+local MOVES = {
+    burrowed = { mole = true, cricket = true },
+    first = { springtail = true, cricket = true, click = true, waterbug = true, bombardier = true, mole = true },
+    own = { mite = true, slug = true, spider = true, queen = true, stag = true, dung = true, pillbug = true, brine = true },
+}
+
 function Game:move(e, dt)
     local d = D.ENEMIES[e.kind]
     e.flash = max(0, e.flash - dt)
@@ -2279,8 +2302,10 @@ function Game:move(e, dt)
         return
     end
     -- Burrowing: nothing on the surface touches it.
-    if e.under and e.kind == "mole" then return self:mole(e, d, 1, dt) end
-    if e.under and e.kind == "cricket" then return self:cricket(e, d, 1, dt) end
+    if e.under and MOVES.burrowed[e.kind] then
+        self[e.kind](self, e, d, 1, dt)
+        return
+    end
 
     if e.infected and e.infected > 0 then return self:host(e, d, dt) end
 
@@ -2315,9 +2340,7 @@ function Game:move(e, dt)
         if e.dead then return end
     end
 
-    if e.kind == "brine" and e.slide then
-        return self:slide(e, d, dt)
-    end
+    if e.slide then return self:slide(e, d, dt) end
 
     -- Panicked by a stinkhorn: back the way it came for a moment.
     if (e.panic or 0) > 0 then
@@ -2334,12 +2357,7 @@ function Game:move(e, dt)
         return
     end
     if e.leader then return self:follow(e, d, slow, dt) end
-    if e.kind == "springtail" and self:springtail(e, d, slow, dt) then return end
-    if e.kind == "cricket" and self:cricket(e, d, slow, dt) then return end
-    if e.kind == "click" and self:click(e, d, dt) then return end
-    if e.kind == "waterbug" and self:waterbug(e, d, slow, dt) then return end
-    if e.kind == "bombardier" and self:bombardier(e, d, slow, dt) then return end
-    if e.kind == "mole" and self:mole(e, d, slow, dt) then return end
+    if MOVES.first[e.kind] and self[e.kind](self, e, d, slow, dt) then return end
 
     -- Stopped to chew a link it walked into.
     if e.state == "chew" then
@@ -2378,47 +2396,11 @@ function Game:move(e, dt)
         e.state = "walk"
     end
 
-    if e.kind == "mite" then return self:mite(e, d, slow, dt) end
-    if e.kind == "slug" then return self:slug(e, d, slow, dt) end
-    if e.kind == "spider" then
-        if self:spider(e, d, slow, dt) then return end
-    end
-    if e.kind == "queen" then self:queen(e, d, dt) end
-    if e.kind == "stag" then
-        if self:stag(e, d, slow, dt) then return end
-    end
-    if e.kind == "dung" then self:dung(e, d, dt) end
+    if MOVES.own[e.kind] and self[e.kind](self, e, d, slow, dt) then return end
     self:trample(e, d, dt)
 
-    if e.kind == "pillbug" then
-        if mat and e.rolling then
-            -- The mat catches the roll: it uncurls, stuck, and is soft again.
-            e.rolling, e.walked, e.stuck = false, 0, 1.0
-            self:burst(e.x, 2, e.z, 6, { "l", "c" }, 14)
-            self:cue("lay", e.x, e.z, 0.7)
-        end
-        if e.stuck then
-            e.stuck = e.stuck - dt
-            if e.stuck <= 0 then e.stuck = nil end
-            return
-        end
-        e.walked = e.walked + dt
-        if e.rolling then
-            if e.walked >= d.rollFor then e.rolling, e.walked = false, 0 end
-            -- Rolling crushes any link it crosses, outright.
-            local l = self:linkNear(e, 4)
-            if l then self:crush(l) end
-            if self:walk(e, d.rollSpeed * slow, dt) then self:reachHeart(e) end
-            return
-        elseif e.walked >= d.walkFor and not mat then
-            e.rolling, e.walked = true, 0
-        end
-    end
-
-    if e.kind == "brine" then
-        local l = self:linkNear(e, 4)
-        if l then return self:attach(e, l) end
-    elseif d.chew and d.chewFor and not e.blind then
+    -- Into a link in its way: it stops to chew it, once a link.
+    if d.chew and d.chewFor and not e.blind then
         local l = self:linkNear(e, 3.5)
         if l and not l.bitten[e] then
             l.bitten[e] = true
@@ -2428,7 +2410,7 @@ function Game:move(e, dt)
     end
 
     -- Ants pick up whatever is lying in their way.
-    if e.kind == "ant" and not e.carry then
+    if d.carries and not e.carry then
         for _, c in ipairs(self.corpses) do
             if not c.carried and not c.absorb and c.kind ~= "ball" and (c.x - e.x) ^ 2 + (c.z - e.z) ^ 2 < 36 then
                 c.carried, e.carry = e, c
@@ -2440,6 +2422,43 @@ function Game:move(e, dt)
     local speed = d.speed
     if e.raged then speed = speed * d.rage end
     if self:walk(e, speed * slow, dt) then self:reachHeart(e) end
+end
+
+-- A pillbug walks a while, then rolls up: armoured, fast, crushing any link
+-- it crosses, until a mat catches it and it uncurls, stuck.
+function Game:pillbug(e, d, slow, dt)
+    local mat = self:onMat(e)
+    if mat and e.rolling then
+        -- The mat catches the roll: it uncurls, stuck, and is soft again.
+        e.rolling, e.walked, e.stuck = false, 0, 1.0
+        self:burst(e.x, 2, e.z, 6, { "l", "c" }, 14)
+        self:cue("lay", e.x, e.z, 0.7)
+    end
+    if e.stuck then
+        e.stuck = e.stuck - dt
+        if e.stuck <= 0 then e.stuck = nil end
+        return true
+    end
+    e.walked = e.walked + dt
+    if e.rolling then
+        if e.walked >= d.rollFor then e.rolling, e.walked = false, 0 end
+        -- Rolling crushes any link it crosses, outright.
+        local l = self:linkNear(e, 4)
+        if l then self:crush(l) end
+        if self:walk(e, d.rollSpeed * slow, dt) then self:reachHeart(e) end
+        return true
+    elseif e.walked >= d.walkFor and not mat then
+        e.rolling, e.walked = true, 0
+    end
+end
+
+-- Brine runs down the first link it touches (see Game:slide).
+function Game:brine(e)
+    local l = self:linkNear(e, 4)
+    if l then
+        self:attach(e, l)
+        return true
+    end
 end
 
 -- A cordyceps host: back the way it came, biting its own, until it fruits.
@@ -2895,10 +2914,11 @@ function Game:mite(e, d, slow, dt)
             e.gnawed = (e.gnawed or 0) + dt
             if e.gnawed > 6 then e.full, e.gnaw = true, nil end -- had enough; back to the march
         end
-        return
+        return true
     end
     -- Back to the trail tile it left, then on.
     if self:walk(e, d.speed * slow, dt) then self:reachHeart(e) end
+    return true
 end
 
 -- A slug stops to eat any fruiting body it passes.
@@ -2913,10 +2933,11 @@ function Game:slug(e, d, slow, dt)
         food.tower.hp = food.tower.hp - d.eat * dt
         food.tower.flash = 0.05
         if food.tower.hp <= 0 then self:destroyTower(food, "EATEN") end
-        return
+        return true
     end
     e.state = "walk"
     if self:walk(e, d.speed * slow, dt) then self:reachHeart(e) end
+    return true
 end
 
 -- A wolf spider leaves the trail for the deadliest tower it can see, webs it
@@ -2955,7 +2976,7 @@ function Game:spider(e, d, slow, dt)
 end
 
 -- The Queen lays workers as she goes and gnaws every thread in reach.
-function Game:queen(e, d, dt)
+function Game:queen(e, d, _, dt)
     e.brood = e.brood - dt
     if e.brood <= 0 then
         e.brood = d.broodEvery
@@ -3143,7 +3164,7 @@ end
 -- The Click Beetle: walks, rolls onto its back and plays dead (soft), then
 -- clicks and leaps down the trail. Where it comes down, links are cut and
 -- towers stunned.
-function Game:click(e, d, dt)
+function Game:click(e, d, _, dt)
     if e.state == "belly" then
         e.bellyT = e.bellyT - dt
         if e.bellyT <= 0 then
@@ -3190,7 +3211,7 @@ function Game:click(e, d, dt)
 end
 
 -- The Dung Beetle's ball flattens every link and mat it rolls over.
-function Game:dung(e, d, dt)
+function Game:dung(e, d, _, dt)
     if not e.ballHp or e.ballHp <= 0 then
         e.raged = true
         return

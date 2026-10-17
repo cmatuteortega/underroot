@@ -240,7 +240,7 @@ D.SELL = 0.6
 -- there; `corpse` is what its body is worth. `size` scales its shadow and where
 -- its health bar floats.
 D.ENEMIES = {
-    ant = { name = "WORKER ANT", hp = 16, speed = 20, armor = 0, chew = 5, chewFor = 1.0, bite = 5,
+    ant = { name = "WORKER ANT", hp = 16, speed = 20, armor = 0, chew = 5, chewFor = 1.0, bite = 5, carries = true,
         heart = 1, corpse = 4, blurb = "CHEWS LINKS ACROSS THE TRAIL. CARRIES OFF CORPSES" },
     pillbug = { name = "PILLBUG", hp = 70, speed = 12, armor = 3, rolledArmor = 10, chew = 4, chewFor = 1.5, bite = 4,
         rollSpeed = 36, walkFor = 3.5, rollFor = 2.6, heart = 3, corpse = 10,
