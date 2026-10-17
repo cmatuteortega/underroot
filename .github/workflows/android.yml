@@ -7,9 +7,9 @@
 # the audio modules off.
 #
 # Outputs:
-#   - every run: the signed APK as a workflow artifact, "Groute"
+#   - every run: the signed APK as a workflow artifact, "Mycelio TD"
 #   - every run with the signing secrets set: the signed app bundle (.aab) for
-#     Play Console as a second artifact, "Groute (Play bundle)". Never with the
+#     Play Console as a second artifact, "Mycelio TD (Play bundle)". Never with the
 #     throwaway key: Play locks in the key of the first upload, so a bundle
 #     signed with a key nobody kept must never reach it.
 #   - tags v*:   a GitHub Release with the APK attached (what players download)
@@ -25,6 +25,8 @@
 #
 # Optional repo variable (Settings → Secrets and variables → Actions → Variables):
 #   ANDROID_APP_ID            application id (default com.cmatute.groute)
+#                             (from when the game was called Groute: a new id
+#                             would be a new app, not an update of the old one)
 #
 # Launcher icon: the Shelf Fungus on its grass block in the dusk glow, baked
 # from assets/icon/ into love-android's res/ at build time by android/icon.py.
@@ -51,9 +53,9 @@ env:
   # The one Survive School, auto-chest and demomino build on. Pinned so builds
   # are reproducible and the native build cache stays valid; bump on purpose.
   LOVE_ANDROID_REF: 4c65fff4f8b38693aca5d91bc06f254f86a97adf
-  APP_NAME: Groute
+  APP_NAME: Mycelio TD
   APP_ID: ${{ vars.ANDROID_APP_ID || 'com.cmatute.groute' }}
-  APK_BASENAME: Groute
+  APK_BASENAME: Mycelio TD
   # Either way up: the game lays itself out for a phone held upright or sideways.
   APP_ORIENTATION: fullUser
   # Play Console refuses bundles below its current target API level (36 since
@@ -182,7 +184,7 @@ jobs:
             echo "::warning::No ANDROID_KEYSTORE_BASE64 secret: signing with a throwaway key. Players will have to uninstall before installing this APK."
             KEYSTORE_PASSWORD=android KEY_ALIAS=groute KEY_PASSWORD=android
             keytool -genkeypair -keystore "$ks" -storepass android -keypass android \
-              -alias groute -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Groute"
+              -alias groute -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Mycelio TD"
           fi
           export KEYSTORE_PASSWORD KEY_PASSWORD
           out="$RUNNER_TEMP/$APK_BASENAME.apk"

@@ -4,7 +4,7 @@ function love.conf(t)
     -- opens its "Compatibility Warning" box on a mismatch, and this ships on
     -- two engines -- 11.x on desktop, 12.0 in the Android build.
     t.version = love._version
-    t.window.title = "Groute"
+    t.window.title = "Mycelio TD"
     t.window.width = 1280
     t.window.height = 720
     t.window.resizable = true

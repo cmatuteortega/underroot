@@ -8,13 +8,13 @@
 # same workflow as Survive School's.
 #
 # Outputs (workflow artifacts):
-#   - "Groute (Windows)"  a folder: Groute.exe (love.exe with game.love
+#   - "Mycelio TD (Windows)"  a folder: Mycelio TD.exe (love.exe with game.love
 #     appended -- LÖVE's own fusing) and the DLLs it loads. 64-bit.
-#   - "Groute (macOS)"    Groute.app, zipped with ditto so the frameworks'
+#   - "Mycelio TD (macOS)"    Mycelio TD.app, zipped with ditto so the frameworks'
 #     symlinks survive. Universal (Intel and Apple Silicon).
-#   - "Groute (Linux)"    Groute.AppImage (x86_64). The artifact zip drops the
+#   - "Mycelio TD (Linux)"    Mycelio TD.AppImage (x86_64). The artifact zip drops the
 #     executable bit: chmod +x it once after unzipping.
-#   - "Groute (love)"     the bare game.love, for anyone with LÖVE 11.x.
+#   - "Mycelio TD (love)"     the bare game.love, for anyone with LÖVE 11.x.
 #   - tags v*: all four attached to the GitHub Release (the Android workflow
 #     attaches the APK to the same one).
 #
@@ -34,7 +34,7 @@
 # Saves: a fused game keeps them under its identity directly, not inside LOVE/
 # -- %APPDATA%\underfoot on Windows, ~/Library/Application Support/underfoot
 # on a Mac, ~/.local/share/underfoot on Linux (the identity is from before the
-# game was called Groute) -- so they are separate from the ones `love .`
+# game was called Groute, then Mycelio TD) -- so they are separate from the ones `love .`
 # writes while developing.
 
 name: Desktop builds
@@ -58,7 +58,7 @@ env:
   # The desktop engine the game is written for (README). Bump on
   # purpose: the asset names below follow LÖVE's release naming.
   LOVE_VERSION: '11.5'
-  APP_NAME: Groute
+  APP_NAME: Mycelio TD
   MAC_BUNDLE_ID: ${{ vars.MAC_BUNDLE_ID || 'com.cmatute.groute' }}
 
 jobs:
@@ -189,12 +189,12 @@ jobs:
           # commented out for exactly this.
           sed -i 's|^#FUSE_PATH="$APPDIR/my_game.love"|FUSE_PATH="$APPDIR/game.love"|' squashfs-root/AppRun
           grep -q '^FUSE_PATH="$APPDIR/game.love"' squashfs-root/AppRun || { echo "::error::AppRun FUSE_PATH line not found"; exit 1; }
-          sed -i "s/^Name=.*/Name=$APP_NAME/; s/^Comment=.*/Comment=A tower defense where you are the mycelium under a sprout/; s/^Categories=.*/Categories=Game;/; s/^Icon=.*/Icon=groute/; /^NoDisplay=/d; /^MimeType=/d" squashfs-root/love.desktop
+          sed -i "s/^Name=.*/Name=$APP_NAME/; s/^Comment=.*/Comment=A tower defense where you are the mycelium under a sprout/; s/^Categories=.*/Categories=Game;/; s/^Icon=.*/Icon=mycelio-td/; /^NoDisplay=/d; /^MimeType=/d" squashfs-root/love.desktop
           # The Shelf Fungus as the AppImage's icon (what file managers and
           # AppImageLauncher show), in place of LÖVE's.
           rm -f squashfs-root/love.svg squashfs-root/.DirIcon
-          cp icons/icon.png squashfs-root/groute.png
-          ln -s groute.png squashfs-root/.DirIcon
+          cp icons/icon.png squashfs-root/mycelio-td.png
+          ln -s mycelio-td.png squashfs-root/.DirIcon
           out="$RUNNER_TEMP/$APP_NAME.AppImage"
           ./appimagetool squashfs-root "$out"
           ls -l "$out"
@@ -231,7 +231,7 @@ jobs:
           (cd "$APP_NAME (Windows)" && zip -9 -r "../$APP_NAME (Windows).zip" .)
           mv "$APP_NAME (macOS)/$APP_NAME (macOS).zip" .
           mv "$APP_NAME (Linux)/$APP_NAME.AppImage" .
-          mv "$APP_NAME (love)/game.love" "Groute.love"
+          mv "$APP_NAME (love)/game.love" "$APP_NAME.love"
           ls -l
 
       - uses: softprops/action-gh-release@v2

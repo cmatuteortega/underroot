@@ -1,7 +1,8 @@
-# Groute
+# Mycelio TD
 
-(Called Underfoot until the builds went up; the design doc and the save
-directory keep that name.)
+(Called Underfoot until the builds went up, then Groute; the design doc and the
+save directory keep the first name, and the app ids the second, so an installed
+copy updates in place.)
 
 A tower defense where you are the mycelium under a sprout, built from the design
 doc (`DESIGN.md`, 13 oct 2026). Six levels, each its own map and waves (The
@@ -527,8 +528,8 @@ that touches more than docs; a `v*` tag also puts the files on a GitHub Release.
 - `.github/workflows/android.yml`: the APK (LÖVE for Android 12.0, the game as
   `game.love`), signed with the `ANDROID_KEYSTORE_*` secrets when they are set
   (and then a Play bundle too), or a throwaway key when they are not.
-- `.github/workflows/desktop.yml`: Windows (`Groute.exe`), macOS (`Groute.app`),
-  Linux (`Groute.AppImage`) and the bare `game.love`, each fused onto stock
+- `.github/workflows/desktop.yml`: Windows (`Mycelio TD.exe`), macOS (`Mycelio TD.app`),
+  Linux (`Mycelio TD.AppImage`) and the bare `game.love`, each fused onto stock
   LÖVE 11.5.
 
 The icon is the Shelf Fungus (second tier down its first branch) on a grass

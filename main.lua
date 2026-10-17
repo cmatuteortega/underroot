@@ -1,4 +1,4 @@
--- Groute: a tower defense where you are the mycelium under a sprout.
+-- Mycelio TD: a tower defense where you are the mycelium under a sprout.
 --
 -- Everything renders into a low-res canvas scaled up by a whole number, in the
 -- thirteen colours of src/palette.lua and nothing else. The board is traced
@@ -50,7 +50,7 @@ local game
 -- level, kept so a second run of it starts at once), and the level picker.
 local level = D.LEVELS[1]
 local worlds = {}
-local menu -- the level picker is up (true), or a level's loadout ("loadout")
+local menu -- the level picker is up (true), a level's loadout ("loadout"), or the title ("title")
 local pick -- the loadout being picked: { n = level, set = { id = true }, enemy = kind }
 local chosen -- the species the run brings, a list; nil brings them all (the shots)
 local loadouts = {} -- each level's last loadout, saved between runs: { crack = { "puffer", ... } }
@@ -1032,6 +1032,7 @@ local function findHover()
         return
     end
     if menu == "codex" then codex.findHover(mx, my) return end
+    if menu == "title" then return end
     if menu then
         local cards, switch = levelCards()
         for k, c in ipairs(cards) do
@@ -1247,7 +1248,7 @@ function love.load(args)
         for _, a in ipairs(args or {}) do if a == "challenge" then challenge = true end end
         play(n)
     else
-        openMenu()
+        flair.title.open()
     end
 end
 
@@ -1341,6 +1342,7 @@ function flair.under()
         return
     end
     if menu == "codex" then return codex.under() end
+    if menu == "title" then return end
     if menu then
         if hover.level then
             local c = levelCards()[hover.level]
@@ -1426,6 +1428,7 @@ local function click(b)
         return
     end
     if menu == "codex" then codex.click(b) return end
+    if menu == "title" then flair.title.leave() return end
     if menu then
         if hover.codex then codex.open() return end
         if hover.level and levelOpen(hover.level) then sound("select"); openLoadout(hover.level)
@@ -1757,6 +1760,7 @@ function love.keypressed(key)
         return
     end
     if menu == "codex" then codex.key(key) return end
+    if menu == "title" then flair.title.leave() return end
     if menu then
         if key == "e" then codex.open() return end
         local n = tonumber(key)
@@ -3605,7 +3609,7 @@ local function drawMenu()
     color("o")
     love.graphics.rectangle("fill", 0, 0, vw, vh)
     local cards, switch = levelCards()
-    centred("GROUTE", cards[1].y - 30, "g", "o")
+    centred("MYCELIO TD", cards[1].y - 30, "g", "o")
     centred("WHERE DOES THE SPROUT COME UP?", cards[1].y - 18, "t", "o")
     for k, c in ipairs(cards) do
         local l = D.LEVELS[k]
@@ -3855,6 +3859,103 @@ function flair.loading()
     love.graphics.rectangle("fill", x, y, w, 4)
     color("c")
     love.graphics.rectangle("fill", x, y, floor(w * progress), 4)
+end
+
+-- The title, the first thing up when the game opens: the name over the
+-- night, the sprout on the ground and the network growing out under it, lit
+-- by nutrients on their way up. Any key, click or tap goes on to the levels.
+flair.title = {}
+
+function flair.title.open()
+    menu, flair.title.t0 = "title", love.timer.getTime()
+    mode, drag, selected = "grow", nil, nil
+end
+
+function flair.title.leave()
+    sound("select")
+    openMenu()
+end
+
+-- The threads under the sprout, grown once for a screen size: each a list of
+-- pixels { x, y, d }, d how far it is along the network from the sprout.
+function flair.title.grow(cx, gy)
+    local rng = love.math.newRandomGenerator(7)
+    local threads = {}
+    local function thread(x, y, a, d, len, depth)
+        local t = {}
+        threads[#threads + 1] = t
+        for _ = 1, len do
+            a = a + (rng:random() - 0.5) * 0.5
+            -- Down, never back up through the ground.
+            a = max(0.15, min(math.pi - 0.15, a))
+            x, y, d = x + math.cos(a), y + math.sin(a) * 0.7, d + 1
+            if y >= vh - 1 or x < 0 or x >= vw then break end
+            t[#t + 1] = { x = floor(x), y = floor(y), d = d }
+            if depth < 3 and rng:random() < 0.035 then
+                thread(x, y, a + (rng:random() < 0.5 and -1 or 1) * (0.5 + rng:random() * 0.6), d,
+                    floor(len * (0.4 + rng:random() * 0.3)), depth + 1)
+            end
+        end
+    end
+    local reach = max(vw, vh)
+    for k = 0, 6 do
+        thread(cx, gy + 1, 0.3 + k * (math.pi - 0.6) / 6, 0, floor(reach * (0.3 + rng:random() * 0.25)), 0)
+    end
+    return threads
+end
+
+function flair.title.draw()
+    local T0 = flair.title
+    local age = love.timer.getTime() - (T0.t0 or 0)
+    local cx, gy = floor(vw / 2), floor(vh * 0.6)
+    if T0.w ~= vw or T0.h ~= vh then T0.w, T0.h, T0.threads = vw, vh, T0.grow(cx, gy) end
+    color("o")
+    love.graphics.rectangle("fill", 0, 0, vw, vh)
+    -- A few stars, each blinking on its own beat.
+    local rng = love.math.newRandomGenerator(3)
+    for _ = 1, floor(vw * gy / 900) do
+        local x, y, beat = rng:random(0, vw - 1), rng:random(0, gy - 4), rng:random() * 6
+        if (age + beat) % 6 > 0.4 then
+            color(rng:random() < 0.3 and "s" or "k")
+            love.graphics.rectangle("fill", x, y, 1, 1)
+        end
+    end
+    -- The ground: a lip of lit soil, then deep soil to the bottom.
+    color("u")
+    love.graphics.rectangle("fill", 0, gy, vw, vh - gy)
+    color("n")
+    love.graphics.rectangle("fill", 0, gy, vw, 2)
+    color("m")
+    love.graphics.rectangle("fill", 0, gy - 1, vw, 1)
+    -- The network, reaching further every frame for its first few seconds, and
+    -- nutrients running up it toward the sprout.
+    local reach = age * 45
+    for _, t in ipairs(T0.threads) do
+        for _, p in ipairs(t) do
+            if p.d > reach then break end
+            local lit = (p.d + age * 30) % 48 < 2
+            color(lit and "l" or (p.d > reach - 3 and "l" or "c"))
+            love.graphics.rectangle("fill", p.x, p.y, 1, 1)
+        end
+    end
+    blit(M.sprout(0), cx, gy)
+    -- The name, as big as the screen's width allows, on a teal shadow.
+    local name = "MYCELIO TD"
+    local s = max(1, min(5, floor((vw - 24) / Font.width(name))))
+    local x, y = floor((vw - Font.width(name) * s) / 2), max(inset.t + 8, floor(gy * 0.3) - 3 * s)
+    love.graphics.push()
+    love.graphics.translate(x, y)
+    love.graphics.scale(s, s)
+    color("c")
+    Font.print(name, 0, 1)
+    color("l")
+    Font.print(name, 0, 0)
+    love.graphics.pop()
+    local sub = "A TOWER DEFENSE UNDER A SPROUT"
+    text(sub, floor((vw - Font.width(sub)) / 2), y + 6 * s + 6, "t")
+    if age % 1.2 < 0.8 then
+        centred(say("PRESS ANY KEY", "TAP TO BEGIN"), vh - inset.b - 14, "w", "o")
+    end
 end
 
 -- Over whatever screen is up: the thing just pressed lit, the screen's edge
@@ -4594,6 +4695,8 @@ function love.draw()
         bank.draw()
     elseif menu == "codex" then
         codex.draw()
+    elseif menu == "title" then
+        flair.title.draw()
     elseif menu then
         drawMenu()
     else
