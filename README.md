@@ -109,7 +109,8 @@ opens it: a tab each for the enemies, the species and the seeds, a tile an
 entry with its model painted big, and a fourth tab, STATUSES, the glossary.
 What has not been found yet is a dark cutout of its model with `???` under it:
 an enemy is found by meeting it on the board, a species by having it (the
-first six, or bought) and a seed the same. Click a tile for its page: the model
+first six, or bought) and a seed the same. The DEV button beside BACK (`U`) shows
+every entry as found, for that run only: the save is not touched. Click a tile for its page: the model
 up to four times its size on the board (an enemy turning slowly round and
 walking on the spot), and everything about it. An enemy's page has what it
 does, its numbers, the levels it comes on and what answers it; a species' its
@@ -166,7 +167,7 @@ chew through any thread they cross.
 | `N` | after a win: on to the next level's loadout |
 | `M` | the level picker (`Esc` there goes back to the run) |
 | `1`–`6`, `C` in the picker | pick a level; challenge mode on or off |
-| `E` in the picker, or its top left button | the encyclopedia: `1`–`4` or left / right for its tabs, a click for a page, left / right through the pages, wheel or up / down to scroll, `Esc` back |
+| `E` in the picker, or its top left button | the encyclopedia: `1`–`4` or left / right for its tabs, `U` the dev toggle (every entry found), a click for a page, left / right through the pages, wheel or up / down to scroll, `Esc` back |
 | click a species in the loadout | read it in the panel; click it again to bring it or leave it (six at most) |
 | a species' key in the loadout | bring it or leave it at once |
 | `Enter` / `Space`, `Esc` in the loadout | grow the level with that loadout; back to the levels |

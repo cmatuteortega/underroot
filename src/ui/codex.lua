@@ -31,6 +31,8 @@ codex.TABS = {
 -- The tab open, how far each tab's grid is scrolled, the entry whose page is
 -- open (its place in the tab's list) and how far that page is scrolled.
 codex.tab, codex.scroll, codex.page, codex.pageScroll = 1, { 0, 0, 0, 0 }, nil, 0
+-- Dev: every entry shown as found, for this run only; the save is left as it is.
+codex.dev = false
 -- The way a model faces in its tile: a little to the right of towards you.
 codex.FACE = 0.35
 codex.TW, codex.TH = 60, 62
@@ -65,6 +67,7 @@ end
 function codex.list(tab) return codex.ids[codex.TABS[tab].id] end
 
 function codex.found(tab, id)
+    if codex.dev then return true end
     local t = codex.TABS[tab].id
     if t == "enemies" then return Profile.seen[id] == true end
     if t == "species" then return Profile.owns(id) end
@@ -290,7 +293,7 @@ function codex.lines(tab, id, w)
         local good, unmet = {}, 0
         for _, kind in ipairs(D.ENEMY_ORDER) do
             for _, k in ipairs(D.COUNTERS[kind] or {}) do
-                if k == id and Profile.seen[kind] then good[#good + 1] = D.ENEMIES[kind].name
+                if k == id and (codex.dev or Profile.seen[kind]) then good[#good + 1] = D.ENEMIES[kind].name
                 elseif k == id then unmet = unmet + 1 end
             end
         end
@@ -365,6 +368,7 @@ function codex.button() return { x = S.inset.l + 4, y = S.inset.t + 4, w = Font.
 -- scrolled under the tabs. `scroll` is kept in reach.
 function codex.layout()
     local L = { back = { x = S.inset.l + 4, y = S.inset.t + 4, w = 34, h = 12 }, tabs = {} }
+    L.dev = { x = L.back.x + L.back.w + 4, y = L.back.y, w = Font.width("DEV") + 8, h = 12 }
     local gap, total = 3, 0
     for k, tb in ipairs(codex.TABS) do
         L.tabs[k] = { w = Font.width(tb.name) + 8, h = 11, y = S.inset.t + 21, tab = k }
@@ -441,13 +445,19 @@ function codex.step(d)
     sound("select")
 end
 
+function codex.toggleDev()
+    codex.dev = not codex.dev
+    codex.pages = {}
+    sound(codex.dev and "on" or "off")
+end
+
 function codex.toTab(k)
     if codex.tab == k and not codex.page then return end
     codex.tab, codex.page = k, nil
     sound("select")
 end
 
--- What is pointed at: hover.cback, hover.ctab (a tab), hover.ctile (an entry)
+-- What is pointed at: hover.cback, hover.cdev (the dev toggle), hover.ctab (a tab), hover.ctile (an entry)
 -- or hover.cstep (an arrow, -1 or 1).
 function codex.hover(mx, my)
     if codex.page then
@@ -460,6 +470,7 @@ function codex.hover(mx, my)
     end
     local L = codex.layout()
     if inside(mx, my, L.back.x, L.back.y, L.back.w, L.back.h) then S.hover.cback = true return end
+    if inside(mx, my, L.dev.x, L.dev.y, L.dev.w, L.dev.h) then S.hover.cdev = true return end
     for k, c in ipairs(L.tabs) do
         if inside(mx, my, c.x, c.y, c.w, c.h) then S.hover.ctab = k return end
     end
@@ -472,6 +483,7 @@ end
 -- The box of whatever is pointed at, to light up when it is pressed.
 function codex.under()
     if S.hover.cback then return function() local b = codex.layout().back return b.x, b.y, b.w, b.h end end
+    if S.hover.cdev then return function() local b = codex.layout().dev return b.x, b.y, b.w, b.h end end
     if S.hover.cstep then
         local d = S.hover.cstep
         return function()
@@ -488,6 +500,7 @@ end
 
 function codex.click(b)
     if b == 2 or S.hover.cback then codex.back()
+    elseif S.hover.cdev then codex.toggleDev()
     elseif S.hover.ctab then codex.toTab(S.hover.ctab)
     elseif S.hover.cstep then codex.step(S.hover.cstep)
     elseif S.hover.ctile then
@@ -502,6 +515,7 @@ function codex.key(key)
         if key == "left" or key == "a" then codex.step(-1)
         elseif key == "right" or key == "d" then codex.step(1) end
     else
+        if key == "u" then codex.toggleDev() end
         local n = tonumber(key)
         if n and codex.TABS[n] then codex.toTab(n) end
         if key == "left" or key == "a" then codex.toTab((codex.tab - 2) % #codex.TABS + 1)
@@ -562,6 +576,7 @@ function codex.draw()
     end
     local L = codex.layout()
     codex.btn(L.back, "BACK", S.hover.cback, S.hover.cback and "t" or "k")
+    codex.btn(L.dev, "DEV", S.hover.cdev or codex.dev, codex.dev and "r" or (S.hover.cdev and "t" or "k"), codex.dev and "r" or "s")
     text(found, S.vw - S.inset.r - 4 - Font.width(found), S.inset.t + 7, "t")
     for k, c in ipairs(L.tabs) do
         local on = codex.tab == k
