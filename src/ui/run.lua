@@ -1,6 +1,7 @@
 -- A run of a level: starting it (painting its board first, the first time),
 -- and each frame of it -- the rules stepped at the game's speed, the sound
 -- of what they cued, and what the profile keeps of it: records, spores, wins.
+-- A run is played on the network the Spore Bank has grown (Profile.grown).
 
 local World = require "src.world"
 local Game = require "src.game"
@@ -18,8 +19,10 @@ local layTools = Toolbar.layTools
 
 -- A new run of the level on its board, everything put down and the camera home.
 local function start()
+    -- The shots play the whole network; a player, what theirs has grown.
     S.game = Game.new(S.world, S.level, { challenge = S.challenge, loadout = S.chosen, seed = not S.script and Profile.sown[S.level.id] or nil,
-        best = Profile.records[S.level.id], dice = S.script and 1 })
+        best = Profile.records[S.level.id], dice = S.script and 1, net = not S.script and Profile.grown() or nil,
+        firstWin = not S.script and not Profile.won[S.level.id] })
     layTools(S.game)
     S.mode, S.drag, S.panx, S.pany, S.selected = "grow", nil, 0, 0, nil
     S.focus, S.focused = nil, nil
@@ -79,12 +82,8 @@ local function update(dt)
     if S.game.phase == "won" and not S.game.recorded then
         S.game.recorded = true
         if not S.script then
-            -- The first win puts the level's species up for sale, shown on the way on.
-            if not Profile.won[S.level.id] and S.level.prize and not Profile.owns(S.level.prize) then S.game.offer = S.level.prize end
-            -- And any seed waiting on it.
-            for _, sd in ipairs(D.SEEDS) do
-                if not Profile.won[S.level.id] and sd.after == S.level.id and not Profile.ownsSeed(sd.id) then S.game.newSeed = sd.id end
-            end
+            -- The first win opens what on the network waited on it, named on the way out.
+            if not Profile.won[S.level.id] then S.game.opened = Profile.opens(S.level.id) end
             Profile.won[S.level.id] = true
             Profile.save()
         end

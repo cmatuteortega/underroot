@@ -163,12 +163,25 @@ Between waves you pick one of three random Mutations for the network, such as
 faster growth, cheaper links, or a free Relay. This is what makes two runs of the
 same map play differently.
 
-Meta progression is a Spore Bank filled by playing levels: a spore a wave
-cleared, more for a win.
+Meta progression is a Spore Bank filled by playing levels: spores for every
+wave cleared, more for a win, most for a level's first. They are spent on the
+**network**, a second mycelium that grows between runs: nodes spreading out
+from the sprout, each bought a rank at a time once the node it grows from has
+one, so the hyphae spread across the screen as it is bought.
 
-- **New species:** the first six species are there from the start. Each level's
-  first win puts one of the other six up for sale, bought for good with spores.
-- **Sprout seeds:** pick the plant at the end of the path, with the loadout. An
+- **New species:** a first run has only the Spore Puffer. Every other species
+  grows on the network, the later ones dearer and some only once a level is
+  won; then its own nodes raise its damage, rate of fire, HP and cost, and open
+  its upgrade branches a tier at a time.
+- **The network's own numbers:** link HP, flow, cost and growing speed, the
+  Fairy Ring, the Spore Pulse, the sprout's HP and sugar, and which mutations
+  can be offered at all.
+- **Field notes:** once a kind of enemy is met, the network can learn it, and
+  hits it harder.
+- **Fully grown is the game as tuned:** every held-back number starts at a
+  fraction of its value and each rank brings it nearer, so a full network is
+  exactly the game the levels were balanced for. Ranges are never held back.
+- **Sprout seeds:** grown on the network, picked with the loadout. An
   oak sapling is tough, a tomato pays more sugar, a dandelion regrows once after
   dying, a sunflower makes what grows near it hit harder by day, a flytrap bites
   what comes close; the bean is the plain sprout, its mutations about growing.

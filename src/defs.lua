@@ -193,20 +193,8 @@ D.TOWERS = {
 D.TOWER = {}
 for _, t in ipairs(D.TOWERS) do D.TOWER[t.id] = t end
 
--- The Spore Bank. The first six species are grown from the start; each of the
--- other six is put up for sale by winning a level (its `prize`, below) and
--- bought for good with spores at its `price`. A run pays a spore for every
--- wave it clears and more for a win.
-D.STARTERS = 6
-for k, t in ipairs(D.TOWERS) do t.starter = k <= D.STARTERS end
-for id, price in pairs({ stink = 20, shelf = 25, mortar = 30, lamp = 35, cordyceps = 40, giant = 50 }) do
-    D.TOWER[id].price = price
-end
-D.SPORES = { wave = 1, win = 10 }
-
 -- Sprout seeds: the plant at the end of the trail, picked with the loadout.
--- Spores buy them too: the bean is there from the start, the oak and the
--- tomato are for sale from the start, the rest once `after` is won. `heart`,
+-- The bean is there from the start; the rest grow on the network. `heart`,
 -- `income` and `grow` scale the level's sprout, its sugar and how fast links
 -- grow; `start` adds to its nutrients. Each brings mutations of its own (MUTATIONS rows with its
 -- `seed`), one of which is on offer every time the network mutates.
@@ -214,19 +202,19 @@ D.SEEDS = {
     { id = "bean", name = "BEAN SPROUT", short = "BEAN",
         blurb = "AS IT COMES: NOTHING GAINED, NOTHING GIVEN UP",
         about = "THE SPROUT YOU KNOW. ITS MUTATIONS ARE ABOUT GROWING: QUICK THREADS, RICHER POCKETS, FREE LINKS." },
-    { id = "oak", name = "OAK SAPLING", short = "OAK", price = 15, heart = 1.5, grow = 0.75,
+    { id = "oak", name = "OAK SAPLING", short = "OAK", heart = 1.5, grow = 0.75,
         blurb = "SPROUT +50% HP, BUT LINKS GROW 25% SLOWER",
         about = "TOUGH AND SLOW. IT TAKES THE HITS SO THE NETWORK CAN BE THIN. ITS MUTATIONS HARDEN IT AND THE THREADS AT ITS FOOT." },
-    { id = "tomato", name = "TOMATO SEEDLING", short = "TOMATO", price = 15, heart = 0.7, income = 1.1, start = 10,
+    { id = "tomato", name = "TOMATO SEEDLING", short = "TOMATO", heart = 0.7, income = 1.1, start = 10,
         blurb = "SUGAR +10%, +10 TO START, SPROUT -30% HP",
         about = "RICH BUT SOFT. MORE TO SPEND ON EVERY WAVE, AND LESS ROOM FOR A LEAK. ITS MUTATIONS PAY MORE, OR BURST ON WHAT GETS THROUGH." },
-    { id = "dandelion", name = "DANDELION", short = "DANDELION", price = 25, after = "flowerpot", regrow = 1,
+    { id = "dandelion", name = "DANDELION", short = "DANDELION", regrow = 1,
         blurb = "KILLED, IT REGROWS ONCE AT HALF HEALTH",
         about = "A WEED: KILL IT AND IT COMES BACK, ONCE, AT HALF ITS HP, AND THE WAVE GOES ON. ITS MUTATIONS SPREAD IT ON THE WIND." },
-    { id = "sunflower", name = "SUNFLOWER", short = "SUNFLOWER", price = 35, after = "log", sun = { hops = 2, damage = 1.15 },
+    { id = "sunflower", name = "SUNFLOWER", short = "SUNFLOWER", sun = { hops = 2, damage = 1.15 },
         blurb = "TOWERS 2 HOPS FROM IT HIT 15% HARDER, BUT NOT AT NIGHT",
         about = "IT FACES THE SUN, AND WHAT GROWS CLOSE TO IT HITS HARDER BY DAY. AT NIGHT IT HANGS ITS HEAD. ITS MUTATIONS FEED ON THE LIGHT." },
-    { id = "flytrap", name = "VENUS FLYTRAP", short = "FLYTRAP", price = 45, after = "lawn", income = 0.9,
+    { id = "flytrap", name = "VENUS FLYTRAP", short = "FLYTRAP", income = 0.9,
         trap = { range = 26, every = 2.5, bite = 20, eat = 40, heal = 0.5 },
         blurb = "SNAPS AT BUGS NEAR IT. EATS SMALL ONES. SUGAR -10%",
         about = "IT BITES WHAT COMES CLOSE: A BUG WITH 40 HP LEFT OR LESS IS EATEN WHOLE, AND HEALS IT A LITTLE. ITS MUTATIONS SHARPEN THE TRAP." },
@@ -691,36 +679,36 @@ local LAWN = {
 -- The levels, in the order they open: each is won to open the next. `map`
 -- names a map in src/world.lua. Species come as the waves are cleared on
 -- every level (see D.unlockAt); `unlock`, if given, overrides a species'
--- wave there. `prize` is the species its first win puts up for sale in the
--- Spore Bank. `loadout` is the species brought the first time it is played,
+-- wave there. A first win opens what on the network waits on it (its rows'
+-- `won`). `loadout` is the species brought the first time it is played,
 -- before the player has picked their own. `growth` is how much tougher each wave's enemies are than the
 -- last's, if not HP_GROWTH. `ringNodes` is how few fed nodes close a Fairy
 -- Ring there, if not RING.nodes. They come in the design doc's order; the
 -- Crack is its first level and has the three bosses the later ones each bring.
 D.LEVELS = {
-    { id = "crack", prize = "stink", name = "THE CRACK", map = "crack", waves = CRACK, start = 110, heart = 20,
+    { id = "crack", name = "THE CRACK", map = "crack", waves = CRACK, start = 110, heart = 20, growth = 0.06,
         mutateAfter = { [3] = true, [5] = true, [8] = true, [10] = true, [12] = true },
         loadout = { "puffer", "needle", "mat", "mane", "relay", "mortar" },
         idea = "A SIDEWALK CRACK. LEARN THE NETWORK", boss = "QUEEN, STAG, DUNG BEETLE" },
-    { id = "flowerpot", prize = "shelf", name = "THE FLOWERPOT", map = "flowerpot", waves = FLOWERPOT, start = 130, heart = 20,
+    { id = "flowerpot", name = "THE FLOWERPOT", map = "flowerpot", waves = FLOWERPOT, start = 130, heart = 20,
         growth = 0.42,
         mutateAfter = { [2] = true, [4] = true, [7] = true, [9] = true },
         loadout = { "puffer", "needle", "mat", "mane", "relay", "mortar" },
         idea = "A CRACKED POT. CUT AND REGROW, AND WATCH THE HOLE", boss = "DUNG, MOLE, QUEEN ANT" },
-    { id = "shed", prize = "mortar", name = "THE SHED FLOOR", map = "shed", waves = SHED, start = 160, heart = 23, growth = 0.08,
+    { id = "shed", name = "THE SHED FLOOR", map = "shed", waves = SHED, start = 160, heart = 23, growth = 0.08,
         mutateAfter = { [3] = true, [5] = true, [8] = true, [10] = true, [12] = true },
         loadout = { "puffer", "needle", "mat", "mane", "shelf", "stink" },
         idea = "BOARDS AND LEGO. HOLD THE CHOKEPOINT", boss = "DUNG, QUEEN, STAG BEETLE" },
-    { id = "log", prize = "lamp", name = "THE ROTTING LOG", map = "log", waves = LOG, start = 130, heart = 20, growth = 0.2,
+    { id = "log", name = "THE ROTTING LOG", map = "log", waves = LOG, start = 130, heart = 20, growth = 0.2,
         ringNodes = 3,
         mutateAfter = { [2] = true, [4] = true, [7] = true, [9] = true, [11] = true },
         loadout = { "puffer", "needle", "mane", "lamp", "inky", "mortar" },
         idea = "DARK AND DAMP. THREE NODES CLOSE A RING", boss = "QUEEN, MOLE, CLICK BEETLE" },
-    { id = "pond", prize = "cordyceps", name = "THE POND EDGE", map = "pond", waves = POND, start = 150, heart = 20, growth = 0.08,
+    { id = "pond", name = "THE POND EDGE", map = "pond", waves = POND, start = 150, heart = 20, growth = 0.08,
         mutateAfter = { [2] = true, [4] = true, [7] = true, [9] = true },
         loadout = { "puffer", "needle", "mat", "mane", "stink", "lamp" },
         idea = "WATER AND REEDS. BUILD ON HIGH GROUND", boss = "QUEEN, STAG, GIANT WATER BUG" },
-    { id = "lawn", prize = "giant", name = "THE LAWN", map = "lawn", waves = LAWN, start = 140, heart = 20, growth = 0.2,
+    { id = "lawn", name = "THE LAWN", map = "lawn", waves = LAWN, start = 140, heart = 20, growth = 0.2,
         mutateAfter = { [3] = true, [5] = true, [8] = true, [10] = true, [12] = true },
         loadout = { "puffer", "needle", "mat", "mane", "mortar", "stink" },
         idea = "OPEN GRASS, THREE GATES. EVERYTHING AT ONCE", boss = "QUEEN, STAG, GIANT CENTIPEDE" },
@@ -798,5 +786,209 @@ D.MUTATIONS = {
     { id = "sundew", seed = "flytrap", name = "SUNDEW", blurb = "BUGS NEAR THE SPROUT WADE AT HALF SPEED" },
     { id = "jaws", seed = "flytrap", name = "WIDE JAWS", blurb = "THE TRAP REACHES 40% FURTHER AND EATS BUGS OF UP TO 80 HP" },
 }
+
+--- the network --------------------------------------------------------------------------
+
+-- What the Spore Bank pays for: a web of nodes spreading out from the sprout,
+-- each bought a rank at a time with spores, and each only once the one it
+-- grows from (`at`) has a rank. Everything above is the network fully grown:
+-- a node's last rank brings its number up to what is written there, and the
+-- ranks before it to `from` of the way, so a new player starts with less of
+-- everything and one species, and a full network plays exactly the game the
+-- rest of this file tunes. src/network.lua reads it.
+--
+--   species = id          the species can be brought (one rank)
+--   seed = id             the seed can be planted (one rank)
+--   tower = id, stats     those numbers of the species, `from` at none
+--   up = { id, branch }   an upgrade branch: rank 1 its first tier, rank 2 both
+--   world = key           one of the network's own numbers (src/network.lua's WORLD)
+--   vs = { kinds }        damage to those enemies, `from` at none
+--   mutations = { ids }   a mutation can be offered: one a rank, in that order
+--   pulse = true          the Spore Pulse
+--   won = level           shut until that level is won
+--   seen = { kinds }      hidden until one of them has been met
+--
+-- `price` is a list, a price a rank. Spores come in a few a wave cleared and
+-- more for a win, the first win of a level most (D.SPORES).
+D.SPORES = { wave = 6, win = 12, first = 20 }
+
+-- A species' branch of the network: its unlock, then what makes it as strong
+-- as its row above. `m` scales every price on it, the later species dearer;
+-- `extra.ease` (0 to 1) holds it back less, for the first species, which the
+-- first level has to be won with.
+-- `stats` names its numbers in groups, each group a node: { name, keys, from,
+-- prices }; the first group is the one its next species grows from.
+local NET = {
+    { id = "sprout", name = "THE SPROUT", blurb = "WHERE THE NETWORK STARTS. THREE MUTATIONS COME WITH IT",
+        mutations = { "thick", "quick", "cheap" }, free = true },
+}
+local function add(row) NET[#NET + 1] = row; return row.id end
+
+local P3, P2, PS, PU
+local function species(kind, at, price, m, groups, extra)
+    local t = D.TOWER[kind]
+    local row = { id = kind, at = at, name = t.name, species = kind, blurb = t.blurb,
+        price = price and { price } or nil, free = price == nil }
+    extra = extra or {}
+    local ease = extra.ease or 1
+    row.won = extra.won
+    add(row)
+    local function cost(list)
+        local out = {}
+        for n, p in ipairs(list) do out[n] = math.max(1, math.floor(p * m + 0.5)) end
+        return out
+    end
+    local first
+    for n, g in ipairs(groups) do
+        local id = add({ id = kind .. "." .. g.id, at = g.at and (kind .. "." .. g.at) or kind, name = g[1],
+            blurb = g[2], tower = kind, stats = g[3], from = 1 - (1 - g[4]) * ease, price = cost(g[5]) })
+        if n == 1 then first = id end
+    end
+    for b = 1, 2 do
+        local up = t.up[b]
+        add({ id = kind .. ".up" .. b, at = kind .. "." .. groups[math.min(b, #groups)].id, name = up[1].name,
+            blurb = "UPGRADE: " .. up[1].name .. ", THEN " .. up[2].name, up = { kind, b }, price = cost(PU) })
+    end
+    return first
+end
+
+-- The prices every species' nodes start from, before its `m`: a stat node of
+-- three ranks, of two, its body, and each upgrade branch.
+P3, P2, PS, PU = { 2, 4, 7 }, { 3, 6 }, { 2, 4 }, { 6, 12 }
+
+-- Damage: the puffer the network starts with, the needle off it, the
+-- mortar and the Humongous Fungus further out.
+local puffer = species("puffer", "sprout", nil, 1, {
+    { id = "power", "SHARPER SPORES", "PUFFS HIT HARDER", { "damage", "toxin" }, 0.75, P3 },
+    { id = "rate", "QUICKER PUFFS", "PUFFS COME FASTER", { "every" }, 0.8, P3 },
+    { id = "body", "TOUGH CAP", "MORE HP, CHEAPER TO GROW", { "hp", "cost" }, 0.8, PS },
+})
+local needle = species("needle", puffer, 6, 1, {
+    { id = "power", "HARDER NEEDLES", "NEEDLES HIT HARDER, AND HARDER ON A DEAD END", { "damage", "deadEnd" }, 0.75, P3 },
+    { id = "rate", "STEADY AIM", "SHOOTS FASTER", { "every" }, 0.8, P3 },
+    { id = "body", "STIFF STALK", "MORE HP, CHEAPER TO GROW", { "hp", "cost" }, 0.8, PS },
+})
+local mortar = species("mortar", needle, 45, 2.8, {
+    { id = "power", "BIGGER BLASTS", "BLASTS HIT HARDER", { "damage", "clusterDamage" }, 0.75, P3 },
+    { id = "rate", "QUICK RELOAD", "BLASTS COME FASTER", { "every" }, 0.8, P3 },
+    { id = "body", "THICK SKIN", "MORE HP, CHEAPER TO GROW", { "hp", "cost" }, 0.8, PS },
+}, { won = "shed" })
+species("giant", mortar, 90, 4, {
+    { id = "power", "OLD MYCELIUM", "QUAKES HIT HARDER, MORE PER NODE", { "damage", "perNode" }, 0.75, P3 },
+    { id = "rate", "DEEP PULSE", "QUAKES COME FASTER", { "every" }, 0.8, P3 },
+    { id = "body", "GREAT BULK", "MORE HP, CHEAPER TO GROW", { "hp", "cost" }, 0.8, PS },
+}, { won = "lawn" })
+
+-- Control: the mat, the Stinkhorn off it, the Cordyceps further out.
+local mat = species("mat", "sprout", 10, 1.2, {
+    { id = "power", "STICKY SLIME", "SLOWS HARDER AND DIGESTS MORE", { "slow", "digest" }, 0.75, P3 },
+    { id = "life", "SLOW TO DRY", "LASTS LONGER, CHEAPER TO LAY", { "life", "cost" }, 0.8, P2 },
+})
+local stink = species("stink", mat, 30, 2.2, {
+    { id = "power", "FOULER REEK", "SLOWS AND TRIPS MORE, ROTS HARDER", { "reek", "stumble", "rot", "panic" }, 0.75, P3 },
+    { id = "bait", "CLINGING STENCH", "BAITS FLIES HARDER, HOLDS THEM LONGER", { "bait", "hold" }, 0.8, P2 },
+    { id = "body", "STOUT STALK", "MORE HP, CHEAPER TO GROW", { "hp", "cost" }, 0.8, PS },
+}, { won = "crack" })
+species("cordyceps", stink, 60, 3.4, {
+    { id = "power", "TIGHT GRIP", "HOLDS LONGER, BIGGER HOSTS, HARDER BITES", { "infect", "maxHp", "bite" }, 0.75, P3 },
+    { id = "rate", "EAGER SPORES", "INFECTS MORE OFTEN", { "every" }, 0.8, P2 },
+    { id = "body", "HARDY BLOOM", "MORE HP, CHEAPER TO GROW", { "hp", "cost" }, 0.8, PS },
+}, { won = "pond" })
+
+-- Support: the relay, the Lion's Mane off it, the Inky Cap further out.
+local relay = species("relay", "sprout", 14, 1.4, {
+    { id = "power", "OPEN CHANNELS", "MORE FLOW, MORE DAMAGE, MORE RESERVE", { "capMul", "amp", "battery" }, 0.7, P3 },
+    { id = "body", "FIRM KNOT", "MORE HP, CHEAPER TO GROW", { "hp", "cost" }, 0.8, PS },
+})
+local mane = species("mane", relay, 18, 1.6, {
+    { id = "power", "QUICK HEALING", "HEALS AND REGROWS FASTER", { "heal", "regrow", "towerHeal" }, 0.7, P3 },
+    { id = "body", "THICK MANE", "MORE HP, CHEAPER TO GROW", { "hp", "cost" }, 0.8, PS },
+})
+species("inky", mane, 26, 2, {
+    { id = "power", "DEEP DIGESTION", "DRINKS BODIES FOR MORE", { "feast" }, 0.7, P3 },
+    { id = "ink", "BLACKER INK", "INK SLOWS HARDER, AND LASTS", { "inkSlow", "inkLife" }, 0.8, P2 },
+    { id = "body", "SOFT GILLS", "MORE HP, CHEAPER TO GROW", { "hp", "cost" }, 0.8, PS },
+})
+
+-- Defence: the shelf, the Ghost Lamp off it.
+local shelf = species("shelf", "sprout", 34, 2.4, {
+    { id = "power", "HARD WOOD", "MORE WOOD, AND IT HEALS AND BITES MORE", { "hp", "regen", "thorns" }, 0.7, P3 },
+    { id = "guard", "WIDE SHADE", "SHIELDS LINKS BETTER, CHEAPER TO GROW", { "shieldMul", "cost" }, 0.8, P2 },
+}, { won = "flowerpot" })
+species("lamp", shelf, 50, 3, {
+    { id = "power", "BRIGHT GLOW", "HOLDS THEM LONGER, BURSTS HARDER", { "hold", "blast" }, 0.75, P3 },
+    { id = "body", "WAXY CAP", "MORE HP, CHEAPER TO GROW", { "hp", "cost" }, 0.8, PS },
+}, { won = "log" })
+
+-- The threads themselves, and the pulse down them.
+add({ id = "hyphae", at = "sprout", name = "HYPHAE", blurb = "THE THREADS: THICKER, WIDER, LONGER", world = "linkHp", from = 0.7,
+    price = { 2, 4, 6 } })
+add({ id = "hyphae.cap", at = "hyphae", name = "WIDE THREADS", blurb = "LINKS CARRY MORE FLOW", world = "linkCap", from = 0.8,
+    price = { 3, 6, 9 } })
+add({ id = "hyphae.cost", at = "hyphae", name = "LEAN THREADS", blurb = "LINKS COST LESS TO GROW", world = "linkCost", from = 0.85,
+    price = { 3, 6 } })
+add({ id = "hyphae.grow", at = "hyphae.cost", name = "FAST THREADS", blurb = "LINKS GROW FASTER", world = "linkGrow", from = 0.8,
+    price = { 2, 4 } })
+add({ id = "ring", at = "hyphae.cap", name = "FAIRY RINGS", blurb = "RINGS HIT HARDER AND SLOW MORE", world = "ring", from = 0.4,
+    price = { 12, 22 } })
+add({ id = "pulse", at = "hyphae", name = "SPORE PULSE", blurb = "SEND A SURGE DOWN THE NETWORK", pulse = true, price = { 12 } })
+add({ id = "pulse.power", at = "pulse", name = "STRONG PULSE", blurb = "THE PULSE OVERCHARGES HARDER AND COMES BACK SOONER",
+    world = "pulse", from = 0.5, price = { 12, 22 } })
+add({ id = "lore.wild", at = "ring", name = "WILD MUTATIONS", blurb = "MORE MUTATIONS ON OFFER",
+    mutations = { "rings", "reach", "pulse" }, price = { 8, 12, 16 } })
+
+-- The sprout: its health and sugar, its seeds and their mutations.
+add({ id = "root", at = "sprout", name = "DEEP ROOT", blurb = "THE SPROUT HAS MORE HP", world = "heart", from = 0.8,
+    price = { 3, 6 } })
+add({ id = "sap", at = "root", name = "SWEET SAP", blurb = "MORE SUGAR A SECOND IN A WAVE", world = "income", from = 0.9,
+    price = { 4, 8 } })
+add({ id = "store", at = "sap", name = "STORED SUGAR", blurb = "MORE NUTRIENTS TO START", world = "start", from = 0.9,
+    price = { 3, 6 } })
+add({ id = "harvest", at = "sap", name = "HARVEST", blurb = "A WAVE CLEARED PAYS MORE", world = "bonus", from = 0.8,
+    price = { 4, 8 } })
+add({ id = "lore.soil", at = "harvest", name = "SOIL MEMORY", blurb = "MORE MUTATIONS ON OFFER",
+    mutations = { "feast", "sugar", "store", "roots" }, price = { 6, 8, 10, 12 } })
+local SEED_AT = { oak = "root", tomato = "sap", dandelion = "oak", sunflower = "tomato", flytrap = "sunflower" }
+local SEED_PRICE = { oak = 18, tomato = 18, dandelion = 30, sunflower = 40, flytrap = 55 }
+local SEED_WON = { dandelion = "flowerpot", sunflower = "log", flytrap = "lawn" }
+add({ id = "bean", at = "root", name = D.SEED.bean.name, seed = "bean", free = true, blurb = "THE PLAIN SPROUT" })
+for _, sd in ipairs(D.SEEDS) do
+    if sd.id ~= "bean" then
+        add({ id = sd.id, at = SEED_AT[sd.id], name = sd.name, seed = sd.id, blurb = sd.blurb,
+            price = { SEED_PRICE[sd.id] }, won = SEED_WON[sd.id] })
+    end
+end
+-- Each seed's own mutations, one a rank.
+for _, sd in ipairs(D.SEEDS) do
+    local own = {}
+    for _, m in ipairs(D.MUTATIONS) do if m.seed == sd.id then own[#own + 1] = m.id end end
+    local price = {}
+    local base, step = 3, 2
+    if sd.id ~= "bean" then base, step = 12, 5 end
+    for n = 1, #own do price[n] = base + step * (n - 1) end
+    add({ id = sd.id .. ".mut", at = sd.id, name = sd.short .. " MUTATIONS", blurb = "MORE OF THE " .. sd.short .. "'S OWN MUTATIONS",
+        mutations = own, price = price })
+end
+
+-- Field notes: what the network learns of each kind of enemy once it has met
+-- one, and hits harder for.
+local NOTES = {
+    { id = "ants", name = "ANTS", kinds = { "ant", "queen" } },
+    { id = "shells", name = "SHELLS", kinds = { "pillbug", "knight", "stag", "dung", "click", "bombardier" } },
+    { id = "crawlers", name = "CRAWLERS", kinds = { "mite", "centi", "centiseg", "centipede", "centseg" } },
+    { id = "fliers", name = "FLIERS", kinds = { "gnat", "moth" } },
+    { id = "diggers", name = "DIGGERS", kinds = { "cricket", "mole", "springtail" } },
+    { id = "soft", name = "SOFT THINGS", kinds = { "slug", "brine", "spider", "waterbug" } },
+}
+add({ id = "notes", at = "sprout", name = "FIELD NOTES", blurb = "WHAT THE NETWORK KNOWS OF WHAT EATS IT. EACH OPENS ONCE ONE IS MET",
+    free = true })
+for _, n in ipairs(NOTES) do
+    add({ id = "notes." .. n.id, at = "notes", name = n.name, blurb = "HIT " .. n.name .. " HARDER", vs = n.kinds,
+        seen = n.kinds, from = 0.92, price = { 4, 8 } })
+end
+
+D.NETWORK = NET
+D.NET = {}
+for _, row in ipairs(NET) do D.NET[row.id] = row end
 
 return D

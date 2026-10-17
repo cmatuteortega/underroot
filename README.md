@@ -55,32 +55,65 @@ level's own, one more every 10 waves. The most waves held in endless on
 each level is kept in the save (`save.txt`, see `src/profile.lua`) and shown at the bottom
 left of its card in the level picker.
 
-**The Spore Bank.** A run pays a spore for every wave it clears, endless
-included, and 10 more for a win; they go into the bank as they come, so a
-lost run keeps them. Only the first six species (Spore Puffer, Enoki Needle,
-Slime Mat, Lion's Mane, Relay, Inky Cap) can be grown at first. Each level's
-first win puts one of the other six up for sale, and once it is bought it is
-yours for good:
+**The Spore Bank and its network.** A run pays 6 spores for every wave it
+clears, endless included, 12 more for a win and 20 more again for a level's
+first win; they go into the bank as they come, so a lost run keeps them.
+Spores are spent on the **network** (`N`, or the NETWORK button beside the
+encyclopedia's): a web of 100-odd nodes spreading out from the sprout in the
+middle, each bought a rank at a time, and each only once the node it grows
+from has a rank. A first run has the Spore Puffer, the bean and three
+mutations, and everything held back; a fully grown network is the game as
+`src/defs.lua` writes it, every number exactly as today.
 
-| level won | species for sale | price |
+| branch | grows from the sprout | then |
 | --- | --- | --- |
-| The Crack | Stinkhorn | 20 |
-| The Flowerpot | Shelf Fungus | 25 |
-| The Shed Floor | Puffball Mortar | 30 |
-| The Rotting Log | Ghost Lamp | 35 |
-| The Pond Edge | Cordyceps Bloom | 40 |
-| The Lawn | Humongous Fungus | 50 |
+| damage | Spore Puffer (free) | Enoki Needle, Puffball Mortar (win the Shed Floor), Humongous Fungus (win the Lawn) |
+| control | Slime Mat | Stinkhorn (win the Crack), Cordyceps Bloom (win the Pond Edge) |
+| support | Relay | Lion's Mane, Inky Cap |
+| defence | Shelf Fungus (win the Flowerpot) | Ghost Lamp (win the Rotting Log) |
+| hyphae | link HP, flow, cost, growing speed | Fairy Rings, the Spore Pulse and its power, more shared mutations |
+| sprout | the sprout's HP, sugar, starting nutrients, wave bonus | the seeds and each seed's own mutations, more shared mutations |
+| field notes | free | one a kind of enemy, open once one is met: damage against them |
 
-The won screen says how many spores the run made and what went up for sale.
-Whichever way on is picked, the Spore Bank comes first, showing the new species
-with BUY (`B`) and LATER (`Enter`). Bought later, it is bought from its card in
-the loadout picker: a species not had yet is dark there, with its price once it
-is for sale (`LOCKED` before), and its panel's button buys it. The spores
-and what was bought are kept in the save (`save.txt`), and the
-level picker and the loadout show the spores in the bank, top left. The
-prices and the pay are `price` in `src/defs.lua` and `D.SPORES`.
+Each species grows its own nodes: its damage (three ranks), its rate of
+fire, its body (HP and cost), and each upgrade branch (rank 1 its first
+tier, rank 2 its second); a support species has its own instead (the mat's
+slime, the relay's channels, the mane's healing). Held back, a number starts
+at a fraction of its full value (`from`, 0.6 to 0.92) and each rank brings it
+nearer. Ranges and link reach are never held back: a tower that cannot reach
+the trail is not a weaker tower but a wasted one. A run on the network reads
+every number through `Game:stat` and the few helpers a mutation can change too
+(see `src/network.lua`); upgrade branches not grown are not offered on the
+board, and mutations not grown are not offered at all.
 
-**Sprout seeds.** Spores buy seeds too, and each run grows from one, picked in
+The network's screen: drag (or the arrows) to look round, the wheel, a pinch
+or `+`/`-` to zoom; a node clicked shows its panel (what it does, now and at
+its next rank, and its price), clicked again (or its button, or `G`) grows a
+rank, and the thread to it grows out lit. `TAB` picks the next node there are
+spores for. REGROW, pressed twice, sells the whole network back for every
+spore it cost. The won screen names what a first win opened on the network,
+and the loadout says where on it a species or seed not grown yet grows (`N`
+from there opens it and comes back).
+
+*Testing the unlocks.* `love . --spores 100000` puts 100000 spores in the
+bank. On the network's screen, `F8` adds 100000, and so do seven quick taps on
+its SPORES count (for a phone). REGROW gives them all back to try another way.
+
+*The balance* is tuned against the bot (`src/bot.lua`), which plays a whole
+campaign from an empty network: the first level not won, its spores into the
+bank, the bank spent on the network the way a player getting ready for the
+next level might, and again (`B.campaign`; `tests/bot_test.lua` keeps it to
+the shape below). With the build orders it loses the Crack seven or so times
+before it falls (around run 8-10), then the Flowerpot, the Shed Floor and the
+Rotting Log come quickly, the Pond Edge holds it up for a few runs, and the
+Lawn falls around run 14-18, with a little over a third of the network grown;
+the rest is the other species and their upgrades, for replays and endless.
+The Crack, now the first level of a network that starts with one species, has
+its waves grow tougher by 6% rather than 10%. A player without a build order
+will take longer. The prices are each row's `price` in `src/defs.lua`, the
+pay `D.SPORES`.
+
+**Sprout seeds.** The network grows seeds too, and each run grows from one, picked in
 the loadout (the row of chips over the species). The sprout is drawn as the
 plant it grew from, and some show their state: the tomato's fruit ripens as it
 is hurt, a regrown dandelion is half bald, the sunflower bows its head at night
@@ -89,14 +122,14 @@ and its seed's name shows over it, with what it does on the line at the bottom. 
 the sprout's numbers and brings three or four mutations of its own: one of the
 three offered at every mutation is the seed's (in green) while it has any left.
 
-| seed | price | what it does | its mutations |
+| seed | on the network | what it does | its mutations |
 | --- | --- | --- | --- |
-| Bean Sprout | free | the sprout as it was | Tendrils (links out of the sprout grow at once), Nitrogen Fix (towers 2 hops from it hit as on a pocket one richer), Bean Pod (three free links) |
-| Oak Sapling | 15 | sprout +50% HP, links grow 25% slower | Heartwood (30% less from leaks), Bark (links at the sprout ×3 HP), Acorn Drop (every 6 s, 30 and a stun on the bug nearest it), Rings of Growth (+1 HP a wave) |
-| Tomato Seedling | 15 | sugar +10%, +10 to start, sprout −30% HP | Ripening (clear bonus +30%), Splat (a leak bursts a fruit: 15 and sticky to bugs near it), Compost (bodies left at a wave's end pay half), Overripe (+1 sugar/s, but half the clear bonus) |
-| Dandelion | 25, once the Flowerpot is won | killed, it regrows once at half HP and the wave goes on | Seed Clock (one more regrow), Taproot (regrowing mends every cut link), Seed Drift (a free Spore Puffer on an empty fed pocket after each wave), Parachutes (pulse 30% sooner, 50% longer) |
-| Sunflower | 35, once the Rotting Log is won | towers within 2 hops of it +15% damage, but not at night | Seed Head (+4 a sunlit tower at a wave's end), Heliotrope (3 hops, and at night too), Tall Stem (fliers near it take 8/s) |
-| Venus Flytrap | 45, once the Lawn is won | sugar −10%; every 2.5 s it snaps at the nearest bug within 26: eats it whole at 40 HP or less (and heals 0.5), else bites for 20 | Digest (what it eats pays its worth again), Trigger Hairs (40% more snaps), Sundew (bugs near it at half speed), Wide Jaws (40% further, eats up to 80 HP) |
+| Bean Sprout | free, off Deep Root | the sprout as it was | Tendrils (links out of the sprout grow at once), Nitrogen Fix (towers 2 hops from it hit as on a pocket one richer), Bean Pod (three free links) |
+| Oak Sapling | 18, off Deep Root | sprout +50% HP, links grow 25% slower | Heartwood (30% less from leaks), Bark (links at the sprout ×3 HP), Acorn Drop (every 6 s, 30 and a stun on the bug nearest it), Rings of Growth (+1 HP a wave) |
+| Tomato Seedling | 18, off Sweet Sap | sugar +10%, +10 to start, sprout −30% HP | Ripening (clear bonus +30%), Splat (a leak bursts a fruit: 15 and sticky to bugs near it), Compost (bodies left at a wave's end pay half), Overripe (+1 sugar/s, but half the clear bonus) |
+| Dandelion | 30, off the oak, once the Flowerpot is won | killed, it regrows once at half HP and the wave goes on | Seed Clock (one more regrow), Taproot (regrowing mends every cut link), Seed Drift (a free Spore Puffer on an empty fed pocket after each wave), Parachutes (pulse 30% sooner, 50% longer) |
+| Sunflower | 40, off the tomato, once the Rotting Log is won | towers within 2 hops of it +15% damage, but not at night | Seed Head (+4 a sunlit tower at a wave's end), Heliotrope (3 hops, and at night too), Tall Stem (fliers near it take 8/s) |
+| Venus Flytrap | 55, off the sunflower, once the Lawn is won | sugar −10%; every 2.5 s it snaps at the nearest bug within 26: eats it whole at 40 HP or less (and heals 0.5), else bites for 20 | Digest (what it eats pays its worth again), Trigger Hairs (40% more snaps), Sundew (bugs near it at half speed), Wide Jaws (40% further, eats up to 80 HP) |
 
 Tap a seed to plant it and read it in the side panel; one not had yet opens
 its panel, whose button buys it (and plants it). The seed is remembered with
@@ -520,10 +553,11 @@ What is new for Underfoot:
 | `src/ui/toolbar.lua` | the toolbar's buttons and where they sit |
 | `src/ui/panel.lua` | the info panel for a species, a fruiting body or a seed |
 | `src/ui/input.lua` | mouse, fingers and keys: taps, drags, pans, pinches, the wheel, handed to the screen that is up |
-| `src/ui/title.lua`, `menu.lua`, `loadout.lua`, `bank.lua`, `codex.lua` | the title, the level picker, the loadout, the Spore Bank, the encyclopedia |
+| `src/ui/title.lua`, `menu.lua`, `loadout.lua`, `network.lua`, `codex.lua` | the title, the level picker, the loadout, the Spore Bank's network, the encyclopedia |
 | `src/ui/run.lua` | starting a run and each frame of it: the rules stepped, and what the profile keeps |
 | `src/ui/flair.lua`, `audio.lua` | the HUD's flourishes and the weather's coming and going; the sound's glue to the screen |
-| `src/profile.lua` | what is kept between runs (`save.txt`): wins, records, loadouts, the Spore Bank and its rules, enemies met |
+| `src/profile.lua` | what is kept between runs (`save.txt`): wins, records, loadouts, the spores and the network's ranks, enemies met |
+| `src/network.lua` | the network (`D.NETWORK`) worked out: prices, what can be bought, what a profile's ranks grow for a run, where each node sits on its screen |
 | `src/game.lua` | the rules: the graph, flow, cuts, pruning, regrowth, rings, the pulse, upgrades, towers firing, enemies and bosses moving, corpses, waves, mutations |
 | `src/defs.lua` | every tuning number: link costs, towers, enemies, weather, the levels and their waves |
 | `src/world.lua` | the maps (ASCII), their solids, the one-time paint and its weather versions, the trail's flow field, picking |

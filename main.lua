@@ -83,7 +83,12 @@ function love.load(args)
     fit()
     Profile.load()
     codex.init()
-    for _, a in ipairs(args or {}) do
+    for n, a in ipairs(args or {}) do
+        -- For testing the network: `--spores 100000` puts that many in the bank.
+        if a == "--spores" and tonumber(args[n + 1]) then
+            Profile.spores = tonumber(args[n + 1])
+            Profile.save()
+        end
         if a == "--shots" then S.script = require("src.script") end
         if a == "--bot" then
             function love.errorhandler(msg) print("ERROR", msg, debug.traceback()) os.exit(1) end
