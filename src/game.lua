@@ -36,7 +36,6 @@ local World = require "src.world"
 
 local sqrt, max, min, abs, floor, huge = math.sqrt, math.max, math.min, math.abs, math.floor, math.huge
 local cos, sin, atan2 = math.cos, math.sin, math.atan2
-local random = love.math.random
 -- Looks only (sparks, dust, motes): their own dice, so what the rules roll
 -- (and a bot's run) is the same with or without them.
 local looks = love.math.newRandomGenerator(7)
@@ -75,6 +74,9 @@ end
 function Game.new(world, level, opts)
     local self = setmetatable({ world = world }, Game)
     level, opts = level or D.LEVELS[1], opts or {}
+    -- The rules' own dice: the same `dice` plays the same run, whatever the
+    -- screen and the sound roll in between.
+    self.dice = love.math.newRandomGenerator(opts.dice or love.math.random(2 ^ 31 - 1))
     self.level = level
     self.waves = {}
     for k, w in ipairs(level.waves) do self.waves[k] = w end
@@ -797,11 +799,11 @@ function Game:endlessWave(n)
     end
     local apart = k > 40 and 3 or (k > 20 and 4 or 5)
     local bossWave = k % apart == 0 and bossy[1]
-    local from = bossWave and bossy[random(#bossy)] or plain[random(#plain)] or waves[#waves]
+    local from = bossWave and bossy[self.dice:random(#bossy)] or plain[self.dice:random(#plain)] or waves[#waves]
     local more, closer = 1 + 0.12 * k, 1 / (1 + 0.06 * k)
     local weathers = { false, "rain", "night", "drought", "frost" }
     local w = { weather = from.weather }
-    if random() < 0.5 then w.weather = weathers[random(#weathers)] or nil end
+    if self.dice:random() < 0.5 then w.weather = weathers[self.dice:random(#weathers)] or nil end
     for _, g in ipairs(from) do
         local boss = D.ENEMIES[g[1]].boss
         local count = boss and g[2] or max(1, floor(g[2] * more + 0.5))
@@ -819,7 +821,7 @@ function Game:endlessWave(n)
             end
         end
         for x = 1, floor(k / 10) do
-            w[#w + 1] = { bosses[random(#bosses)], 1, 1, gates[random(#gates)], 4 + 6 * x }
+            w[#w + 1] = { bosses[self.dice:random(#bosses)], 1, 1, gates[self.dice:random(#gates)], 4 + 6 * x }
         end
     end
     return w
@@ -861,8 +863,8 @@ function Game:spawnAt(kind, x, z, c, r)
     if deep > 0 then scale = scale * 1.07 ^ deep * (d.boss and 1 + 0.05 * deep or 1) end
     local hp = d.hp * scale
     local en = { kind = kind, x = x, z = z, y = 0, c = c, r = r, tc = c, tr = r,
-        hp = hp, maxHp = hp, h = 0, flash = 0, slow = 1, off = (random() - 0.5) * 6,
-        walked = 0, anim = random() * 4, state = "walk", boss = d.boss, stun = 0, mark = 0 }
+        hp = hp, maxHp = hp, h = 0, flash = 0, slow = 1, off = (self.dice:random() - 0.5) * 6,
+        walked = 0, anim = self.dice:random() * 4, state = "walk", boss = d.boss, stun = 0, mark = 0 }
     if d.boss then en.off = 0 end
     en.y = self.world:groundAt(x, z)
     if d.fly then en.y = 12 end
@@ -872,10 +874,10 @@ function Game:spawnAt(kind, x, z, c, r)
     if d.webCd then en.webCd = 1 end
     if d.grabEvery then en.grabCd = d.grabEvery * 0.6 end
     if d.sprayEvery then en.spray = d.sprayEvery * 0.5 end
-    if d.hopEvery then en.hopCd = d.hopEvery * random() end
+    if d.hopEvery then en.hopCd = d.hopEvery * self.dice:random() end
     if d.clickEvery then en.clickCd = d.clickEvery * 0.6 end
     if d.digEvery then en.digCd, en.digs = d.digEvery * 0.5, 0 end
-    if d.sinkEvery then en.sinkCd, en.cut = d.sinkEvery * (0.5 + random() * 0.5), 0 end
+    if d.sinkEvery then en.sinkCd, en.cut = d.sinkEvery * (0.5 + self.dice:random() * 0.5), 0 end
     if d.moth then en.y = 10 end
     self.enemies[#self.enemies + 1] = en
     return en
@@ -888,7 +890,7 @@ function Game:spawn(kind, gate)
     -- From off the left edge, or up out of a hole in the floor.
     local x, z = e.x - (e.hole and 0 or TILE * 0.6), e.z
     if kind == "mite" then
-        for _ = 1, d.swarm do self:spawnAt(kind, x + (random() - 0.5) * 10, z + (random() - 0.5) * 10, e.c, e.r) end
+        for _ = 1, d.swarm do self:spawnAt(kind, x + (self.dice:random() - 0.5) * 10, z + (self.dice:random() - 0.5) * 10, e.c, e.r) end
     else
         local en = self:spawnAt(kind, x, z, e.c, e.r)
         if d.segments then
@@ -918,11 +920,11 @@ end
 
 function Game:burst(x, y, z, n, keys, speed)
     for _ = 1, n do
-        local a, u = random() * 2 * math.pi, random()
+        local a, u = self.dice:random() * 2 * math.pi, self.dice:random()
         self.fx[#self.fx + 1] = {
             x = x, y = y, z = z,
-            vx = cos(a) * speed * u, vy = speed * (0.4 + random()), vz = sin(a) * speed * u,
-            life = 0.3 + random() * 0.3, k = keys[random(#keys)],
+            vx = cos(a) * speed * u, vy = speed * (0.4 + self.dice:random()), vz = sin(a) * speed * u,
+            life = 0.3 + self.dice:random() * 0.3, k = keys[self.dice:random(#keys)],
         }
     end
 end
@@ -1240,10 +1242,10 @@ function Game:offerMutations()
         end
     end
     self.choices = {}
-    if own[1] then self.choices[1] = table.remove(own, random(#own)) end
+    if own[1] then self.choices[1] = table.remove(own, self.dice:random(#own)) end
     for _, m in ipairs(own) do pool[#pool + 1] = m end
     while #self.choices < 3 and pool[1] do
-        self.choices[#self.choices + 1] = table.remove(pool, random(#pool))
+        self.choices[#self.choices + 1] = table.remove(pool, self.dice:random(#pool))
     end
     if self.choices[1] then
         self.phase = "mutate"
@@ -1428,7 +1430,7 @@ function Game:drift()
         if n.conn and not n.heart and not n.tower and (n.salted or 0) <= 0 then open[#open + 1] = n end
     end
     if not open[1] then return end
-    local n = open[random(#open)]
+    local n = open[self.dice:random(#open)]
     self:plant("puffer", n, 0)
     self:say("SEED DRIFT", n.x, n.y + 18, n.z, "w")
 end
@@ -1780,7 +1782,7 @@ function Game:stink(n, t, S, power, boost, dt)
             e.reek = (e.reekT or 0) > 0 and min(e.reek, S("reek")) or S("reek")
             e.reekT = 0.25
             if not d.boss and not e.slide and not e.hopT then -- a springtail in the air does not trip
-                if random() < S("stumble") * boost * dt then
+                if self.dice:random() < S("stumble") * boost * dt then
                     e.stun = max(e.stun, S("trip"))
                     self:burst(e.x, 3, e.z, 2, { "m", "d" }, 8)
                     self:cue("trip", e.x, e.z)
@@ -1800,16 +1802,16 @@ function Game:stink(n, t, S, power, boost, dt)
     t.busy = busy
     if busy then
         t.reserve = max(0, t.reserve - D.TOWER.stink.drain * dt)
-        if random() < dt * (5 + 3 * #lanes) then
-            local a, u = random() * 2 * math.pi, random() * range * 0.8
+        if self.dice:random() < dt * (5 + 3 * #lanes) then
+            local a, u = self.dice:random() * 2 * math.pi, self.dice:random() * range * 0.8
             local x, z = n.x + cos(a) * u, n.z + sin(a) * u
-            if lanes[1] and random() < 0.6 then
-                local l, f = lanes[random(#lanes)], random()
-                u = random() * lane * 0.8
+            if lanes[1] and self.dice:random() < 0.6 then
+                local l, f = lanes[self.dice:random(#lanes)], self.dice:random()
+                u = self.dice:random() * lane * 0.8
                 x, z = l.a.x + (l.b.x - l.a.x) * f + cos(a) * u, l.a.z + (l.b.z - l.a.z) * f + sin(a) * u
             end
             self.fx[#self.fx + 1] = { x = x, y = 2, z = z, vx = 0, vy = 14, vz = 0,
-                life = 0.5, k = random() < 0.5 and "m" or "d", rise = true }
+                life = 0.5, k = self.dice:random() < 0.5 and "m" or "d", rise = true }
         end
     end
 end
@@ -2019,9 +2021,9 @@ function Game:updateShots(dt)
                 end
                 if s.cluster then
                     for c = 1, s.cluster do
-                        local a, r = c / s.cluster * 2 * math.pi + random(), s.splash * (0.8 + random() * 0.6)
+                        local a, r = c / s.cluster * 2 * math.pi + self.dice:random(), s.splash * (0.8 + self.dice:random() * 0.6)
                         self.shots[#self.shots + 1] = { kind = "bomblet", x0 = s.tx, y0 = 2, z0 = s.tz,
-                            tx = s.tx + cos(a) * r, tz = s.tz + sin(a) * r, t = 0, flight = 0.35 + random() * 0.15,
+                            tx = s.tx + cos(a) * r, tz = s.tz + sin(a) * r, t = 0, flight = 0.35 + self.dice:random() * 0.15,
                             damage = s.clusterDamage, splash = 9 }
                     end
                 end
@@ -2101,7 +2103,7 @@ function Game:updateCorpses(dt)
             self.stats.drunk = self.stats.drunk + take
             if c.inky then take = self:feedFrom(c.inky, take) end
             self.nutrients = self.nutrients + take
-            if random() < dt * 20 then
+            if self.dice:random() < dt * 20 then
                 self.fx[#self.fx + 1] = { glow = true, x = c.x, y = 2, z = c.z, tx = c.ax, tz = c.az, t = 0, life = 0.5, max = 0.5 }
             end
             if c.value <= 0.01 then table.remove(self.corpses, k) end
@@ -2453,7 +2455,7 @@ function Game:host(e, d, dt)
         if o ~= e and not o.dead and not (o.infected and o.infected > 0) and not D.ENEMIES[o.kind].fly
             and (o.x - e.x) ^ 2 + (o.z - e.z) ^ 2 < 64 then
             self:hurt(o, e.hostBite * dt, true, true)
-            if random() < dt * 6 then self:burst(o.x, 3, o.z, 1, { "r", "t" }, 10) end
+            if self.dice:random() < dt * 6 then self:burst(o.x, 3, o.z, 1, { "r", "t" }, 10) end
         end
     end
     self:walkBack(e, d.speed * 0.8, dt)
@@ -2738,8 +2740,8 @@ function Game:scald(e, d, tx, tz, target)
     for _, l in ipairs(self:linksNear(ex, ez, 6)) do self:biteLink(l, 20) end
     for k = 1, 14 do
         local f = k / 14
-        self.fx[#self.fx + 1] = { streak = true, x = e.x, y = 4, z = e.z, tx = ex + (random() - 0.5) * 8 * f,
-            tz = ez + (random() - 0.5) * 8 * f, t = -f * 0.25, life = 0.55, max = 0.3, k = k % 3 == 0 and "t" or "w" }
+        self.fx[#self.fx + 1] = { streak = true, x = e.x, y = 4, z = e.z, tx = ex + (self.dice:random() - 0.5) * 8 * f,
+            tz = ez + (self.dice:random() - 0.5) * 8 * f, t = -f * 0.25, life = 0.55, max = 0.3, k = k % 3 == 0 and "t" or "w" }
     end
     self:burst(ex, 4, ez, 10, { "w", "t", "s" }, 20)
     self:splat(ex, ez, 5, "w", 1.5)
@@ -2848,7 +2850,7 @@ end
 function Game:emerge(e)
     local t = e.tunnel
     e.tunnel = nil
-    e.x, e.z = t.b.x + (random() - 0.5) * 6, t.b.z + (random() - 0.5) * 6
+    e.x, e.z = t.b.x + (self.dice:random() - 0.5) * 6, t.b.z + (self.dice:random() - 0.5) * 6
     e.tc, e.tr = t.b.c, t.b.r
     e.y = self.world:groundAt(e.x, e.z)
     e.stun = max(e.stun, D.ENEMIES[t.owner.kind].daze)
@@ -2881,7 +2883,7 @@ function Game:mite(e, d, slow, dt)
         local l = self:linkNear(e, d.sniff)
         if l then
             local _, t = segDist(e.x, e.z, l.a.x, l.a.z, l.b.x, l.b.z)
-            e.gnaw, e.gt = l, max(0.1, min(0.9, t + (random() - 0.5) * 0.3))
+            e.gnaw, e.gt = l, max(0.1, min(0.9, t + (self.dice:random() - 0.5) * 0.3))
         end
     end
     if e.gnaw then
@@ -3116,7 +3118,7 @@ function Game:springtail(e, d, slow, dt)
         if self:walk(e, d.hopSpeed * self:pace(), dt) then self:reachHeart(e) return true end
         -- It keeps going until it is past the shelf.
         if e.hopT <= 0 and not self:blocker(e) then
-            e.hopT, e.lift, e.hopCd = nil, 0, d.hopEvery * (0.8 + random() * 0.4)
+            e.hopT, e.lift, e.hopCd = nil, 0, d.hopEvery * (0.8 + self.dice:random() * 0.4)
             self:motes(e.x, e.y, e.z, 3, { "t", "n" }, 4, 6, 0.4)
             if not e.snapped then
                 local l = self:linkNear(e, d.snapR)

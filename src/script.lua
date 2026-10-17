@@ -20,6 +20,7 @@ function love.errorhandler(msg)
 end
 
 local clock, shots = 0, 0
+function S.now() return clock end
 local game
 local steps
 

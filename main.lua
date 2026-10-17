@@ -252,6 +252,9 @@ local shake = 0 -- seconds of shaking left: a boss charging, a ball breaking
 --   note     seconds left of the word saying how loud the sound is now
 --   beat     the sprout's heartbeat, when it is low
 local flair = { nut = { t = 0, k = "l" }, hurt = 0, note = 0, lastNut = 0 }
+-- The screen's own dice (a shake, a cloud's flicker), apart from the rules'
+-- and the sound's, so a scripted run draws the same pictures every time.
+flair.dice = love.math.newRandomGenerator(5)
 -- The weather coming in or going: the board's picture for the old sky giving
 -- way to the new one's a few more pixels a frame, so nothing is ever blended.
 -- `from` and `to` are weather kinds or false (clear), `t` the seconds since the
@@ -296,6 +299,8 @@ local peek -- the species in hand whose panel the toolbar opened
 -- they were sent there for (a new selection sends them again).
 local focus, focused
 local script -- the --shots run
+-- The clock the screen's own animations run on: the script's, when there is one.
+function flair.now() return script and script.now() or love.timer.getTime() end
 local shot -- and the whole screen it photographs
 -- The camera going round: the frame it left, the screen point it turns about,
 -- how far round and how long it has been at it.
@@ -1136,7 +1141,7 @@ end
 
 local function start()
     game = Game.new(world, level, { challenge = challenge, loadout = chosen, seed = not script and bank.sown[level.id] or nil,
-        best = records[level.id] })
+        best = records[level.id], dice = script and 1 })
     layTools(game)
     mode, drag, panx, pany, selected = "grow", nil, 0, 0, nil
     focus, focused = nil, nil
@@ -1926,7 +1931,7 @@ function audio.ambience(dt)
     local pitch
     if menu == "title" then
         -- The night over the title, and the network's hum swelling as it grows.
-        local age = love.timer.getTime() - (flair.title.t0 or 0)
+        local age = flair.now() - (flair.title.t0 or 0)
         want.night, want.hum = 0.3, 0.35 * min(1, age / 4)
         pitch = 0.9 + 0.2 * min(1, age / 6)
     elseif game and not menu and not painter then
@@ -1951,7 +1956,7 @@ end
 -- sprout, then a drink each time the nutrients running up it get there.
 function audio.title()
     local T0 = flair.title
-    local age = love.timer.getTime() - (T0.t0 or 0)
+    local age = flair.now() - (T0.t0 or 0)
     if age < 3 then
         local k = floor(age / 0.22)
         if k ~= T0.grew then T0.grew = k; Sfx.play("grow", 0, 0.35, 0.8 + age * 0.15) end
@@ -1963,6 +1968,8 @@ function audio.title()
 end
 
 function love.update(dt)
+    -- The script runs on its own clock, the HUD's flourishes too.
+    if script then dt = 1 / 30 end
     Sfx.warm(0.004)
     audio.ambience(dt)
     flair.pressed = flair.pressed and flair.pressed.t > 0 and flair.pressed or nil
@@ -2661,8 +2668,8 @@ local function drawBoard()
     camx, camy = floor(camx) - pad.l, floor(camy) - pad.t
     cw, ch = cw + pad.l + pad.r, ch + pad.t + pad.b
     if shake > 0 then
-        camx = camx + love.math.random(-2, 2)
-        camy = camy + love.math.random(-1, 1)
+        camx = camx + flair.dice:random(-2, 2)
+        camy = camy + flair.dice:random(-1, 1)
     end
     love.graphics.clear(unpack(T.RGB[IDX.o]))
     love.graphics.setColor(1, 1, 1)
@@ -3006,7 +3013,7 @@ local function drawBoard()
             local r = p.r * (0.5 + 0.5 * f)
             local n = p.r > 14 and 44 or 30
             for s = 0, n - 1 do
-                if love.math.random() > f * 0.8 then
+                if flair.dice:random() > f * 0.8 then
                     local a = s / n * 2 * math.pi + f
                     local rr = r * (0.4 + 0.6 * ((s * 7) % 5) / 4)
                     local x, z = p.x + math.cos(a) * rr, p.z + math.sin(a) * rr
@@ -3710,7 +3717,7 @@ end
 function drawInfo(P)
     box(P.x, P.y, P.w, P.h, "u", "c")
     love.graphics.setScissor(P.x, P.y, P.w, P.h)
-    local clock = love.timer.getTime()
+    local clock = flair.now()
     local t = P.t
     local pic = P.seed and M.sprout(0, P.seed) or icon(P.kind, t and t.branch, t and t.tier or 0, (clock * 0.7) % 1)
     love.graphics.setScissor(P.x, P.y, 22, 24)
@@ -3785,7 +3792,7 @@ local function drawLoadout()
     local lv = D.LEVELS[pick.n]
     local L = loadoutLayout()
     local list = picked()
-    local clock = love.timer.getTime()
+    local clock = flair.now()
     centred(lv.name .. (challenge and " (CHALLENGE)" or ""), L.top, "g", "o", L.mid)
     text("SPORES " .. bank.spores, inset.l + 4, inset.t + 7, "t")
     local count = #list .. "/" .. D.LOADOUT
@@ -3926,7 +3933,7 @@ end
 flair.title = {}
 
 function flair.title.open()
-    menu, flair.title.t0 = "title", love.timer.getTime()
+    menu, flair.title.t0 = "title", flair.now()
     mode, drag, selected = "grow", nil, nil
 end
 
@@ -3965,7 +3972,7 @@ end
 
 function flair.title.draw()
     local T0 = flair.title
-    local age = love.timer.getTime() - (T0.t0 or 0)
+    local age = flair.now() - (T0.t0 or 0)
     local cx, gy = floor(vw / 2), floor(vh * 0.6)
     if T0.w ~= vw or T0.h ~= vh then T0.w, T0.h, T0.threads = vw, vh, T0.grow(cx, gy) end
     color("o")
@@ -4074,7 +4081,7 @@ function bank.draw()
     centred(level.name .. " WON: A NEW SPECIES FOR SALE", L.top + 11, "t", "o", L.mid)
     local c = L.card
     box(c.x, c.y, c.w, c.h, "u", bank.offer.bought and "g" or "t")
-    local pic = icon(t.id, nil, 0, (love.timer.getTime() * 0.7) % 1)
+    local pic = icon(t.id, nil, 0, (flair.now() * 0.7) % 1)
     love.graphics.setScissor(c.x, c.y, 24, c.h)
     blit(pic, c.x + 12, t.id == "mat" and c.y + c.h - 8 or c.y + c.h - 6)
     love.graphics.setScissor()
@@ -4652,7 +4659,7 @@ end
 function codex.draw()
     color("o")
     love.graphics.rectangle("fill", 0, 0, vw, vh)
-    local clock = love.timer.getTime()
+    local clock = flair.now()
     local n, all = codex.count()
     centred("ENCYCLOPEDIA", inset.t + 7, "g", "o")
     local found = "FOUND " .. n .. "/" .. all

@@ -269,9 +269,8 @@ function B.choose(g)
 end
 
 local function run(seed, lv, generic, challenge, endless, sprout)
-    love.math.setRandomSeed(seed)
     local world = World.new(lv.map)
-    local g = Game.new(world, lv, { challenge = challenge, seed = sprout })
+    local g = Game.new(world, lv, { challenge = challenge, seed = sprout, dice = seed })
     local PLAN = PLANS[lv.id]
     if generic or not PLAN then
         local act = B.generic(g)
@@ -405,6 +404,7 @@ function B.run(args)
         if g.endless then print("   endless: held " .. g.cleared .. " waves") end
         local leaks = {}
         for k, v in pairs(g.stats.leaked) do leaks[#leaks + 1] = k .. "=" .. v end
+        table.sort(leaks)
         print("   leaked: " .. table.concat(leaks, " ") .. "  bosses through at:" .. (g.stats.bossLeft or ""))
         local mods = {}
         for _, m in ipairs(g.picked) do mods[#mods + 1] = m.id end
