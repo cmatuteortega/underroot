@@ -247,6 +247,35 @@ local shake = 0 -- seconds of shaking left: a boss charging, a ball breaking
 --   note     seconds left of the word saying how loud the sound is now
 --   beat     the sprout's heartbeat, when it is low
 local flair = { nut = { t = 0, k = "l" }, hurt = 0, note = 0, lastNut = 0 }
+-- The weather coming in or going: the board's picture for the old sky giving
+-- way to the new one's a few more pixels a frame, so nothing is ever blended.
+-- `from` and `to` are weather kinds or false (clear), `t` the seconds since the
+-- change, `time` how long this one takes and `w` the weather whose way of
+-- arriving it is (`out`: going, so the same way backwards).
+-- (A field of flair's, shader and all: this file is at Lua's 200 locals.)
+flair.sky = { from = false, to = false, t = 0, time = 1, w = "night", out = false }
+-- How each weather settles on the board. Night falls evenly, an ordered dither
+-- all over. Rain, frost and drought come in patches: the first wet spots, the
+-- first drifts of snow, the first dry earth, then more round them until the
+-- ground is covered, and they go the same way backwards, the last spots to
+-- come in the first to go. `blob` is a patch's size in board pixels, `rough`
+-- how much the patches lead over the plain dither (the dither always
+-- breaks up their edges), `lag` how much of the change passes before the
+-- ground starts to turn (the rain is falling a moment before anything is wet).
+flair.sky.STYLE = {
+    night = { time = 2.5, blob = 1, rough = 0, lag = 0, seed = 0 },
+    rain = { time = 4.5, blob = 10, rough = 0.75, lag = 0.2, seed = 1 },
+    frost = { time = 5.5, blob = 7, rough = 0.7, lag = 0.25, seed = 2 },
+    drought = { time = 4.5, blob = 16, rough = 0.7, lag = 0.1, seed = 3 },
+}
+
+-- The sky is now `to`: start the change from what mostly shows.
+function flair.sky.change(to)
+    local from = flair.sky.t >= flair.sky.time / 2 and flair.sky.to or flair.sky.from
+    local w = (to and to ~= "night" and to) or (from and from ~= "night" and from) or "night"
+    flair.sky.from, flair.sky.to, flair.sky.t = from, to, 0
+    flair.sky.w, flair.sky.out, flair.sky.time = w, w ~= to, flair.sky.STYLE[w].time
+end
 
 -- A sound of the HUD's: not anywhere on the board, so dead centre.
 local function sound(name, pitch) Sfx.play(name, 0, 1, pitch) end
@@ -1078,6 +1107,8 @@ local function start()
     focus, focused = nil, nil
     paused, speed = false, 1
     menu = nil
+    flair.sky.change(game.weather or false)
+    flair.sky.t = flair.sky.time
 end
 
 -- Plays level `n` with the species in `chosen`: its board if it is painted
@@ -2002,6 +2033,12 @@ function love.update(dt)
     end
     centre()
 
+    -- The sky changed: the new picture dithers in over the old. Changed again
+    -- before it was done, the picture mostly showing is the one it leaves.
+    local sky = game.weather or false
+    if sky ~= flair.sky.to then flair.sky.change(sky) end
+    flair.sky.t = min(flair.sky.time, flair.sky.t + dt)
+
     if script then script.update(game, dt) end
     findHover()
     audio.hover()
@@ -2348,29 +2385,83 @@ local function lightPool(x, z, r)
 end
 
 -- The weather, drawn over everything on the board in screen pixels: rain in
--- streaks, frost as drifting flakes, drought as dust in the heat.
-local function drawWeather(kind)
+-- streaks, frost as drifting flakes, drought as dust in the heat. `amount`, 0
+-- to 1, is how much of it there is while it comes in or goes.
+local function drawWeather(kind, amount)
     local t = game.clock
+    amount = amount or 1
     if kind == "rain" then
-        for k = 1, floor(cw * ch / 260) do
+        for k = 1, floor(cw * ch / 260 * amount) do
             local x = floor((k * 7919 + floor(t * 50) * 31) % cw)
             local y = floor((k * 104729 + t * 260) % (ch + 8)) - 4
             for s = 0, 2 do putS(IDX.s, x, y + s) end
         end
     elseif kind == "frost" then
-        for k = 1, floor(cw * ch / 900) do
+        for k = 1, floor(cw * ch / 900 * amount) do
             local y = floor((k * 104729 + t * 14) % ch)
             local x = floor((k * 7919 + math.sin(t * 0.8 + k) * 6) % cw)
             putS(IDX.w, x, y)
             if k % 4 == 0 then putS(IDX.w, x + 1, y); putS(IDX.w, x, y + 1) end
         end
     elseif kind == "drought" then
-        for k = 1, floor(cw * ch / 1800) do
+        for k = 1, floor(cw * ch / 1800 * amount) do
             local x = floor((k * 7919 + t * 9) % cw)
             local y = floor((k * 104729 + math.sin(t + k) * 3) % ch)
             putS(IDX.t, x, y)
         end
     end
+end
+
+-- Draws the board's picture `img` over another, a pixel where it has come in
+-- and none where it has not: `amount` 0 none of it, 1 all of it. Which pixels
+-- come first is the weather's: an 8x8 Bayer dither (64 even steps, for
+-- night), or patches of value noise that grow, their edges broken up by the
+-- same dither. All of it pinned to the picture's own pixels, so it holds
+-- still under a pan or a shake. Every pixel is the one picture's or the
+-- other's: chosen, never mixed. False if the shader will not build, and the
+-- sky just changes.
+function flair.sky.draw(img, x, y, amount)
+    if flair.sky.shader == nil then
+        local ok, sh = pcall(love.graphics.newShader, [[
+            extern vec2 size;
+            extern float amount, blob, rough, seed, back;
+            float bayer2(vec2 b) { return 2.0 * abs(b.x - b.y) + b.y; }
+            float hash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7)) + seed * 17.0) * 43758.5453); }
+            float noise(vec2 p) {
+                vec2 i = floor(p), f = fract(p);
+                f = f * f * (3.0 - 2.0 * f);
+                return mix(mix(hash(i), hash(i + vec2(1.0, 0.0)), f.x),
+                           mix(hash(i + vec2(0.0, 1.0)), hash(i + vec2(1.0, 1.0)), f.x), f.y);
+            }
+            vec4 effect(vec4 colour, Image tex, vec2 uv, vec2 sc) {
+                vec2 p = floor(uv * size);
+                float b = (16.0 * bayer2(mod(p, 2.0))
+                        + 4.0 * bayer2(mod(floor(p / 2.0), 2.0))
+                        + bayer2(mod(floor(p / 4.0), 2.0)) + 0.5) / 64.0;
+                float n = 0.65 * noise(p / blob) + 0.35 * noise(p / (blob * 0.4) + 19.0);
+                n = clamp((n - 0.2) / 0.6, 0.0, 1.0);
+                if (back > 0.5) n = 1.0 - n;
+                if (mix(b, n, rough) >= amount) discard;
+                return Texel(tex, uv) * colour;
+            }
+        ]])
+        flair.sky.shader = ok and sh or false
+    end
+    local dither = flair.sky.shader
+    if not dither then return false end
+    local st = flair.sky.STYLE[flair.sky.w]
+    dither:send("size", { img:getDimensions() })
+    dither:send("amount", amount)
+    dither:send("blob", st.blob)
+    dither:send("rough", st.rough)
+    dither:send("seed", st.seed)
+    -- Going, the same patches backwards: the new picture comes in where the
+    -- old weather came in last.
+    dither:send("back", flair.sky.out and 1 or 0)
+    love.graphics.setShader(dither)
+    love.graphics.draw(img, x, y)
+    love.graphics.setShader()
+    return true
 end
 
 -- Ink on the ground: the board under it goes dark, in a checker so the soil shows.
@@ -2516,17 +2607,36 @@ local function drawBoard()
     end
     love.graphics.clear(unpack(T.RGB[IDX.o]))
     love.graphics.setColor(1, 1, 1)
+    -- The sky's picture of the board, or two dithering between them while the
+    -- weather turns.
+    local function skyImage(kind) return kind and world:variant(kind) or world.image end
+    local fade = flair.sky.t / flair.sky.time
     local sky = game.weather
-    love.graphics.draw(sky and world:variant(sky) or world.image, -floor(camx), -floor(camy))
+    local bx, by = -floor(camx), -floor(camy)
+    if fade < 1 and flair.sky.from ~= flair.sky.to then
+        -- Coming in, the ground waits a moment for the rain or snow to start.
+        local lag = flair.sky.out and 0 or flair.sky.STYLE[flair.sky.w].lag
+        local ground = max(0, (fade - lag) / (1 - lag))
+        love.graphics.draw(skyImage(flair.sky.from), bx, by)
+        if not flair.sky.draw(skyImage(flair.sky.to), bx, by, ground) then fade = 1; love.graphics.draw(skyImage(sky), bx, by) end
+    else
+        fade = 1
+        love.graphics.draw(skyImage(sky), bx, by)
+    end
     ffi.fill(opx, cw * ch * 4, 0)
-    local night = sky == "night"
+    -- Bugs go dark once the night is mostly in, and are themselves again once
+    -- it is mostly gone. A lamp's pool is the daytime ground, which is right
+    -- both ways, so it shows all the while night comes or goes.
+    local shown = fade >= 0.5 and flair.sky.to or (fade < 1 and flair.sky.from) or sky
+    local night = shown == "night"
+    local nightPools = night or (fade < 1 and (flair.sky.from == "night" or flair.sky.to == "night"))
     -- At night a lamp lights the ground round it.
     local lamps = {}
     for _, n in ipairs(game.nodes) do
         local t = n.tower
         if t and t.kind == "lamp" and (t.glow or 0) > 0 then
             lamps[#lamps + 1] = n
-            if night then lightPool(n.x, n.z, min(34, t.glow * 0.45)) end
+            if nightPools then lightPool(n.x, n.z, min(34, t.glow * 0.45)) end
         end
     end
     local function lit(x, z)
@@ -2906,7 +3016,15 @@ local function drawBoard()
         end
     end
 
-    if sky then drawWeather(sky) end
+    if fade < 1 then
+        -- What falls leads the ground: the rain or snow starts in the first
+        -- part of the change, and stops in the first part of its going while
+        -- the ground is still drying or melting.
+        if flair.sky.from then drawWeather(flair.sky.from, max(0, 1 - fade / 0.3)) end
+        if flair.sky.to then drawWeather(flair.sky.to, min(1, fade / 0.3)) end
+    elseif sky then
+        drawWeather(sky)
+    end
 
     overlayImage:replacePixels(overlay)
     love.graphics.setColor(1, 1, 1)
