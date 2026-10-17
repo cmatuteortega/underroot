@@ -36,7 +36,7 @@ local IDX = T.IDX
 
 local S = require "src.ui.state"
 local SHORT, TOP, BOTTOM, UI_STEP, ZOOM_STEPS, TURN_TIME = S.SHORT, S.TOP, S.BOTTOM, S.UI_STEP, S.ZOOM_STEPS, S.TURN_TIME
--- The Spore Bank: buying with the spores in the profile. `offer` is the
+-- The Spore Bank's screen (what it has and sells is src/profile.lua). `offer` is the
 -- species a first win put up for sale, shown on the way on: { kind, after = button, bought }.
 local bank = {}
 -- The encyclopedia (see "the encyclopedia", near the end): its screen.
@@ -45,62 +45,6 @@ local codex = {}
 -- How loud: 1, 0.5 or 0 (the V key goes round them), kept between runs.
 function audio.save() Profile.sound = Sfx.level; Profile.save() end
 
--- Can it be brought? The first six always, the rest once bought.
-function bank.owns(id) return D.TOWER[id].starter or Profile.owned[id] == true end
-
--- The level whose first win puts a species up for sale.
-function bank.prizeOf(id)
-    for _, l in ipairs(D.LEVELS) do if l.prize == id then return l end end
-end
-
-function bank.forSale(id)
-    local l = bank.prizeOf(id)
-    return not bank.owns(id) and l ~= nil and Profile.won[l.id] == true
-end
-
--- Bought for good, if it is for sale and the spores are there.
-function bank.buy(id)
-    local price = D.TOWER[id].price
-    if not bank.forSale(id) or Profile.spores < price then return false end
-    Profile.spores = Profile.spores - price
-    Profile.owned[id] = true
-    Profile.save()
-    return true
-end
-
--- Seeds too: the bean from the start, the oak and the tomato for sale from the
--- start, the rest once the level they are `after` is won.
-function bank.ownsSeed(id) return not D.SEED[id].price or Profile.seeds[id] == true end
-
-function bank.seedForSale(id)
-    local sd = D.SEED[id]
-    return not bank.ownsSeed(id) and (not sd.after or Profile.won[sd.after] == true)
-end
-
--- Known: had, or up for sale. Anything else is only "???" in the loadout
--- until a win puts it up for sale.
-function bank.known(id) return bank.owns(id) or bank.forSale(id) end
-function bank.seedKnown(id) return bank.ownsSeed(id) or bank.seedForSale(id) end
-
-function bank.buySeed(id)
-    local sd = D.SEED[id]
-    if not bank.seedForSale(id) or Profile.spores < sd.price then return false end
-    Profile.spores = Profile.spores - sd.price
-    Profile.seeds[id] = true
-    Profile.save()
-    return true
-end
-
--- A level is open once the one before it is won; challenge mode once the last is.
--- One won already, or any after it, keeps it open: a save from before the
--- Flowerpot, the Shed Floor and the Rotting Log came in still has the Pond
--- Edge and the Lawn.
-local function levelOpen(n)
-    if n == 1 or Profile.won[D.LEVELS[n - 1].id] then return true end
-    for k = n, #D.LEVELS do if Profile.won[D.LEVELS[k].id] then return true end end
-    return false
-end
-local function challengeOpen() return Profile.won[D.LEVELS[#D.LEVELS].id] end
 -- The HUD's own flourishes: the last thing pressed lighting up, the nutrients
 -- going red when they fall short (bright when a lot comes in at once), the
 -- edge of the screen going red when the sprout is hit, and a word across the
@@ -499,7 +443,7 @@ end
 -- and both upgrade branches with what is grown, open or shut.
 local function infoLines(kind, t, w)
     local d = D.TOWER[kind]
-    if not t and not bank.known(kind) then return bank.lockedLines("SPECIES", bank.prizeOf(kind).name, w) end
+    if not t and not Profile.known(kind) then return bank.lockedLines("SPECIES", Profile.prizeOf(kind).name, w) end
     local out, height = {}, 0
     local function add(str, k, x, h)
         x = x or 0
@@ -599,7 +543,7 @@ end
 -- A seed's panel in the loadout: what it changes, and the mutations it brings.
 function bank.seedLines(id, w)
     local sd = D.SEED[id]
-    if not bank.seedKnown(id) then return bank.lockedLines("SEED", D.LEVEL[sd.after].name, w) end
+    if not Profile.seedKnown(id) then return bank.lockedLines("SEED", D.LEVEL[sd.after].name, w) end
     local out, height = {}, 0
     local function add(str, k, x, h)
         x = x or 0
@@ -640,7 +584,7 @@ local function info()
     local lines, h
     if seed then lines, h = bank.seedLines(seed, w - 8) else lines, h = infoLines(kind, t, w - 8) end
     local P = { kind = kind, seed = seed, t = t, lines = lines, w = w,
-        locked = S.menu == "loadout" and not (seed and bank.seedKnown(seed) or (not seed and bank.known(kind))) }
+        locked = S.menu == "loadout" and not (seed and Profile.seedKnown(seed) or (not seed and Profile.known(kind))) }
     if S.menu == "loadout" then
         if wide() then
             P.x, P.y, P.h = S.vw - S.inset.r - w - 3, S.inset.t + 3, S.vh - S.inset.t - S.inset.b - 6
@@ -794,8 +738,8 @@ local function loadoutLayout()
     local seeds, seedRows = {}, 1
     x = 0
     for _, sd in ipairs(D.SEEDS) do
-        local s = bank.seedKnown(sd.id) and sd.short or "???"
-        if not bank.ownsSeed(sd.id) and bank.seedForSale(sd.id) then s = s .. " " .. sd.price end
+        local s = Profile.seedKnown(sd.id) and sd.short or "???"
+        if not Profile.ownsSeed(sd.id) and Profile.seedForSale(sd.id) then s = s .. " " .. sd.price end
         local w = Font.width(s) + 8
         if x > 0 and x + w > width then seedRows, x = seedRows + 1, 0 end
         seeds[#seeds + 1] = { seed = sd, line = seedRows, dx = x, w = w, h = 11, name = s }
@@ -845,7 +789,7 @@ end
 -- A species in or out of the loadout. Full, it says so rather than drop one.
 local function toggleSpecies(id)
     -- Not had yet: its panel says how to get it.
-    if not bank.owns(id) then S.pick.info = id; deny() return end
+    if not Profile.owns(id) then S.pick.info = id; deny() return end
     if S.pick.set[id] then S.pick.set[id] = nil; sound("off")
     elseif #picked() >= D.LOADOUT then S.pick.full = 1.5; sound("deny")
     else S.pick.set[id] = true; sound("on") end
@@ -853,17 +797,17 @@ end
 
 -- The panel's button: brings or leaves what is had, buys what is for sale.
 function bank.bringOrBuy(id)
-    if bank.owns(id) then toggleSpecies(id)
-    elseif bank.buy(id) then sound("unlock")
+    if Profile.owns(id) then toggleSpecies(id)
+    elseif Profile.buy(id) then sound("unlock")
     else deny() end
 end
 
 -- A seed card or its panel's button: plants what is had, buys what is for
 -- sale (and plants it).
 function bank.plantOrBuy(id)
-    if bank.ownsSeed(id) then
+    if Profile.ownsSeed(id) then
         if S.pick.seed ~= id then S.pick.seed = id; sound("on") end
-    elseif bank.buySeed(id) then S.pick.seed = id; sound("unlock")
+    elseif Profile.buySeed(id) then S.pick.seed = id; sound("unlock")
     else deny() end
 end
 
@@ -928,7 +872,7 @@ local function findHover()
         end
         local cb = codex.button()
         if inside(mx, my, cb.x, cb.y, cb.w, cb.h) then S.hover.codex = true return end
-        if challengeOpen() and inside(mx, my, switch.x, switch.y, switch.w, switch.h) then S.hover.challenge = true end
+        if Profile.challengeOpen() and inside(mx, my, switch.x, switch.y, switch.w, switch.h) then S.hover.challenge = true end
         local sw = audio.switch()
         if inside(mx, my, sw.x, sw.y, sw.w, sw.h) then S.hover.sound = true end
         return
@@ -1055,7 +999,7 @@ end
 
 function bank.buyOffer()
     if bank.offer.bought then return end
-    if bank.buy(bank.offer.kind) then bank.offer.bought = true; sound("unlock") else deny() end
+    if Profile.buy(bank.offer.kind) then bank.offer.bought = true; sound("unlock") else deny() end
 end
 
 function openLoadout(n)
@@ -1064,15 +1008,15 @@ function openLoadout(n)
     S.mode, S.drag, S.selected = "grow", nil, nil
     -- The seed planted here last time, if it is still had; else the bean.
     local seed = Profile.sown[lv.id]
-    S.pick = { n = n, set = {}, full = 0, seed = seed and bank.ownsSeed(seed) and seed or D.SEEDS[1].id }
+    S.pick = { n = n, set = {}, full = 0, seed = seed and Profile.ownsSeed(seed) and seed or D.SEEDS[1].id }
     local dropped = false
     for _, id in ipairs(Profile.loadouts[lv.id] or lv.loadout or {}) do
-        if bank.owns(id) then S.pick.set[id] = true else dropped = true end
+        if Profile.owns(id) then S.pick.set[id] = true else dropped = true end
     end
     -- A species not had yet stays home, and the next one had takes its place.
     for _, t in ipairs(D.TOWERS) do
         if not dropped or #picked() >= D.LOADOUT then break end
-        if bank.owns(t.id) then S.pick.set[t.id] = true end
+        if Profile.owns(t.id) then S.pick.set[t.id] = true end
     end
 end
 
@@ -1294,9 +1238,9 @@ local function click(b)
             -- only opens its panel, whose button buys it.
             S.pick.info = nil
             local id = S.hover.seed
-            if bank.ownsSeed(id) and S.pick.seed ~= id then S.pick.seed = id; sound("on")
+            if Profile.ownsSeed(id) and S.pick.seed ~= id then S.pick.seed = id; sound("on")
             elseif S.pick.seedInfo ~= id then sound("panel")
-            elseif not bank.ownsSeed(id) then deny() end
+            elseif not Profile.ownsSeed(id) then deny() end
             S.pick.seedInfo = id
             return
         elseif S.hover.back then sound("back"); openMenu()
@@ -1315,7 +1259,7 @@ local function click(b)
     if S.menu == "title" then flair.title.leave() return end
     if S.menu then
         if S.hover.codex then codex.open() return end
-        if S.hover.level and levelOpen(S.hover.level) then sound("select"); openLoadout(S.hover.level)
+        if S.hover.level and Profile.levelOpen(S.hover.level) then sound("select"); openLoadout(S.hover.level)
         elseif S.hover.level then deny()
         elseif S.hover.challenge then S.challenge = not S.challenge; sound(S.challenge and "on" or "off")
         elseif S.hover.sound then Sfx.cycle(); audio.save(); sound("on") end
@@ -1651,9 +1595,9 @@ function love.keypressed(key)
         if key == "e" then codex.open() return end
         local n = tonumber(key)
         if n and D.LEVELS[n] then
-            if levelOpen(n) then sound("select"); openLoadout(n) else deny() end
+            if Profile.levelOpen(n) then sound("select"); openLoadout(n) else deny() end
         end
-        if key == "c" and challengeOpen() then S.challenge = not S.challenge; sound(S.challenge and "on" or "off") end
+        if key == "c" and Profile.challengeOpen() then S.challenge = not S.challenge; sound(S.challenge and "on" or "off") end
         if key == "escape" and S.game then sound("back"); S.menu = nil end
         return
     end
@@ -1988,10 +1932,10 @@ function love.update(dt)
         S.game.recorded = true
         if not S.script then
             -- The first win puts the level's species up for sale, shown on the way on.
-            if not Profile.won[S.level.id] and S.level.prize and not bank.owns(S.level.prize) then S.game.offer = S.level.prize end
+            if not Profile.won[S.level.id] and S.level.prize and not Profile.owns(S.level.prize) then S.game.offer = S.level.prize end
             -- And any seed waiting on it.
             for _, sd in ipairs(D.SEEDS) do
-                if not Profile.won[S.level.id] and sd.after == S.level.id and not bank.ownsSeed(sd.id) then S.game.newSeed = sd.id end
+                if not Profile.won[S.level.id] and sd.after == S.level.id and not Profile.ownsSeed(sd.id) then S.game.newSeed = sd.id end
             end
             Profile.won[S.level.id] = true
             Profile.save()
@@ -3522,7 +3466,7 @@ local function drawMenu()
     centred("WHERE DOES THE SPROUT COME UP?", cards[1].y - 18, "t", "o")
     for k, c in ipairs(cards) do
         local l = D.LEVELS[k]
-        local open, on = levelOpen(k), S.hover.level == k
+        local open, on = Profile.levelOpen(k), S.hover.level == k
         box(c.x, c.y, c.w, c.h, on and open and "n" or "u", Profile.won[l.id] and "g" or (open and (on and "l" or "c") or "k"))
         text(k .. "  " .. l.name, c.x + 4, c.y + 4, open and "w" or "k")
         if not open then
@@ -3537,7 +3481,7 @@ local function drawMenu()
             if Profile.records[l.id] then text("BEST " .. Profile.records[l.id], c.x + 4, c.y + c.h - 8, "r") end
         end
     end
-    if challengeOpen() then
+    if Profile.challengeOpen() then
         local c = switch
         box(c.x, c.y, c.w, c.h, S.hover.challenge and "n" or "u", S.challenge and "r" or "k")
         local s = "CHALLENGE: " .. (S.challenge and "ON" or "OFF")
@@ -3556,7 +3500,7 @@ local function drawMenu()
     local st = "SOUND " .. lv
     text(st, sw.x + floor((sw.w - Font.width(st)) / 2), sw.y + 3, Sfx.level > 0 and "l" or "k")
     local hintY = S.vh - S.inset.b - 12
-    centred(say("1-" .. #D.LEVELS .. " OR CLICK A LEVEL", "TAP A LEVEL") .. (challengeOpen() and say("   C: CHALLENGE", "") or "")
+    centred(say("1-" .. #D.LEVELS .. " OR CLICK A LEVEL", "TAP A LEVEL") .. (Profile.challengeOpen() and say("   C: CHALLENGE", "") or "")
         .. say("   E: ENCYCLOPEDIA", ""), hintY, "s", "o")
 end
 
@@ -3599,10 +3543,10 @@ function drawInfo(P)
         -- A seed: planted, plantable, for sale, or waiting on a win.
         local sd = D.SEED[P.seed]
         local s, fill, edge, k
-        if bank.ownsSeed(sd.id) then
+        if Profile.ownsSeed(sd.id) then
             local on = S.pick.seed == sd.id
             s, fill, edge, k = on and "PLANTED" or "PLANT IT", on and "u" or "d", on and "t" or "g", on and "w" or "g"
-        elseif bank.seedForSale(sd.id) then
+        elseif Profile.seedForSale(sd.id) then
             local can = Profile.spores >= sd.price
             s = can and ("BUY IT: " .. sd.price .. " SPORES") or (sd.price .. " SPORES. YOU HAVE " .. Profile.spores)
             fill, edge, k = "u", can and "t" or "k", can and "t" or "r"
@@ -3611,16 +3555,16 @@ function drawInfo(P)
         end
         box(b.x, b.y, b.w, b.h, S.hover.bring and "n" or fill, edge)
         text(s, b.x + floor((b.w - Font.width(s)) / 2), b.y + 4, k)
-    elseif b and not bank.owns(P.kind) then
+    elseif b and not Profile.owns(P.kind) then
         -- Not had yet: bought here once a win has put it up for sale.
         local price = D.TOWER[P.kind].price
         local s, edge, k
-        if bank.forSale(P.kind) then
+        if Profile.forSale(P.kind) then
             local can = Profile.spores >= price
             s = can and ("BUY IT: " .. price .. " SPORES") or (price .. " SPORES. YOU HAVE " .. Profile.spores)
             edge, k = can and "t" or "k", can and "t" or "r"
         else
-            s, edge, k = "WIN " .. bank.prizeOf(P.kind).name .. " FOR IT", "k", "k"
+            s, edge, k = "WIN " .. Profile.prizeOf(P.kind).name .. " FOR IT", "k", "k"
         end
         box(b.x, b.y, b.w, b.h, S.hover.bring and "n" or "u", edge)
         text(s, b.x + floor((b.w - Font.width(s)) / 2), b.y + 4, k)
@@ -3652,8 +3596,8 @@ local function drawLoadout()
     -- with its price, one still locked dark.
     for _, c in ipairs(L.seeds) do
         local sd = c.seed
-        local own, inn, on = bank.ownsSeed(sd.id), S.pick.seed == sd.id, S.hover.seed == sd.id
-        local sale = not own and bank.seedForSale(sd.id)
+        local own, inn, on = Profile.ownsSeed(sd.id), S.pick.seed == sd.id, S.hover.seed == sd.id
+        local sale = not own and Profile.seedForSale(sd.id)
         local edge = inn and "g" or "k"
         if on or S.pick.seedInfo == sd.id then edge = inn and "w" or "t" end
         box(c.x, c.y, c.w, c.h, inn and "d" or (on and "n" or "u"), edge)
@@ -3682,14 +3626,14 @@ local function drawLoadout()
         -- The picture kept to its corner of the card: a shelf or the giant is wider.
         local pic = icon(t.id, nil, 0, inn and (clock * 0.7) % 1 or 0)
         love.graphics.setScissor(c.x, c.y, 21, c.h)
-        local known = bank.known(t.id)
+        local known = Profile.known(t.id)
         blit(pic, c.x + 11, t.id == "mat" and c.y + c.h - 8 or c.y + c.h - 3, not known and codex.CUT or (not inn and T.DARKER2 or nil))
         love.graphics.setScissor()
-        local own = bank.owns(t.id)
+        local own = Profile.owns(t.id)
         wrap(known and t.name or "???", c.x + 22, c.y + 3, c.w - 24, inn and "w" or (own and "s" or "k"))
         -- Not had yet: its price once it is for sale, else locked.
         if not own then
-            local sale = bank.forSale(t.id)
+            local sale = Profile.forSale(t.id)
             text(sale and (t.price .. " SPORES") or "LOCKED", c.x + 22, c.y + c.h - 7, sale and "t" or "k")
         else
             text(tostring(t.cost), c.x + 22, c.y + c.h - 7, inn and "l" or "k")
@@ -3724,13 +3668,13 @@ local function drawLoadout()
         tip, k = "ONLY " .. D.LOADOUT .. " COME. DROP ONE FIRST", "r"
     elseif S.hover.seed then
         local sd = D.SEED[S.hover.seed]
-        if bank.ownsSeed(sd.id) then tip, k = sd.name .. ": " .. sd.blurb, "w"
-        elseif bank.seedForSale(sd.id) then tip, k = sd.name .. ": FOR SALE, " .. sd.price .. " SPORES. YOU HAVE " .. Profile.spores, "t"
+        if Profile.ownsSeed(sd.id) then tip, k = sd.name .. ": " .. sd.blurb, "w"
+        elseif Profile.seedForSale(sd.id) then tip, k = sd.name .. ": FOR SALE, " .. sd.price .. " SPORES. YOU HAVE " .. Profile.spores, "t"
         else tip, k = "???: WIN " .. D.LEVEL[sd.after].name .. " TO PUT IT UP FOR SALE", "k" end
-    elseif S.hover.species and not bank.owns(S.hover.species) then
+    elseif S.hover.species and not Profile.owns(S.hover.species) then
         local t = D.TOWER[S.hover.species]
-        if bank.forSale(t.id) then tip, k = t.name .. ": FOR SALE, " .. t.price .. " SPORES. YOU HAVE " .. Profile.spores, "t"
-        else tip, k = "???: WIN " .. bank.prizeOf(t.id).name .. " TO PUT IT UP FOR SALE", "k" end
+        if Profile.forSale(t.id) then tip, k = t.name .. ": FOR SALE, " .. t.price .. " SPORES. YOU HAVE " .. Profile.spores, "t"
+        else tip, k = "???: WIN " .. Profile.prizeOf(t.id).name .. " TO PUT IT UP FOR SALE", "k" end
     elseif S.hover.species then
         local t = D.TOWER[S.hover.species]
         tip, k = t.name .. ": " .. t.blurb, "w"
@@ -4010,8 +3954,8 @@ function codex.list(tab) return codex.ids[codex.TABS[tab].id] end
 function codex.found(tab, id)
     local t = codex.TABS[tab].id
     if t == "enemies" then return Profile.seen[id] == true end
-    if t == "species" then return bank.owns(id) end
-    return bank.ownsSeed(id)
+    if t == "species" then return Profile.owns(id) end
+    return Profile.ownsSeed(id)
 end
 
 function codex.name(tab, id)
@@ -4152,11 +4096,11 @@ function codex.where(tab, id)
         return "IT COMES IN CHALLENGE MODE, ON ANY LEVEL"
     elseif t == "species" then
         local d = D.TOWER[id]
-        if bank.forSale(id) then return "FOR SALE IN THE LOADOUT: " .. d.price .. " SPORES" end
-        return "WIN " .. bank.prizeOf(id).name .. " TO PUT IT UP FOR SALE, THEN BUY IT WITH SPORES"
+        if Profile.forSale(id) then return "FOR SALE IN THE LOADOUT: " .. d.price .. " SPORES" end
+        return "WIN " .. Profile.prizeOf(id).name .. " TO PUT IT UP FOR SALE, THEN BUY IT WITH SPORES"
     end
     local sd = D.SEED[id]
-    if bank.seedForSale(id) then return "FOR SALE IN THE LOADOUT: " .. sd.price .. " SPORES" end
+    if Profile.seedForSale(id) then return "FOR SALE IN THE LOADOUT: " .. sd.price .. " SPORES" end
     return "WIN " .. D.LEVEL[sd.after].name .. " TO PUT IT UP FOR SALE, THEN BUY IT WITH SPORES"
 end
 

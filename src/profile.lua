@@ -1,5 +1,6 @@
 -- What the player keeps between runs: the levels won, the endless records,
--- each level's loadout and seed, the Spore Bank, the enemies met and how loud.
+-- each level's loadout and seed, the Spore Bank, the enemies met and how loud;
+-- and what that opens: the levels open, and what the bank has and sells.
 --
 -- It all lives in one file in the save directory, `save.txt`, a line a thing:
 -- a word saying what, then its words.
@@ -144,6 +145,65 @@ function P.save()
     if P.sound then lines[#lines + 1] = "sound " .. P.sound end
     love.filesystem.write(FILE, table.concat(lines, "\n") .. "\n")
 end
+
+--- the Spore Bank ---------------------------------------------------------------------
+
+-- Can it be brought? The first six always, the rest once bought.
+function P.owns(id) return D.TOWER[id].starter or P.owned[id] == true end
+
+-- The level whose first win puts a species up for sale.
+function P.prizeOf(id)
+    for _, l in ipairs(D.LEVELS) do if l.prize == id then return l end end
+end
+
+function P.forSale(id)
+    local l = P.prizeOf(id)
+    return not P.owns(id) and l ~= nil and P.won[l.id] == true
+end
+
+-- Bought for good, if it is for sale and the spores are there.
+function P.buy(id)
+    local price = D.TOWER[id].price
+    if not P.forSale(id) or P.spores < price then return false end
+    P.spores = P.spores - price
+    P.owned[id] = true
+    P.save()
+    return true
+end
+
+-- Seeds too: the bean from the start, the oak and the tomato for sale from the
+-- start, the rest once the level they are `after` is won.
+function P.ownsSeed(id) return not D.SEED[id].price or P.seeds[id] == true end
+
+function P.seedForSale(id)
+    local sd = D.SEED[id]
+    return not P.ownsSeed(id) and (not sd.after or P.won[sd.after] == true)
+end
+
+-- Known: had, or up for sale. Anything else is only "???" in the loadout
+-- until a win puts it up for sale.
+function P.known(id) return P.owns(id) or P.forSale(id) end
+function P.seedKnown(id) return P.ownsSeed(id) or P.seedForSale(id) end
+
+function P.buySeed(id)
+    local sd = D.SEED[id]
+    if not P.seedForSale(id) or P.spores < sd.price then return false end
+    P.spores = P.spores - sd.price
+    P.seeds[id] = true
+    P.save()
+    return true
+end
+
+-- A level is open once the one before it is won; challenge mode once the last is.
+-- One won already, or any after it, keeps it open: a save from before the
+-- Flowerpot, the Shed Floor and the Rotting Log came in still has the Pond
+-- Edge and the Lawn.
+function P.levelOpen(n)
+    if n == 1 or P.won[D.LEVELS[n - 1].id] then return true end
+    for k = n, #D.LEVELS do if P.won[D.LEVELS[k].id] then return true end end
+    return false
+end
+function P.challengeOpen() return P.won[D.LEVELS[#D.LEVELS].id] end
 
 clear()
 
