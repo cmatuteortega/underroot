@@ -74,9 +74,11 @@ level picker and the loadout show the spores in the bank, top left. The
 prices and the pay are `price` in `src/defs.lua` and `D.SPORES`.
 
 **Sprout seeds.** Spores buy seeds too, and each run grows from one, picked in
-the loadout (the row of chips over the species). The sprout looks the same
-whatever it grew from; point at it (tap it on a phone) and its seed's name
-shows over it, with what it does on the line at the bottom. Each seed changes
+the loadout (the row of chips over the species). The sprout is drawn as the
+plant it grew from, and some show their state: the tomato's fruit ripens as it
+is hurt, a regrown dandelion is half bald, the sunflower bows its head at night
+and the flytrap's jaws shut when it bites. Point at it (tap it on a phone)
+and its seed's name shows over it, with what it does on the line at the bottom. Each seed changes
 the sprout's numbers and brings three or four mutations of its own: one of the
 three offered at every mutation is the seed's (in green) while it has any left.
 

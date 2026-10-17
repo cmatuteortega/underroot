@@ -1359,6 +1359,7 @@ end
 function Game:snap(e, trap)
     local d = D.ENEMIES[e.kind]
     local eat = self.mods.jaws and 80 or trap.eat
+    self.snapped = self.clock -- the jaws are drawn shut for a moment
     self:cue("clack", e.x, e.z)
     self:shock(e.x, e.z, 8, 0.25, "g", "m")
     if not d.boss and e.hp <= eat and not (e.ballHp and e.ballHp > 0) then

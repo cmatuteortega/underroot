@@ -2694,8 +2694,14 @@ local function drawBoard()
         movers[#movers + 1] = { d = d, draw = draw }
     end
     local wilt = 1 - game.heartHp / game.heartMax
+    -- The seed's own pose: a dandelion's spent life, a sunflower's night, a
+    -- flytrap's bite.
+    local sd, pose = game.seed, nil
+    if sd.regrow and game.regrows < sd.regrow then pose = "bald"
+    elseif sd.sun and game.weather == "night" and not game.mods.helio then pose = "night"
+    elseif sd.trap and game.snapped and game.clock - game.snapped < 0.3 then pose = "shut" end
     add(game.heart.x, game.heart.y, game.heart.z, function()
-        stamp(M.sprout(wilt), game.heart.x, game.heart.y - 1, game.heart.z, heartFlash > 0 and T.FLASH or nil)
+        stamp(M.sprout(wilt, sd.id, pose), game.heart.x, game.heart.y - 1, game.heart.z, heartFlash > 0 and T.FLASH or nil)
     end)
     for _, n in ipairs(game.nodes) do
         local t = n.tower
@@ -3529,10 +3535,12 @@ function drawInfo(P)
     love.graphics.setScissor(P.x, P.y, P.w, P.h)
     local clock = love.timer.getTime()
     local t = P.t
-    local pic = P.seed and M.sprout(0) or icon(P.kind, t and t.branch, t and t.tier or 0, (clock * 0.7) % 1)
+    local pic = P.seed and M.sprout(0, P.seed) or icon(P.kind, t and t.branch, t and t.tier or 0, (clock * 0.7) % 1)
     love.graphics.setScissor(P.x, P.y, 22, 24)
-    -- The sprout is taller than the corner: its leaves and the top of its stem.
-    blit(pic, P.x + 12, P.seed and P.y + 30 or (P.kind == "mat" and P.y + 16 or P.y + 22))
+    -- The sprout is taller than the corner: its leaves and the top of its stem,
+    -- the top few pixels cut off, fewer for a low one (the flytrap).
+    blit(pic, P.x + 12, P.seed and P.y + pic.oj - min(7, max(0, pic.h - 24))
+        or (P.kind == "mat" and P.y + 16 or P.y + 22))
     love.graphics.setScissor(P.x, P.y, P.w, P.h - (P.button and 20 or 0))
     for _, l in ipairs(P.lines) do
         local y = l.y
@@ -3931,7 +3939,7 @@ codex.POSE = {
 function codex.figure(tab, id, s, h, a)
     local t = codex.TABS[tab].id
     if t == "species" then return { { M.scaled(s, M.tower, id, nil, 0, a), 0, 0, 0 } } end
-    if t == "seeds" then return { { M.scaled(s, M.sprout, 0), 0, 0, 0 } } end
+    if t == "seeds" then return { { M.scaled(s, M.sprout, 0, id), 0, 0, 0 } } end
     local leg = floor(a * 4) % 2
     local layers = {}
     -- `back` room units behind it and `side` to its left.
