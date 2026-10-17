@@ -1685,6 +1685,7 @@ end
 -- (sx, sy). Called with the same step it only pans: that is how a pinch's
 -- slide is kept when it settles on the zoom it started at.
 local function zoomTo(step, bx, by, sx, sy)
+    if not world then return end
     local lo, hi = stepRange()
     zoomStep = max(lo, min(hi, step))
     focus, focused = nil, selected -- aimed at the old zoom; the player has taken over
@@ -1699,7 +1700,8 @@ end
 -- One step in or out about a window pixel (the cursor, or the middle).
 local function zoomBy(d, sx, sy)
     local lo, hi = stepRange()
-    if painter or zoomStep + d < lo or zoomStep + d > hi then return end
+    -- No board yet (the picker before the first level): nothing to zoom.
+    if painter or not world or zoomStep + d < lo or zoomStep + d > hi then return end
     sound("zoom", d > 0 and 1.2 or 0.85)
     sx, sy = sx or love.graphics.getWidth() / 2, sy or love.graphics.getHeight() / 2
     zoomTo(zoomStep + d, sx / zoom + camx, sy / zoom + camy, sx, sy)
