@@ -163,12 +163,17 @@ Between waves you pick one of three random Mutations for the network, such as
 faster growth, cheaper links, or a free Relay. This is what makes two runs of the
 same map play differently.
 
-Meta progression is a Spore Bank filled by finishing levels:
+Meta progression is a Spore Bank filled by playing levels: a spore a wave
+cleared, more for a win.
 
-- **New species:** unlock tower families, each with a distinct look and rule set.
-- **Sprout seeds:** pick the plant at the end of the path. An oak sapling is tough,
-  a tomato pays more sugar, a dandelion regrows once after dying, a bean sprout
-  speeds up growth.
+- **New species:** the first six species are there from the start. Each level's
+  first win puts one of the other six up for sale, bought for good with spores.
+- **Sprout seeds:** pick the plant at the end of the path, with the loadout. An
+  oak sapling is tough, a tomato pays more sugar, a dandelion regrows once after
+  dying, a sunflower makes what grows near it hit harder by day, a flytrap bites
+  what comes close; the bean is the plain sprout, its mutations about growing.
+  Each seed brings mutations of its own, and one is always among the three on
+  offer, so the seed decides what the network can become.
 - **Colony traits:** small permanent bonuses, deliberately modest so skill matters
   more than grind.
 

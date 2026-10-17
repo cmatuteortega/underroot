@@ -27,7 +27,8 @@ love . --sounds        # dev: every sound and loop written as a .wav (sounds/), 
 love . --bot 10        # dev: plays the Crack headless 10 times, prints how it went
 love . --bot 10 lawn   # dev: another level; add `challenge`, or `generic` for the
                        # map-agnostic player instead of the level's build order,
-                       # or `endless` to play on past the win until the sprout falls
+                       # or `endless` to play on past the win until the sprout falls,
+                       # or a seed (oak, tomato, dandelion, sunflower, flytrap)
 ```
 
 ## Playing it
@@ -47,6 +48,73 @@ level's own, one more every 10 waves. The most waves held in endless on
 each level is kept in the save directory (`endless.txt`) and shown at the bottom
 left of its card in the level picker.
 
+**The Spore Bank.** A run pays a spore for every wave it clears, endless
+included, and 10 more for a win; they go into the bank as they come, so a
+lost run keeps them. Only the first six species (Spore Puffer, Enoki Needle,
+Slime Mat, Lion's Mane, Relay, Inky Cap) can be grown at first. Each level's
+first win puts one of the other six up for sale, and once it is bought it is
+yours for good:
+
+| level won | species for sale | price |
+| --- | --- | --- |
+| The Crack | Stinkhorn | 20 |
+| The Flowerpot | Shelf Fungus | 25 |
+| The Shed Floor | Puffball Mortar | 30 |
+| The Rotting Log | Ghost Lamp | 35 |
+| The Pond Edge | Cordyceps Bloom | 40 |
+| The Lawn | Humongous Fungus | 50 |
+
+The won screen says how many spores the run made and what went up for sale.
+Whichever way on is picked, the Spore Bank comes first, showing the new species
+with BUY (`B`) and LATER (`Enter`). Bought later, it is bought from its card in
+the loadout picker: a species not had yet is dark there, with its price once it
+is for sale (`LOCKED` before), and its panel's button buys it. The spores
+and what was bought are kept in the save directory (`bank.txt`), and the
+level picker and the loadout show the spores in the bank, top left. The
+prices and the pay are `price` in `src/defs.lua` and `D.SPORES`.
+
+**Sprout seeds.** Spores buy seeds too, and each run grows from one, picked in
+the loadout (the row of chips over the species). The sprout looks the same
+whatever it grew from; point at it (tap it on a phone) and its seed's name
+shows over it, with what it does on the line at the bottom. Each seed changes
+the sprout's numbers and brings three or four mutations of its own: one of the
+three offered at every mutation is the seed's (in green) while it has any left.
+
+| seed | price | what it does | its mutations |
+| --- | --- | --- | --- |
+| Bean Sprout | free | the sprout as it was | Tendrils (links out of the sprout grow at once), Nitrogen Fix (towers 2 hops from it hit as on a pocket one richer), Bean Pod (three free links) |
+| Oak Sapling | 15 | sprout +50% HP, links grow 25% slower | Heartwood (30% less from leaks), Bark (links at the sprout ×3 HP), Acorn Drop (every 6 s, 30 and a stun on the bug nearest it), Rings of Growth (+1 HP a wave) |
+| Tomato Seedling | 15 | sugar +10%, +10 to start, sprout −30% HP | Ripening (clear bonus +30%), Splat (a leak bursts a fruit: 15 and sticky to bugs near it), Compost (bodies left at a wave's end pay half), Overripe (+1 sugar/s, but half the clear bonus) |
+| Dandelion | 25, once the Flowerpot is won | killed, it regrows once at half HP and the wave goes on | Seed Clock (one more regrow), Taproot (regrowing mends every cut link), Seed Drift (a free Spore Puffer on an empty fed pocket after each wave), Parachutes (pulse 30% sooner, 50% longer) |
+| Sunflower | 35, once the Rotting Log is won | towers within 2 hops of it +15% damage, but not at night | Seed Head (+4 a sunlit tower at a wave's end), Heliotrope (3 hops, and at night too), Tall Stem (fliers near it take 8/s) |
+| Venus Flytrap | 45, once the Lawn is won | sugar −10%; every 2.5 s it snaps at the nearest bug within 26: eats it whole at 40 HP or less (and heals 0.5), else bites for 20 | Digest (what it eats pays its worth again), Trigger Hairs (40% more snaps), Sundew (bugs near it at half speed), Wide Jaws (40% further, eats up to 80 HP) |
+
+Tap a seed to plant it and read it in the side panel; one not had yet opens
+its panel, whose button buys it (and plants it). The seed is remembered with
+each level's loadout, and the seeds bought are kept in `bank.txt`. The numbers
+are `D.SEEDS` in `src/defs.lua`, and the seeds' mutations are the rows of
+`D.MUTATIONS` with a `seed`.
+
+**The encyclopedia.** The button at the top left of the level picker (`E`)
+opens it: a tab each for the enemies, the species and the seeds, a tile an
+entry with its model painted big, and a fourth tab, STATUSES, the glossary.
+What has not been found yet is a dark cutout of its model with `???` under it:
+an enemy is found by meeting it on the board, a species by having it (the
+first six, or bought) and a seed the same. Click a tile for its page: the model
+up to four times its size on the board (an enemy turning slowly round and
+walking on the spot), and everything about it. An enemy's page has what it
+does, its numbers, the levels it comes on and what answers it; a species' its
+numbers, what it is good against and both upgrade branches with a picture of
+each tier; a seed's its mutations. One not found yet says where to find it.
+Every status or game word written on a page (STUNNED, ARMOR, SALTED, NIGHT and
+the rest) gets a number after it, and the notes at the bottom of the page say
+what each means. `<` and `>` (or the arrow keys) go through a tab's pages, the
+mouse wheel or a drag scrolls, and `Esc` or a right click goes back. The
+enemies met are kept in the save directory (`seen.txt`); a save from before it
+counts everything on the levels already won as met. The words and what they
+say are `D.GLOSSARY` in `src/defs.lua`, and each enemy's page text is its
+`about` there.
+
 Before a level starts you pick the species to bring: six of the twelve. The rest
 stay home and stay off the toolbar. The picker shows every enemy the level sends,
 with bosses in red. Point at one (tap it on a phone) and the species that answer
@@ -54,9 +122,10 @@ it blink. The first time you play a level it suggests six; after that it starts
 from what you brought last time, which is kept in the save directory. Tap a
 species card to read all about it in a side panel: what it does, its network
 twist, its numbers and both upgrade branches. Tap it again (or the panel's button)
-to bring it or leave it, and tap anywhere else to close the panel. On the
-Crack a species you bring still opens when its wave is cleared (the `W` number on
-its card).
+to bring it or leave it (or buy it), and tap anywhere else to close the panel. A species
+you bring opens when its wave is cleared (the `W` number on its card), on every
+level. A run always starts with something to grow: if nothing brought comes at
+wave 0, the one that comes first is there from the start.
 
 You start with the sprout (the Heart) and 110 nutrients (more on the later
 levels). Grow hyphae out from it to pockets (a leaf, a crumb, a pebble, a dead
@@ -88,6 +157,7 @@ chew through any thread they cross.
 | `N` | after a win: on to the next level's loadout |
 | `M` | the level picker (`Esc` there goes back to the run) |
 | `1`–`6`, `C` in the picker | pick a level; challenge mode on or off |
+| `E` in the picker, or its top left button | the encyclopedia: `1`–`4` or left / right for its tabs, a click for a page, left / right through the pages, wheel or up / down to scroll, `Esc` back |
 | click a species in the loadout | read it in the panel; click it again to bring it or leave it (six at most) |
 | a species' key in the loadout | bring it or leave it at once |
 | `Enter` / `Space`, `Esc` in the loadout | grow the level with that loadout; back to the levels |
@@ -111,6 +181,7 @@ keeps clear of the notch and home bar:
 | tap the weather's name in the top bar | what the weather does, in a tip under it; tap it again (or anywhere) to shut it |
 | tap the top bar | pause and resume (the game also pauses when it is sent to the background) |
 | tap a level card, or the challenge switch | play it / challenge on or off |
+| tap ENCYCLOPEDIA in the picker, then a tile | read about it; drag to scroll, `<` `>` for the next, BACK to go back |
 | tap anywhere after a win or loss | back to the level picker |
 
 The bottom line always says either what is under the mouse or the next thing to
@@ -167,8 +238,7 @@ two tiers each. Every tier is a new model, not a recolour: a toxin puffer goes
 green and grows satellites, a lance-tipped enoki clump stands a head taller than
 the rest, a bramble shelf bristles. Each one breathes or sways on its own beat,
 kicks when it fires and comes up out of the ground when it is grown or upgraded.
-On the Crack the last seven species unlock as the waves are cleared; on the later
-levels everything grows from the start but the Humongous Fungus.
+On every level the last seven species unlock as the waves are cleared.
 
 | tower | cost | does | network twist | branch A | branch B |
 | --- | --- | --- | --- | --- | --- |
@@ -292,7 +362,8 @@ own picture of the board.
 **Mutations.** After the waves a level names (3, 5, 8, 10 and 12 on the Crack) the
 game holds while you pick one of three for the rest of the run: thick hyphae, quick growth, cheaper links, bodies
 worth more, more sugar, a quicker pulse, deeper roots (+5 sprout), fatter
-reserves, older rings (+40%), or longer reach.
+reserves, older rings (+40%), or longer reach; or one of the seed's own (see
+Sprout seeds above), always one of the three while the seed has any left.
 
 Every number is a row in `src/defs.lua`. The doc says they are placeholders to
 tune in playtesting, and they are. Upgrade tiers only name what they change:
@@ -327,7 +398,7 @@ before they have a build order, not for tuning.
 
 ### Not in yet
 
-Green Mold; elite modifiers, props, the Spore Bank, sprout seeds and the Compost
+Green Mold; elite modifiers, props, sprout seeds and the Compost
 Heap. Each of those is a row and a model more, below.
 
 ## How it sounds
@@ -471,7 +542,8 @@ to see every size.
   loadout picker by being in the list, and a toolbar button when brought. Name it
   in `D.COUNTERS` for the enemies it answers. Check every tier with `love . --sheet`.
 - **An enemy**: a row in `D.ENEMIES` and `D.ENEMY_ORDER`, a model, a line in
-  `enemyPicture` in `main.lua`, and a branch in `Game:move` if it does something to
+  `enemyPicture` in `main.lua` and in `codex.POSE` (the encyclopedia's), its page
+  text as an `about`, and a branch in `Game:move` if it does something to
   the network nothing else does. Put it in a wave in `D.WAVES`, and give it its
   answers in `D.COUNTERS`.
 - **A map**: a row in `MAPS` in `src/world.lua`. `E` gates (off the left edge, a

@@ -40,12 +40,31 @@ local ramp = T.ramp
 local M = {}
 
 local cache = {}
+-- How much bigger than on the board the pictures asked for now are painted:
+-- 1 but inside M.scaled, which the encyclopedia paints its big models with.
+-- Traced again at the size, not blown up, so they stay one pixel a pixel.
+local big = 1
 local function kept(key, build)
+    if big ~= 1 then key = key .. "@" .. big end
     local p = cache[key]
     if not p then
-        p = T.paint(build(), 2)
+        local parts = build()
+        if big ~= 1 then
+            local m = A.scale(big, big, big)
+            for _, part in ipairs(parts) do part.at = A.mul(m, part.at) end
+        end
+        p = T.paint(parts, 2)
         cache[key] = p
     end
+    return p
+end
+
+-- `f(...)`'s picture painted `s` times the size.
+function M.scaled(s, f, ...)
+    local was = big
+    big = s
+    local p = f(...)
+    big = was
     return p
 end
 M.count = function()

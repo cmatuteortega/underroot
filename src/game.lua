@@ -70,7 +70,8 @@ end
 -- A run of one level. `opts.challenge` adds the challenge wave at the end;
 -- `opts.best` is the most waves held in endless on this level so far;
 -- `opts.loadout`, a list of species ids, is all that can be grown (every
--- species when it is not given: the bot and the shots bring them all).
+-- species when it is not given: the bot and the shots bring them all);
+-- `opts.seed` is the sprout's seed (a D.SEEDS id, the bean if not given).
 function Game.new(world, level, opts)
     local self = setmetatable({ world = world }, Game)
     level, opts = level or D.LEVELS[1], opts or {}
@@ -82,6 +83,7 @@ function Game.new(world, level, opts)
         self.challenge = true
     end
     self.best = opts.best or 0 -- the endless record, raised as it is beaten
+    self.spores = 0 -- earned for the Spore Bank: a spore a wave cleared, more for a win
     self.uniques = {} -- the one-per-run species already grown
     if opts.loadout then
         self.loadout = {}
@@ -91,9 +93,14 @@ function Game.new(world, level, opts)
     self.enemies, self.corpses, self.shots, self.fx, self.texts = {}, {}, {}, {}, {}
     self.clouds, self.inks = {}, {}
     self.tunnels = {} -- a Mole Cricket's: { a = hole, b = hole, owner = it, open }
-    self.nutrients = level.start
-    self.heartMax = level.heart
-    self.heartHp = level.heart
+    self.seed = D.SEED[opts.seed or "bean"] or D.SEEDS[1]
+    local seed = self.seed
+    self.nutrients = level.start + (seed.start or 0)
+    self.heartMax = max(1, floor(level.heart * (seed.heart or 1) + 0.5))
+    self.heartHp = self.heartMax
+    self.regrows = seed.regrow or 0 -- a dandelion's lives left
+    self.pods = 0 -- free links left from a Bean Pod
+    self.trapCd, self.acornCd = 0, 0
     self.wave, self.cleared, self.phase = 0, 0, "build"
     self.clock, self.waveClock = 0, 0
     self.queue = {}
@@ -134,6 +141,12 @@ end
 --- numbers a mutation can change --------------------------------------------------------
 
 function Game:linkHp() return D.LINK.hp * (self.mods.thick and 1.5 or 1) end
+-- What one link holds when whole: an oak's Bark triples those at the sprout.
+function Game:linkFull(l)
+    local hp = self:linkHp()
+    if self.mods.bark and (l.a.heart or l.b.heart) then hp = hp * 3 end
+    return hp
+end
 function Game:linkReach() return D.LINK.reach * (self.mods.reach and 1.25 or 1) end
 function Game:linkCost(len)
     local c = D.LINK.cost(len)
@@ -146,7 +159,26 @@ local CLEAR = {}
 function Game:sky() return self.weather and D.WEATHER[self.weather] or CLEAR end
 function Game:pace() return self:sky().pace or 1 end
 
-function Game:pulseCooldown() return D.PULSE.cooldown * (self.mods.pulse and 0.6 or 1) end
+function Game:pulseCooldown() return D.PULSE.cooldown * (self.mods.pulse and 0.6 or 1) * (self.mods.chute and 0.7 or 1) end
+function Game:pulseDuration() return D.PULSE.duration * (self.mods.chute and 1.5 or 1) end
+-- A pocket's quality as the towers on it feel it (its power, not its pay): a
+-- bean's Nitrogen Fix makes those near the sprout one richer.
+local RICHER = { poor = "normal", normal = "rich", rich = "rich" }
+function Game:quality(n)
+    if self.mods.nitro and not n.heart and n.conn and n.hop <= 2 then return RICHER[n.quality] end
+    return n.quality
+end
+-- In a sunflower's sun: fed, near enough the sprout, and not at night.
+function Game:sunlit(n)
+    local sun = self.seed.sun
+    if not sun or not n.conn or n.heart then return false end
+    if self.weather == "night" and not self.mods.helio then return false end
+    return n.hop <= (self.mods.helio and 3 or sun.hops)
+end
+-- The sugar paid when a wave is cleared (and on going endless).
+function Game:waveBonus()
+    return floor((D.WAVE_BONUS + 4 * self.wave) * (self.mods.ripen and 1.3 or 1) * (self.mods.overripe and 0.5 or 1))
+end
 function Game:ringDamage() return self.mods.rings and 1.4 or D.RING.damage end
 function Game:ringSlow() return self.mods.rings and 0.55 or D.RING.slow end
 
@@ -251,7 +283,7 @@ end
 function Game:canLink(a, b)
     if not a or not b or a == b then return false, nil, "" end
     local len = dist(a, b)
-    local cost = self:linkCost(len)
+    local cost = self.pods > 0 and 0 or self:linkCost(len)
     if self:linkBetween(a, b) then return false, cost, "ALREADY LINKED" end
     if len > self:linkReach() then return false, cost, "TOO FAR" end
     if not (a.conn or b.conn) then return false, cost, "NOT CONNECTED TO THE SPROUT" end
@@ -265,10 +297,17 @@ function Game:grow(a, b)
     -- It grows out from whichever end is already fed.
     if not a.conn then a, b = b, a end
     self.nutrients = self.nutrients - cost
+    -- A free one from a Bean Pod is costed as usual, for its repairs, but
+    -- pruned it pays nothing back.
+    local free = self.pods > 0
+    if free then self.pods, cost = self.pods - 1, self:linkCost(dist(a, b)) end
     -- Its cap is set now, not at the next recompute: that waits for it to
     -- arrive, and anything asking about it meanwhile (a hover) needs one.
-    local l = { id = self.nextLink, a = a, b = b, len = dist(a, b), cost = cost, hp = self:linkHp(), state = "grow", grow = 0,
-        bitten = {}, cap = D.LINK.cap, capMul = 1 }
+    local l = { id = self.nextLink, a = a, b = b, len = dist(a, b), cost = cost, state = "grow", grow = 0,
+        bitten = {}, cap = D.LINK.cap, capMul = 1, free = free }
+    l.hp = self:linkFull(l)
+    -- Tendrils: out of the sprout it is there at once.
+    if self.mods.tendrils and (a.heart or b.heart) then l.grow = 1 end
     self.nextLink = self.nextLink + 1
     self.links[#self.links + 1] = l
     a.links[#a.links + 1] = l
@@ -287,7 +326,7 @@ end
 -- Your own cut: a partial refund, and whatever was downstream is on its own.
 function Game:prune(l)
     local back = l.state == "alive" and D.LINK.prune or D.LINK.prune * 0.5
-    local refund = floor(l.cost * back)
+    local refund = l.free and 0 or floor(l.cost * back)
     self.nutrients = self.nutrients + refund
     local mx, mz = (l.a.x + l.b.x) / 2, (l.a.z + l.b.z) / 2
     self:say("+" .. refund, mx, 4, mz)
@@ -502,8 +541,8 @@ function Game:pulse(node)
     self.pulseCd = self:pulseCooldown()
     local n = node
     while n do
-        if n.tower then n.tower.boost = D.PULSE.duration end
-        if n.via then n.via.surge = D.PULSE.duration end
+        if n.tower then n.tower.boost = self:pulseDuration() end
+        if n.via then n.via.surge = self:pulseDuration() end
         n = n.parent
     end
     self:burst(node.x, node.y + 4, node.z, 12, { "l", "w", "c" }, 26)
@@ -536,12 +575,7 @@ end
 function Game:maxHp(t) return self:stat(t, "hp") or 30 end
 
 -- The wave that has to be cleared before a species can be grown, on this level.
-function Game:unlockAt(kind)
-    local l = self.level
-    if l.unlock and l.unlock[kind] then return l.unlock[kind] end
-    if l.open then return 0 end
-    return D.TOWER[kind].unlock or 0
-end
+function Game:unlockAt(kind) return D.unlockAt(self.level, kind, self.loadout) end
 
 -- Was this species brought on the run?
 function Game:brought(kind)
@@ -573,7 +607,13 @@ function Game:build(kind, node)
     if not self:canBuild(kind, node) then return false end
     local d = D.TOWER[kind]
     self.nutrients = self.nutrients - d.cost
-    local t = newTower(kind, d.cost)
+    return self:plant(kind, node, d.cost)
+end
+
+-- A fruiting body put on a node, paid for (`cost`) or not.
+function Game:plant(kind, node, cost)
+    local d = D.TOWER[kind]
+    local t = newTower(kind, cost)
     t.node, t.reserve, t.hp = node, d.reserve or 0, d.hp or 30
     node.tower = t
     if d.unique then self.uniques[kind] = true end
@@ -729,7 +769,7 @@ function Game:goEndless()
     self.endless = true
     self.endlessFrom = #self.waves
     self.phase = "build"
-    local bonus = D.WAVE_BONUS + 4 * self.wave
+    local bonus = self:waveBonus()
     self.nutrients = self.nutrients + bonus
     self:say("ENDLESS +" .. bonus, self.heart.x, 26, self.heart.z, "r")
     self:cue("clear")
@@ -1096,7 +1136,8 @@ function Game:update(dt)
         end
         local living = 0
         for _, l in ipairs(self.links) do if alive(l) then living = living + 1 end end
-        local income = D.INCOME - living * D.UPKEEP + (self.mods.sugar and 0.8 or 0)
+        local income = D.INCOME * (self.seed.income or 1) - living * D.UPKEEP
+            + (self.mods.sugar and 0.8 or 0) + (self.mods.overripe and 1 or 0)
         -- A rich pocket that something grows on, fed, pays its own way.
         for _, n in ipairs(self.nodes) do
             if n.conn and n.tower then income = income + World.QUALITY[n.quality].income end
@@ -1110,6 +1151,7 @@ function Game:update(dt)
     self:updateLinks(dt)
     self:updateTowers(dt)
     self:updateMats(dt)
+    if self.phase == "wave" then self:updateSeed(dt) end
     for _, e in ipairs(self.enemies) do
         if not e.dead then
             self:move(e, dt)
@@ -1140,7 +1182,9 @@ function Game:update(dt)
     self:updateFx(dt)
     self:recompute()
 
-    if self.heartHp <= 0 then
+    if self.heartHp <= 0 and self.regrows > 0 then
+        self:regrow()
+    elseif self.heartHp <= 0 then
         self.heartHp = 0
         self.phase = "lost"
         self:cue("lost")
@@ -1148,19 +1192,22 @@ function Game:update(dt)
         self:shock(self.heart.x, self.heart.z, 30, 1, "r", "d")
     elseif self.phase == "wave" and not self.queue[1] and not self.enemies[1] then
         self.cleared = self.wave
+        self.spores = self.spores + D.SPORES.wave
         self.inks, self.clouds, self.tunnels = {}, {}, {}
+        self:seedCleared()
         self.weather = nil
         if self.endless then
             if self.cleared > self.best then self.best, self.record = self.cleared, true end
         end
         if self.wave >= #self.waves and not self.endless then
             self.phase = "won"
+            self.spores = self.spores + D.SPORES.win
             self:cue("won")
             self:shock(self.heart.x, self.heart.z, 50, 1.2, "g", "l")
             self:motes(self.heart.x, 4, self.heart.z, 40, { "g", "l", "w" }, 26, 26, 1.6)
         else
             self.phase = "build"
-            local bonus = D.WAVE_BONUS + 4 * self.wave
+            local bonus = self:waveBonus()
             self.nutrients = self.nutrients + bonus
             self:say("WAVE CLEAR +" .. bonus, self.heart.x, 26, self.heart.z, "g")
             self:cue("clear")
@@ -1172,6 +1219,7 @@ function Game:update(dt)
                     self:cue("unlock")
                 end
             end
+            if self.mods.drift then self:drift() end
             if self.level.mutateAfter[self.wave] or (self:endlessDepth() > 0 and self:endlessDepth() % 4 == 0) then
                 self:offerMutations()
             end
@@ -1181,13 +1229,20 @@ end
 
 --- mutations --------------------------------------------------------------------------------
 
+-- Three cards: one of the seed's own while it has any left, the rest from
+-- the mutations every seed shares (and the seed's, once those run out).
 function Game:offerMutations()
-    local pool = {}
+    local pool, own = {}, {}
     for _, m in ipairs(D.MUTATIONS) do
-        if not self.mods[m.id] then pool[#pool + 1] = m end
+        if not self.mods[m.id] then
+            if m.seed == self.seed.id then own[#own + 1] = m
+            elseif not m.seed then pool[#pool + 1] = m end
+        end
     end
     self.choices = {}
-    for _ = 1, min(3, #pool) do
+    if own[1] then self.choices[1] = table.remove(own, random(#own)) end
+    for _, m in ipairs(own) do pool[#pool + 1] = m end
+    while #self.choices < 3 and pool[1] do
         self.choices[#self.choices + 1] = table.remove(pool, random(#pool))
     end
     if self.choices[1] then
@@ -1206,6 +1261,12 @@ function Game:mutate(n)
     elseif m.id == "roots" then
         self.heartMax = self.heartMax + 5
         self.heartHp = self.heartMax
+    elseif m.id == "bark" then
+        for _, l in ipairs(self.heart.links) do l.hp = l.hp * 3 end
+    elseif m.id == "pod" then
+        self.pods = self.pods + 3
+    elseif m.id == "clock" then
+        self.regrows = self.regrows + 1
     end
     self.choices = nil
     self.phase = "build"
@@ -1217,13 +1278,167 @@ function Game:mutate(n)
     return true
 end
 
+--- the seed ------------------------------------------------------------------------------------
+
+-- A dandelion killed comes back at half its HP, and the wave goes on.
+function Game:regrow()
+    self.regrows = self.regrows - 1
+    self.heartHp = max(1, floor(self.heartMax * 0.5 + 0.5))
+    local h = self.heart
+    if self.mods.taproot then
+        for _, l in ipairs(self.links) do
+            if l.state == "cut" and not l.salted then l.regrow = 1 end
+        end
+    end
+    self.events.regrow = true
+    self:say("THE DANDELION REGROWS", h.x, 30, h.z, "g")
+    self:burst(h.x, 12, h.z, 30, { "w", "s", "g" }, 30)
+    self:shock(h.x, h.z, 40, 0.9, "w", "g")
+    self:motes(h.x, 8, h.z, 30, { "w", "s" }, 30, 20, 2)
+    self:cue("clear", h.x, h.z)
+end
+
+-- What the seed does each frame of a wave: the flytrap's snap, the oak's
+-- acorns, the sunflower's stem, the sundew's glue.
+function Game:updateSeed(dt)
+    local h = self.heart
+    local trap = self.seed.trap
+    if trap then
+        self.trapCd = self.trapCd - dt
+        local range = trap.range * (self.mods.jaws and 1.4 or 1)
+        if self.trapCd <= 0 then
+            local best, bd = nil, range * range
+            for _, e in ipairs(self.enemies) do
+                if not e.dead and not e.under and not e.hidden then
+                    local d2 = (e.x - h.x) ^ 2 + (e.z - h.z) ^ 2
+                    if d2 <= bd then best, bd = e, d2 end
+                end
+            end
+            if best then
+                self.trapCd = trap.every * (self.mods.hairs and 0.6 or 1)
+                self:snap(best, trap)
+            end
+        end
+    end
+    if self.mods.acorn then
+        self.acornCd = self.acornCd - dt
+        if self.acornCd <= 0 then
+            local best, bd = nil, 60 * 60
+            for _, e in ipairs(self.enemies) do
+                if not e.dead and not e.under and not e.hidden then
+                    local d2 = (e.x - h.x) ^ 2 + (e.z - h.z) ^ 2
+                    if d2 <= bd then best, bd = e, d2 end
+                end
+            end
+            if best then
+                self.acornCd = 6
+                self:hurt(best, 30, true)
+                if not best.dead and not D.ENEMIES[best.kind].boss then best.stun = max(best.stun, 1) end
+                self:burst(best.x, 6, best.z, 8, { "n", "t", "u" }, 18)
+                self:shock(best.x, best.z, 10, 0.3, "t", "n")
+                self:cue("thump", best.x, best.z)
+            end
+        end
+    end
+    if self.mods.stem or self.mods.sundew then
+        for _, e in ipairs(self.enemies) do
+            if not e.dead and not e.under and not e.hidden then
+                local d = D.ENEMIES[e.kind]
+                local d2 = (e.x - h.x) ^ 2 + (e.z - h.z) ^ 2
+                if self.mods.stem and d.fly and d2 <= 36 * 36 then self:hurt(e, 8 * dt, true, true) end
+                if self.mods.sundew and not d.fly and not d.noSlow and d2 <= 40 * 40 then
+                    e.stick = min((e.stickT or 0) > 0 and e.stick or 1, 0.5)
+                    e.stickT = max(e.stickT or 0, 0.2)
+                end
+            end
+        end
+    end
+end
+
+-- The flytrap shuts on one: eaten whole if it is small enough, else bitten.
+function Game:snap(e, trap)
+    local d = D.ENEMIES[e.kind]
+    local eat = self.mods.jaws and 80 or trap.eat
+    self:cue("clack", e.x, e.z)
+    self:shock(e.x, e.z, 8, 0.25, "g", "m")
+    if not d.boss and e.hp <= eat and not (e.ballHp and e.ballHp > 0) then
+        self:kill(e)
+        self.heartHp = min(self.heartMax, self.heartHp + trap.heal)
+        if self.mods.digest and d.corpse > 0 then
+            self.nutrients = self.nutrients + d.corpse
+            self:say("+" .. d.corpse, e.x, 10, e.z, "g")
+        end
+        self:burst(e.x, 4, e.z, 6, { "g", "r" }, 16)
+    else
+        self:hurt(e, trap.bite)
+    end
+end
+
+-- A tomato's Splat: what reached the sprout bursts a fruit on those near it.
+function Game:splatFruit()
+    local h = self.heart
+    for _, e in ipairs(self.enemies) do
+        if not e.dead and not e.under and not e.hidden and (e.x - h.x) ^ 2 + (e.z - h.z) ^ 2 <= 36 * 36 then
+            self:hurt(e, 15)
+            if not e.dead and not D.ENEMIES[e.kind].noSlow then e.stick, e.stickT = 0.5, 3 end
+        end
+    end
+    self:splat(h.x, h.z, 14, "r", 4)
+    self:burst(h.x, 6, h.z, 14, { "r", "w" }, 26)
+    self:cue("splash", h.x, h.z)
+end
+
+-- What the seed does when a wave is cleared.
+function Game:seedCleared()
+    local h = self.heart
+    if self.mods.growth then
+        self.heartMax = self.heartMax + 1
+        self.heartHp = self.heartHp + 1
+    end
+    if self.mods.seedhead then
+        local n = 0
+        for _, o in ipairs(self.nodes) do if o.tower and self:sunlit(o) then n = n + 1 end end
+        if n > 0 then
+            self.nutrients = self.nutrients + 4 * n
+            self:say("SEED HEAD +" .. 4 * n, h.x, 38, h.z, "t")
+        end
+    end
+    if self.mods.compost then
+        local paid = 0
+        for k = #self.corpses, 1, -1 do
+            local c = self.corpses[k]
+            if not c.absorb and not c.carried then
+                paid = paid + c.value * 0.5
+                table.remove(self.corpses, k)
+            end
+        end
+        paid = floor(paid + 0.5)
+        if paid > 0 then
+            self.nutrients = self.nutrients + paid
+            self:say("COMPOST +" .. paid, h.x, 46, h.z, "l")
+        end
+    end
+end
+
+-- A dandelion's Seed Drift: a puffer on an empty fed pocket, free.
+function Game:drift()
+    local open = {}
+    for _, n in ipairs(self.nodes) do
+        if n.conn and not n.heart and not n.tower and (n.salted or 0) <= 0 then open[#open + 1] = n end
+    end
+    if not open[1] then return end
+    local n = open[random(#open)]
+    self:plant("puffer", n, 0)
+    self:say("SEED DRIFT", n.x, n.y + 18, n.z, "w")
+end
+
 --- links, towers, mats -----------------------------------------------------------------------
 
 function Game:updateLinks(dt)
     local changed = false
-    local quick = (self.mods.quick and 2 or 1) * (self:sky().grow or 1)
-    local full = self:linkHp()
+    local quick = (self.mods.quick and 2 or 1) * (self:sky().grow or 1) * (self.seed.grow or 1)
     for _, l in ipairs(self.links) do
+        local full = self:linkFull(l)
         if l.flash then
             l.flash = l.flash - dt
             if l.flash <= 0 then l.flash = nil end
@@ -1280,8 +1495,9 @@ function Game:updateTowers(dt)
                     self.nutrients = self.nutrients - take
                 end
             end
-            t.reach = Q[n.quality].power
+            t.reach = Q[self:quality(n)].power
             t.power = t.reach * (n.ringed and self:ringDamage() or 1) * (t.amp or 1)
+            if self:sunlit(n) then t.power = t.power * self.seed.sun.damage end
             if t.boost then
                 t.boost = t.boost - dt
                 if t.boost <= 0 then t.boost = nil end
@@ -1452,8 +1668,9 @@ end
 -- drinks while it has something to do.
 function Game:mane(n, t, S, power, boost, dt)
     local busy = false
-    local care, full = t.care or { [n] = true }, self:linkHp()
+    local care = t.care or { [n] = true }
     for _, l in ipairs(self.links) do
+        local full = self:linkFull(l)
         if care[l.a] or care[l.b] then
             if l.state == "alive" and l.hp < full then
                 l.hp = min(full, l.hp + S("heal") * power * boost * dt)
@@ -1698,8 +1915,7 @@ function Game:quake(n, t, S, power, range, list)
     end
     local mend = S("mend")
     if mend then
-        local full = self:linkHp()
-        for _, l in ipairs(self:linksNear(n.x, n.z, range)) do l.hp = min(full, l.hp + mend) end
+        for _, l in ipairs(self:linksNear(n.x, n.z, range)) do l.hp = min(self:linkFull(l), l.hp + mend) end
     end
     self.fx[#self.fx + 1] = { wave = true, x = n.x, z = n.z, r = range, life = 0.7, max = 0.7, honey = stick ~= nil }
     self.events.shake = max(self.events.shake or 0, 0.12)
@@ -2015,6 +2231,7 @@ function Game:reachHeart(e)
     local d = D.ENEMIES[e.kind]
     local hit = d.heart
     if e.ballHp and e.ballHp > 0 then hit = hit + d.ballHeart end
+    if self.mods.heartwood then hit = hit * 0.7 end
     self.heartHp = self.heartHp - hit
     self.stats.leaked[e.kind] = (self.stats.leaked[e.kind] or 0) + hit
     self.events.heart = true
@@ -2032,6 +2249,7 @@ function Game:reachHeart(e)
     self:burst(self.heart.x, 10, self.heart.z, d.boss and 20 or 6, { "g", "m" }, 20)
     self:shock(self.heart.x, self.heart.z, d.boss and 28 or 14, 0.4, "r", "g")
     self:cue("heart", self.heart.x, self.heart.z)
+    if self.mods.splat then self:splatFruit() end
 end
 
 -- Jaws at a thread: chips of it fly, and it can be heard.

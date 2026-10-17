@@ -180,7 +180,7 @@ function B.generic(g)
     end
     local next, laid, upTurn = 1, 0, 0
     return function()
-        if g.phase == "mutate" then g:mutate(1) end
+        if g.phase == "mutate" then g:mutate(B.choose(g)) end
         -- Repair, and prune whatever brine is running down.
         for _, e in ipairs(g.enemies) do
             if e.slide and e.slide.state == "alive" then g:prune(e.slide) end
@@ -261,10 +261,17 @@ local function going(g, endless, clock)
     return g.phase ~= "won" and g.phase ~= "lost" and clock < (endless and 7200 or 3600)
 end
 
-local function run(seed, lv, generic, challenge, endless)
+-- The mutation it takes: the first offered, but not Seed Drift, whose free
+-- puffers take the pockets a build order is saving.
+function B.choose(g)
+    for k, m in ipairs(g.choices) do if m.id ~= "drift" then return k end end
+    return 1
+end
+
+local function run(seed, lv, generic, challenge, endless, sprout)
     love.math.setRandomSeed(seed)
     local world = World.new(lv.map)
-    local g = Game.new(world, lv, { challenge = challenge })
+    local g = Game.new(world, lv, { challenge = challenge, seed = sprout })
     local PLAN = PLANS[lv.id]
     if generic or not PLAN then
         local act = B.generic(g)
@@ -284,44 +291,68 @@ local function run(seed, lv, generic, challenge, endless)
         error("no pocket " .. p[1] .. "," .. p[2])
     end
     local step = 1
+    -- Builds and lays of a species not come yet, and the upgrades of their pockets: put
+    -- by while the rest of the plan goes on, and taken up again once it comes.
+    local later, waits = {}, {}
+    local function try(s)
+        local done = false
+        if s[1] == "link" then
+            local a, b = node(s[2]), node(s[3])
+            if g:linkBetween(a, b) then done = true
+            elseif g:canLink(a, b) then local l = g:grow(a, b); done = l and true end
+        elseif s[1] == "build" then
+            local n = node(s[3])
+            if s.link and not g:linkBetween(n, node(s.link)) then
+                if g:canLink(node(s.link), n) then g:grow(node(s.link), n) else return end
+            end
+            if n.tower and n.tower.kind == s[2] then done = true
+            elseif not g:unlocked(s[2]) then return "later"
+            elseif g:canBuild(s[2], n) then done = g:build(s[2], n) and true end
+        elseif s[1] == "lay" then
+            local m = g:matAt(s[3][1], s[3][2])
+            if m then done = true
+            elseif not g:unlocked(s[2]) then return "later"
+            else
+                local ok, why = g:canLay(s[2], s[3][1], s[3][2])
+                if ok then done = g:lay(s[2], s[3][1], s[3][2]) and true
+                elseif why == "TILE TAKEN" then done = true end
+            end
+        elseif s[1] == "up" then
+            local n = node(s[2])
+            local t = n.tower
+            if not t and waits[n] then return "later"
+            elseif not t or not g:upgrades(t)[1] then done = true
+            elseif g:canUpgrade(t, s[3]) or g:canUpgrade(t, t.branch or s[3]) then
+                done = g:upgrade(t, t.branch or s[3])
+            end
+        end
+        return done
+    end
     local function act()
+        -- What was put by comes first, in plan order, once it can be done.
+        local k = 1
+        while later[k] do
+            local s = later[k]
+            local done = try(s)
+            if done == "later" then k = k + 1
+            elseif done then
+                table.remove(later, k)
+                if s[1] == "build" then waits[node(s[3])] = nil end
+            else return end
+        end
         while PLAN[step] do
             local s = PLAN[step]
-            local done = false
-            if s[1] == "link" then
-                local a, b = node(s[2]), node(s[3])
-                if g:linkBetween(a, b) then done = true
-                elseif g:canLink(a, b) then local l = g:grow(a, b); done = l and true end
-            elseif s[1] == "build" then
-                local n = node(s[3])
-                if s.link and not g:linkBetween(n, node(s.link)) then
-                    if g:canLink(node(s.link), n) then g:grow(node(s.link), n) else return end
-                end
-                if n.tower and n.tower.kind == s[2] then done = true
-                elseif g:canBuild(s[2], n) then done = g:build(s[2], n) and true
-                elseif not g:unlocked(s[2]) then done = false end
-            elseif s[1] == "lay" then
-                local m = g:matAt(s[3][1], s[3][2])
-                if m then done = true
-                else
-                    local ok, why = g:canLay(s[2], s[3][1], s[3][2])
-                    if ok then done = g:lay(s[2], s[3][1], s[3][2]) and true
-                    elseif why == "TILE TAKEN" then done = true end
-                end
-            elseif s[1] == "up" then
-                local t = node(s[2]).tower
-                if not t or not g:upgrades(t)[1] then done = true
-                elseif g:canUpgrade(t, s[3]) or g:canUpgrade(t, t.branch or s[3]) then
-                    done = g:upgrade(t, t.branch or s[3])
-                end
-            end
-            if not done then return end
+            local done = try(s)
+            if done == "later" then
+                later[#later + 1] = s
+                if s[1] == "build" then waits[node(s[3])] = true end
+            elseif not done then return end
             step = step + 1
         end
     end
     local clock = 0
     while going(g, endless, clock) do
-        if g.phase == "mutate" then g:mutate(1) end
+        if g.phase == "mutate" then g:mutate(B.choose(g)) end
         act()
         -- Rebuild what slugs ate and brine sterilised: walk the plan again from the top.
         for k = 1, step - 1 do
@@ -356,18 +387,20 @@ end
 
 function B.run(args)
     local runs = tonumber(args[1]) or 4
-    local lv, generic, challenge, endless = D.LEVELS[1], false, false, false
+    local lv, generic, challenge, endless, sprout = D.LEVELS[1], false, false, false, nil
     for _, a in ipairs(args) do
         if D.LEVEL[a] then lv = D.LEVEL[a] end
+        if D.SEED[a] then sprout = a end
         if a == "generic" then generic = true end
         if a == "challenge" then challenge = true end
         if a == "endless" then endless = true end
     end
-    print(lv.name .. (challenge and " (challenge)" or "") .. ((generic or not PLANS[lv.id]) and ", generic player" or ""))
+    print(lv.name .. (challenge and " (challenge)" or "") .. ((generic or not PLANS[lv.id]) and ", generic player" or "")
+        .. (sprout and (", " .. D.SEED[sprout].name) or ""))
     local won = 0
     for seed = 1, runs do
         local t0 = love.timer.getTime()
-        local g = run(seed, lv, generic, challenge, endless)
+        local g = run(seed, lv, generic, challenge, endless, sprout)
         if g.phase == "won" or g.endless then won = won + 1 end
         if g.endless then print("   endless: held " .. g.cleared .. " waves") end
         local leaks = {}

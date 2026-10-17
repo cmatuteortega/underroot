@@ -192,6 +192,47 @@ D.TOWERS = {
 }
 D.TOWER = {}
 for _, t in ipairs(D.TOWERS) do D.TOWER[t.id] = t end
+
+-- The Spore Bank. The first six species are grown from the start; each of the
+-- other six is put up for sale by winning a level (its `prize`, below) and
+-- bought for good with spores at its `price`. A run pays a spore for every
+-- wave it clears and more for a win.
+D.STARTERS = 6
+for k, t in ipairs(D.TOWERS) do t.starter = k <= D.STARTERS end
+for id, price in pairs({ stink = 20, shelf = 25, mortar = 30, lamp = 35, cordyceps = 40, giant = 50 }) do
+    D.TOWER[id].price = price
+end
+D.SPORES = { wave = 1, win = 10 }
+
+-- Sprout seeds: the plant at the end of the trail, picked with the loadout.
+-- Spores buy them too: the bean is there from the start, the oak and the
+-- tomato are for sale from the start, the rest once `after` is won. `heart`,
+-- `income` and `grow` scale the level's sprout, its sugar and how fast links
+-- grow; `start` adds to its nutrients. Each brings mutations of its own (MUTATIONS rows with its
+-- `seed`), one of which is on offer every time the network mutates.
+D.SEEDS = {
+    { id = "bean", name = "BEAN SPROUT", short = "BEAN",
+        blurb = "AS IT COMES: NOTHING GAINED, NOTHING GIVEN UP",
+        about = "THE SPROUT YOU KNOW. ITS MUTATIONS ARE ABOUT GROWING: QUICK THREADS, RICHER POCKETS, FREE LINKS." },
+    { id = "oak", name = "OAK SAPLING", short = "OAK", price = 15, heart = 1.5, grow = 0.75,
+        blurb = "SPROUT +50% HP, BUT LINKS GROW 25% SLOWER",
+        about = "TOUGH AND SLOW. IT TAKES THE HITS SO THE NETWORK CAN BE THIN. ITS MUTATIONS HARDEN IT AND THE THREADS AT ITS FOOT." },
+    { id = "tomato", name = "TOMATO SEEDLING", short = "TOMATO", price = 15, heart = 0.7, income = 1.1, start = 10,
+        blurb = "SUGAR +10%, +10 TO START, SPROUT -30% HP",
+        about = "RICH BUT SOFT. MORE TO SPEND ON EVERY WAVE, AND LESS ROOM FOR A LEAK. ITS MUTATIONS PAY MORE, OR BURST ON WHAT GETS THROUGH." },
+    { id = "dandelion", name = "DANDELION", short = "DANDELION", price = 25, after = "flowerpot", regrow = 1,
+        blurb = "KILLED, IT REGROWS ONCE AT HALF HEALTH",
+        about = "A WEED: KILL IT AND IT COMES BACK, ONCE, AT HALF ITS HP, AND THE WAVE GOES ON. ITS MUTATIONS SPREAD IT ON THE WIND." },
+    { id = "sunflower", name = "SUNFLOWER", short = "SUNFLOWER", price = 35, after = "log", sun = { hops = 2, damage = 1.15 },
+        blurb = "TOWERS 2 HOPS FROM IT HIT 15% HARDER, BUT NOT AT NIGHT",
+        about = "IT FACES THE SUN, AND WHAT GROWS CLOSE TO IT HITS HARDER BY DAY. AT NIGHT IT HANGS ITS HEAD. ITS MUTATIONS FEED ON THE LIGHT." },
+    { id = "flytrap", name = "VENUS FLYTRAP", short = "FLYTRAP", price = 45, after = "lawn", income = 0.9,
+        trap = { range = 26, every = 2.5, bite = 20, eat = 40, heal = 0.5 },
+        blurb = "SNAPS AT BUGS NEAR IT. EATS SMALL ONES. SUGAR -10%",
+        about = "IT BITES WHAT COMES CLOSE: A BUG WITH 40 HP LEFT OR LESS IS EATEN WHOLE, AND HEALS IT A LITTLE. ITS MUTATIONS SHARPEN THE TRAP." },
+}
+D.SEED = {}
+for _, s in ipairs(D.SEEDS) do D.SEED[s.id] = s end
 D.SELL = 0.6
 
 -- Enemies. `chew` is damage a second to a link it stops on; `bite` is damage a
@@ -303,6 +344,57 @@ D.ENEMY_ORDER = { "ant", "pillbug", "mite", "gnat", "moth", "brine", "slug", "sp
     "cricket", "centi",
     "queen", "stag", "dung", "click", "waterbug", "centipede", "bombardier", "mole" }
 
+-- What the encyclopedia says of each enemy: the whole of what it does, where
+-- the loadout's chip has room for one line (`blurb`).
+for kind, about in pairs({
+    ant = "THE COMMON WORKER. IT STOPS ON A LINK IT WALKS INTO AND CHEWS IT FOR A SECOND, ONCE PER LINK. "
+        .. "IT PICKS UP A CORPSE LYING IN ITS WAY: IF IT REACHES THE SPROUT WITH IT, THE BODY IS GONE. "
+        .. "KILLED, OR HIT BY SMOKE, IT DROPS IT.",
+    pillbug = "PLATED AND PLODDING. AFTER 3.5S OF WALKING IT ROLLS UP FOR 2.6S: ARMOR 10, THREE TIMES AS FAST, "
+        .. "AND ANY LINK IT CROSSES IS CUT OUTRIGHT. A SLIME MAT UNCURLS IT AND HOLDS IT FOR A SECOND, "
+        .. "AND A SHIELDED LINK TAKES 20 DAMAGE INSTEAD OF BREAKING.",
+    mite = "TEN TO A SWARM, EACH A SPECK WITH 4 HP. EACH PICKS THE NEAREST LINK IT CAN SNIFF OUT AND GNAWS IT FOR 6S, "
+        .. "THEN GOES BACK TO THE MARCH. ONE SPLASH CLEARS A CLUMP. INK BLINDS THEM: THEY CANNOT PICK A THREAD.",
+    gnat = "A FLIER. IT IGNORES THE TRAIL AND MAKES STRAIGHT FOR THE SPROUT, OVER MATS AND SHELVES. ONLY SPORE PUFFERS "
+        .. "AND ENOKI NEEDLES CAN HIT IT. A GHOST LAMP LURES IT, AND A FED STINKHORN BAITS IT INTO CIRCLING.",
+    moth = "A FLIER THAT COMES OUT AT NIGHT. IT GOES FOR THE BRIGHTEST LIGHT IT CAN SEE, A LIT GHOST LAMP OR ELSE THE "
+        .. "NEAREST GLOWING TOWER, AND NIBBLES IT TO NOTHING. ONLY SPORE PUFFERS AND ENOKI NEEDLES CAN HIT IT.",
+    brine = "A DROP OF SALT WATER. IT RUNS DOWN THE FIRST LINK IT TOUCHES, AWAY FROM THE SPROUT, SALTING WHAT IT PASSES, "
+        .. "AND A POCKET IT REACHES IS STERILISED. PRUNE THE LINK AHEAD OF IT AND IT FALLS OFF AND FIZZLES.",
+    slug = "HUGE AND PATIENT, AND NOTHING SLOWS IT BUT FROST. IT STOPS TO EAT ANY FRUITING BODY WITHIN 15 OF THE TRAIL, "
+        .. "8 HP A SECOND. A MAT STILL DIGESTS IT AND INK STILL BLINDS IT.",
+    spider = "FAST AND CUNNING. EVERY 9S IT LEAVES THE TRAIL FOR THE DEADLIEST TOWER WITHIN 56 AND WEBS IT SHUT FOR 5S. "
+        .. "INK BLINDS IT, AND A LION'S MANE WITH PURGE CLEARS THE WEB.",
+    knight = "A WALKING SHELL: ARMOR 9 TURNS MOST OF EVERY CHEAP HIT. ENOKI NEEDLES PIERCE IT, AND A CORDYCEPS BLOOM "
+        .. "CAN TURN IT. IT CHEWS EVERY LINK IT WALKS INTO FOR 2S.",
+    springtail = "EVERY 2.6S IT SPRINGS OFF ITS TAIL: OVER A SHELF, OFF A MAT, PAST WHATEVER WAS HOLDING IT. "
+        .. "THE FIRST TIME IT COMES DOWN ON A LINK, THE LINK SNAPS.",
+    cricket = "IT WALKS THE TRAIL UNTIL A LINK IS IN REACH, THEN SINKS AND BURROWS UNDER THE BOARD, WHERE NOTHING CAN "
+        .. "TOUCH IT. IT COMES UP BESIDE THE LINK AND CUTS IT (A SHIELDED ONE TAKES 20), THEN SITS STILL AND SOFT FOR "
+        .. "2.2S. TWICE, THEN BACK TO THE TRAIL. IT CANNOT COME UP IN WATER.",
+    centi = "A HEAD AND A TRAIN OF 4 SEGMENTS, EACH ITS OWN ENEMY. IT DOES NOT CUT WHAT IT CROSSES BUT WEARS IT: "
+        .. "EVERY BODY OF IT GNAWS EVERY LINK WITHIN 4 AT 7 A SECOND. A SPLASH HITS SEVERAL AT ONCE.",
+    queen = "THE BROOD MOTHER. SHE LAYS 3 WORKER ANTS EVERY 6S AS SHE WALKS, AND GNAWS EVERY THREAD WITHIN 8 OF HER.",
+    stag = "EVERY 9S IT CHARGES FOR 1.5S AT THREE TIMES ITS PACE. ITS JAWS SHEAR EVERY LINK IT PASSES, AND STUN "
+        .. "EVERY TOWER WITHIN 18 FOR 3S.",
+    dung = "IT WALKS BACKWARDS, PUSHING ITS BALL AHEAD. THE BALL SOAKS EVERY HIT UNTIL IT BREAKS (900 HP), AND "
+        .. "FLATTENS EVERY LINK AND MAT IT ROLLS OVER. A BALL THAT REACHES THE SPROUT HITS IT FOR 20 MORE. "
+        .. "ONCE THE BALL BREAKS, THE BEETLE WALKS X1.5 AS FAST.",
+    click = "EVERY 7S IT ROLLS ON ITS BACK AND PLAYS DEAD FOR 2.4S: NO ARMOR, AND IT TAKES X1.5 DAMAGE. THEN IT CLICKS "
+        .. "AND LEAPS DOWN THE TRAIL. WHERE IT LANDS, LINKS WITHIN 20 ARE CUT AND TOWERS WITHIN 30 STUNNED FOR 2.5S.",
+    waterbug = "IT LURKS UNDER A FLOODED TRAIL TILE, WHERE NOTHING CAN SEE OR HURT IT. EVERY 7S IT LUNGES AT A TOWER "
+        .. "WITHIN 44 THAT IS NOT ON HIGH GROUND AND DRAGS IT AT 30 A SECOND FOR 2.6S. A FED LION'S MANE TENDING THE "
+        .. "TOWER HALVES ITS GRIP.",
+    centipede = "A HEAD AND 11 ARMORED SEGMENTS, EACH ITS OWN ENEMY WITH ITS OWN HP, AND EVERY ONE CUTS THE LINKS IT "
+        .. "CROSSES. BREAK A SEGMENT AND IT SPLITS: THE ONE BEHIND LEADS A TRAIN OF ITS OWN.",
+    bombardier = "CHALLENGE MODE'S BOSS. AS IT WALKS IT SCALDS THE NEAREST TOWER EVERY 6S. THREE TILES FROM THE "
+        .. "SPROUT IT STOPS AND SPRAYS THE SPROUT ITSELF, AND WHATEVER STANDS IN THE WAY, A SHELF OR A TOWER, "
+        .. "TAKES THE SPRAY INSTEAD.",
+    mole = "EVERY 10S IT STOPS AND DIGS, STILL AND OPEN TO ANYTHING, THEN BURROWS STRAIGHT ACROSS TO THE TRAIL FURTHER "
+        .. "ON, THROUGH THE WALL TO THE NEXT TURN, AND COMES UP DAZED. THE TUNNEL STAYS OPEN, AND WALKERS THAT REACH "
+        .. "THE HOLE FOLLOW IT. KILL IT AND THE TUNNEL CAVES IN, WITH WHATEVER IS DOWN IT.",
+}) do D.ENEMIES[kind].about = about end
+
 -- What answers each enemy: the species the loadout picker lights up when the
 -- player points at one coming in the level (the design doc's counterplay).
 D.COUNTERS = {
@@ -344,6 +436,120 @@ D.WEATHER = {
         blurb = "LAMPS AND THE GLOWING NETWORK REACH FURTHER. MOTHS COME OUT" },
     frost = { name = "FROST", pace = 0.8, grow = 0.6,
         blurb = "EVERYTHING SLOWS: GROWTH, FIRE AND ENEMIES ALIKE" },
+}
+
+-- The encyclopedia's glossary: every status and word of the game's that wants
+-- explaining. Wherever one of its `forms` is written in the encyclopedia it
+-- gets a footnote with the `about`; a `skip` phrase is the same letters
+-- meaning something else ("HUGE SLOW BLASTS" are not a slow), left alone.
+-- Longer forms are matched first, so CUT OFF is not a CUT.
+D.GLOSSARY = {
+    { name = "STUNNED", forms = { "STUN", "STUNS", "STUNNED" },
+        about = "DOES NOTHING: AN ENEMY STOPS WALKING, CHEWING AND WEBBING, A TOWER STOPS FIRING. IT STILL TAKES "
+            .. "DAMAGE. THE LONGEST STUN WINS: THEY DO NOT ADD UP." },
+    { name = "MARKED", forms = { "MARK", "MARKS", "MARKED" },
+        about = "TAKES +25% DAMAGE FROM EVERYTHING (+45% FROM HUNTER'S MARK) FOR 4S, REFRESHED BY EVERY NEEDLE HIT." },
+    { name = "STENCH", forms = { "STENCH", "REEK" },
+        about = "INSIDE A STINKHORN'S RANGE OR ALONG ITS LINKS: SLOWED TO X0.75 OR LESS, AND NOW AND THEN TRIPPED "
+            .. "FOR 0.5S. FLIERS FLY OVER IT, AND BOSSES NEVER TRIP." },
+    { name = "PANIC", forms = { "PANIC", "FLEE", "FLEES" },
+        about = "TURNS ROUND AND WALKS BACK THE WAY IT CAME FOR 1.2S (2S WITH TERROR), AND STOPS CHEWING. "
+            .. "NOT BOSSES, BRINE OR A CENTIPEDE'S TRAIN." },
+    { name = "SLOWED", forms = { "SLOW", "SLOWS", "SLOWED" },
+        skip = { "SLOW BLASTS", "RUN, SLOW", "SLOW, HUGE", "TOUGH AND SLOW" },
+        about = "MOVES SLOWER. SLOWS MULTIPLY: AN ANT IN INK, IN STENCH AND ON A MAT GETS ALL THREE. THE SLUG "
+            .. "IGNORES EVERY SLOW BUT FROST." },
+    { name = "ARMOR", forms = { "ARMOR", "ARMORED" },
+        about = "TAKEN OFF EVERY HIT, BUT AT LEAST 15% OF A HIT ALWAYS GETS THROUGH: MANY SMALL HITS ARE WASTED "
+            .. "ON IT. A NEEDLE PIERCES IT." },
+    { name = "PIERCE", forms = { "PIERCE", "PIERCES" },
+        about = "AN ENOKI NEEDLE'S SHOT IGNORES ARMOR." },
+    { name = "FLIER", forms = { "FLIER", "FLIERS" },
+        about = "FLIES OVER THE BOARD STRAIGHT FOR THE SPROUT: NO TRAIL, NO MATS, NO SHELVES. ONLY SPORE PUFFERS "
+            .. "AND ENOKI NEEDLES CAN HIT IT." },
+    { name = "BOSS", forms = { "BOSS", "BOSSES" },
+        about = "A BIG BUG, THREE ON EVERY LEVEL. IT DOES NOT GET TOUGHER WAVE BY WAVE, AND IT CANNOT BE TRIPPED, "
+            .. "PANICKED, LURED OR INFECTED." },
+    { name = "CHEWING", forms = { "CHEW", "CHEWS", "CHEWING", "CHEWED", "GNAW", "GNAWS", "GNAWING" },
+        about = "AN ENEMY ON A LINK WEARS IT DOWN: A LINK HAS 40 HP, AND AT 0 IT IS CUT. A SHELF IN ITS WAY IS "
+            .. "CHEWED THROUGH THE SAME WAY." },
+    { name = "CUT OFF", forms = { "CUT OFF" },
+        about = "NO LIVING PATH TO THE SPROUT: A TOWER RUNS ON ITS RESERVE, CANNOT REFILL AND COUNTS AS STARVED. "
+            .. "RECONNECT IT." },
+    { name = "CUT", forms = { "CUT", "CUTS", "SHEAR", "SHEARS", "SNAPS" },
+        about = "A CUT LINK CARRIES NOTHING, AND WHATEVER WAS BEYOND IT IS CUT OFF UNTIL IT REGROWS." },
+    { name = "STARVED", forms = { "STARVED", "STARVE" },
+        about = "CUT OFF, OR ITS RESERVE BELOW 30%: A SHOOTER FIRES AT HALF PACE. DRAWN ONE STEP DARKER." },
+    { name = "DORMANT", forms = { "DORMANT" },
+        about = "RESERVE BELOW ONE SHOT, OR A RELAY NOT CONNECTED: IT DOES NOTHING AT ALL. A LAMP GOES DARK, A "
+            .. "STINKHORN'S FLIES LEAVE. FEED IT." },
+    { name = "RESERVE", forms = { "RESERVE" },
+        about = "WHAT A TOWER HOLDS. EACH SHOT SPENDS SOME, AND A CONNECTED TOWER REFILLS FROM THE SPROUT AS FAST "
+            .. "AS ITS PATH CARRIES." },
+    { name = "FLOW", forms = { "FLOW" },
+        about = "WHAT A LINK CARRIES: 3 NUTRIENTS A SECOND, X2 OUT OF A RELAY, X1.5 IN RAIN, X0.7 IN DROUGHT." },
+    { name = "THIRSTY", forms = { "THIRSTY" },
+        about = "A PUFFBALL MORTAR WHOSE PATH CARRIES LESS THAN 5 A SECOND FIRES AT HALF PACE. FEED IT THROUGH "
+            .. "A RELAY." },
+    { name = "WEBBED", forms = { "WEB", "WEBS", "WEBBED" },
+        about = "A TOWER UNDER A WOLF SPIDER'S WEB CANNOT FIRE FOR 5S. A LION'S MANE WITH PURGE CLEARS IT, AND "
+            .. "SANCTUARY KEEPS IT OFF." },
+    { name = "INKED", forms = { "INK", "INKED", "BLIND", "BLINDS" },
+        about = "IN AN INKY CAP'S POOL: SLOWED TO X0.7 OR LESS, AND BLIND. IT CANNOT START CHEWING A LINK, STOPS "
+            .. "ONE IT IS CHEWING, AND A SPIDER CANNOT WEB. A POOL LASTS 5S, HALF THAT IN RAIN." },
+    { name = "LURED", forms = { "LURE", "LURES", "LURED", "DECOY" },
+        about = "A WALKER OR FLIER IN A LIT GHOST LAMP'S GLOW LEAVES THE TRAIL AND CHEWS THE LAMP FOR 5S, OR UNTIL "
+            .. "IT GOES OUT. ONCE PER ENEMY. NEVER BOSSES, BRINE, MITES OR HOSTS." },
+    { name = "BAITED", forms = { "BAIT", "BAITS", "BAITED" },
+        about = "A GNAT OR MOTH WITHIN 70 OF A FED STINKHORN FLIES TO IT AND CIRCLES IT FOR 6S INSTEAD OF GOING "
+            .. "FOR THE SPROUT. ONCE PER FLIER." },
+    { name = "INFECTED", forms = { "INFECT", "INFECTS", "INFECTED", "HOST", "HOSTS" },
+        about = "A CORDYCEPS HOST WALKS BACK THE WAY IT CAME, BITING EVERY WALKER NEAR IT, AND TOWERS LEAVE IT "
+            .. "BE. WHEN THE HOLD RUNS OUT IT DIES AND FRUITS. NOT FLIERS, BOSSES, BRINE OR A CENTIPEDE'S TRAIN." },
+    { name = "SALTED", forms = { "SALT", "SALTED", "SALTING", "STERILISING", "STERILISED" },
+        about = "A LINK A BRINE DROP RAN DOWN IS CUT FOR GOOD: IT NEVER REGROWS, SO PRUNE IT. A POCKET IT REACHES "
+            .. "LOSES ITS TOWER, AND NOTHING GROWS THERE FOR 12S." },
+    { name = "SHIELDED", forms = { "SHIELD", "SHIELDS", "SHIELDED" },
+        about = "A LINK WITHIN 30 OF A SHELF FUNGUS TAKES A THIRD OF THE CHEWING, AND A CRUSH DOES IT 20 DAMAGE "
+            .. "INSTEAD OF CUTTING IT." },
+    { name = "REGROW", forms = { "REGROW", "REGROWS", "REGROWTH" },
+        about = "A CUT LINK GROWS BACK: CLICK IT (40% OF ITS COST, 3S), REGROW THEM ALL AT ONCE, OR LET A LION'S "
+            .. "MANE DO IT. A SALTED ONE NEVER DOES." },
+    { name = "PRUNE", forms = { "PRUNE", "PRUNED" },
+        about = "THE PRUNE TOOL TAKES A LINK AWAY (HALF ITS COST BACK), OR SELLS A TOWER FOR 60% OF WHAT WAS SPENT "
+            .. "ON IT." },
+    { name = "HOP", forms = { "HOP", "HOPS" }, skip = { "HOPS OVER" },
+        about = "ONE LINK ALONG THE NETWORK. HOPS OUT ARE COUNTED FROM THE SPROUT." },
+    { name = "DEAD END", forms = { "DEAD END" },
+        about = "A POCKET WITH ONLY ONE LINK: THE TIP OF A BRANCH." },
+    { name = "HIGH GROUND", forms = { "HIGH GROUND" },
+        about = "A RAISED POCKET. A MORTAR THERE HAS NO MIN RANGE AND +20% RANGE, AND A GIANT WATER BUG CANNOT "
+            .. "GRAB WHAT GROWS ON IT." },
+    { name = "MIN RANGE", forms = { "MIN RANGE" },
+        about = "A MORTAR CANNOT HIT ANYTHING CLOSER TO IT THAN 22." },
+    { name = "FAIRY RING", forms = { "FAIRY RING", "RING", "RINGS" },
+        about = "FOUR OR MORE FED POCKETS LINKED IN A LOOP (THREE ON THE ROTTING LOG). TOWERS ON IT HIT X1.25, AND "
+            .. "ENEMIES INSIDE IT WADE AT X0.7." },
+    { name = "SPORE PULSE", forms = { "SPORE PULSE", "PULSE", "BOOSTED" },
+        about = "SENT TO A POCKET EVERY 45S: THE TOWERS ON ITS PATH FROM THE SPROUT FIRE TWICE AS OFTEN FOR X1.5 "
+            .. "DAMAGE FOR 6S." },
+    { name = "POISON", forms = { "POISON", "TOXIN" },
+        about = "A LINGERING SPORE CLOUD KEEPS HURTING WHATEVER STANDS IN IT, EVERY SECOND IT HANGS THERE." },
+    { name = "CORPSE", forms = { "CORPSE", "CORPSES", "BODY", "BODIES" },
+        about = "WHAT A DEAD ENEMY LEAVES. AN INKY CAP DRINKS IT FOR NUTRIENTS, AND A WORKER ANT CAN CARRY IT OFF." },
+    { name = "NUTRIENTS", forms = { "NUTRIENTS", "SUGAR" },
+        about = "WHAT A RUN IS SPENT IN. THE SPROUT MAKES THEM WHILE A WAVE IS ON, EVERY CLEARED WAVE PAYS MORE, "
+            .. "AND BODIES DRUNK ADD TO THEM." },
+    { name = "SPORES", forms = { "SPORES" },
+        about = "KEPT IN THE SPORE BANK BETWEEN RUNS: ONE FOR EVERY WAVE CLEARED, 10 MORE FOR A WIN. THEY BUY "
+            .. "SPECIES AND SEEDS." },
+    { name = "MUTATION", forms = { "MUTATION", "MUTATIONS" },
+        about = "AFTER SOME WAVES THE NETWORK MUTATES: PICK ONE OF THREE CHANGES FOR THE REST OF THE RUN. A SEED "
+            .. "BRINGS SOME OF ITS OWN." },
+    { name = "RAIN", forms = { "RAIN" }, about = D.WEATHER.rain.blurb .. "." },
+    { name = "DROUGHT", forms = { "DROUGHT" }, about = D.WEATHER.drought.blurb .. "." },
+    { name = "NIGHT", forms = { "NIGHT" }, about = D.WEATHER.night.blurb .. "." },
+    { name = "FROST", forms = { "FROST" }, about = D.WEATHER.frost.blurb .. "." },
 }
 
 -- Waves: { kind, how many, seconds between, gate, start[, health] }, health
@@ -483,40 +689,38 @@ local LAWN = {
 }
 
 -- The levels, in the order they open: each is won to open the next. `map`
--- names a map in src/world.lua. `open` grows every species from wave one
--- (the player met them all on the Crack); `unlock` overrides that per
--- species. `loadout` is the species brought the first time it is played,
+-- names a map in src/world.lua. Species come as the waves are cleared on
+-- every level (see D.unlockAt); `unlock`, if given, overrides a species'
+-- wave there. `prize` is the species its first win puts up for sale in the
+-- Spore Bank. `loadout` is the species brought the first time it is played,
 -- before the player has picked their own. `growth` is how much tougher each wave's enemies are than the
 -- last's, if not HP_GROWTH. `ringNodes` is how few fed nodes close a Fairy
 -- Ring there, if not RING.nodes. They come in the design doc's order; the
 -- Crack is its first level and has the three bosses the later ones each bring.
 D.LEVELS = {
-    { id = "crack", name = "THE CRACK", map = "crack", waves = CRACK, start = 110, heart = 20,
+    { id = "crack", prize = "stink", name = "THE CRACK", map = "crack", waves = CRACK, start = 110, heart = 20,
         mutateAfter = { [3] = true, [5] = true, [8] = true, [10] = true, [12] = true },
         loadout = { "puffer", "needle", "mat", "mane", "relay", "mortar" },
         idea = "A SIDEWALK CRACK. LEARN THE NETWORK", boss = "QUEEN, STAG, DUNG BEETLE" },
-    { id = "flowerpot", name = "THE FLOWERPOT", map = "flowerpot", waves = FLOWERPOT, start = 130, heart = 20, open = true,
-        growth = 0.42, unlock = { giant = 4 },
+    { id = "flowerpot", prize = "shelf", name = "THE FLOWERPOT", map = "flowerpot", waves = FLOWERPOT, start = 130, heart = 20,
+        growth = 0.42,
         mutateAfter = { [2] = true, [4] = true, [7] = true, [9] = true },
         loadout = { "puffer", "needle", "mat", "mane", "relay", "mortar" },
         idea = "A CRACKED POT. CUT AND REGROW, AND WATCH THE HOLE", boss = "DUNG, MOLE, QUEEN ANT" },
-    { id = "shed", name = "THE SHED FLOOR", map = "shed", waves = SHED, start = 160, heart = 23, open = true, growth = 0.08,
-        unlock = { giant = 5 },
+    { id = "shed", prize = "mortar", name = "THE SHED FLOOR", map = "shed", waves = SHED, start = 160, heart = 23, growth = 0.08,
         mutateAfter = { [3] = true, [5] = true, [8] = true, [10] = true, [12] = true },
         loadout = { "puffer", "needle", "mat", "mane", "shelf", "stink" },
         idea = "BOARDS AND LEGO. HOLD THE CHOKEPOINT", boss = "DUNG, QUEEN, STAG BEETLE" },
-    { id = "log", name = "THE ROTTING LOG", map = "log", waves = LOG, start = 130, heart = 20, open = true, growth = 0.2,
-        ringNodes = 3, unlock = { giant = 4 },
+    { id = "log", prize = "lamp", name = "THE ROTTING LOG", map = "log", waves = LOG, start = 130, heart = 20, growth = 0.2,
+        ringNodes = 3,
         mutateAfter = { [2] = true, [4] = true, [7] = true, [9] = true, [11] = true },
         loadout = { "puffer", "needle", "mane", "lamp", "inky", "mortar" },
         idea = "DARK AND DAMP. THREE NODES CLOSE A RING", boss = "QUEEN, MOLE, CLICK BEETLE" },
-    { id = "pond", name = "THE POND EDGE", map = "pond", waves = POND, start = 150, heart = 20, open = true, growth = 0.08,
-        unlock = { giant = 4 },
+    { id = "pond", prize = "cordyceps", name = "THE POND EDGE", map = "pond", waves = POND, start = 150, heart = 20, growth = 0.08,
         mutateAfter = { [2] = true, [4] = true, [7] = true, [9] = true },
         loadout = { "puffer", "needle", "mat", "mane", "stink", "lamp" },
         idea = "WATER AND REEDS. BUILD ON HIGH GROUND", boss = "QUEEN, STAG, GIANT WATER BUG" },
-    { id = "lawn", name = "THE LAWN", map = "lawn", waves = LAWN, start = 140, heart = 20, open = true, growth = 0.2,
-        unlock = { giant = 5 },
+    { id = "lawn", prize = "giant", name = "THE LAWN", map = "lawn", waves = LAWN, start = 140, heart = 20, growth = 0.2,
         mutateAfter = { [3] = true, [5] = true, [8] = true, [10] = true, [12] = true },
         loadout = { "puffer", "needle", "mat", "mane", "mortar", "stink" },
         idea = "OPEN GRASS, THREE GATES. EVERYTHING AT ONCE", boss = "QUEEN, STAG, GIANT CENTIPEDE" },
@@ -534,6 +738,21 @@ D.CHALLENGE = { weather = "night", { "bombardier", 1, 1, 1, 0 }, { "knight", 4, 
 -- always come.
 D.LOADOUT = 6
 
+-- The wave that has to be cleared on `level` before a species can be grown.
+-- `set`, the loadout brought ({ id = true }), makes sure a run starts with
+-- something to grow: if nothing in it comes at wave 0, the one of it that
+-- comes first (toolbar order breaks a tie) is there from the start.
+function D.unlockAt(level, kind, set)
+    local function at(id) return level.unlock and level.unlock[id] or D.TOWER[id].unlock or 0 end
+    if not (set and set[kind]) then return at(kind) end
+    local first
+    for _, t in ipairs(D.TOWERS) do
+        if set[t.id] and (not first or at(t.id) < at(first)) then first = t.id end
+    end
+    if at(first) > 0 and kind == first then return 0 end
+    return at(kind)
+end
+
 D.HP_GROWTH = 0.1 -- each wave's enemies are this much tougher than the last's (bosses aside)
 
 -- Mutations: after the waves a level's `mutateAfter` names, the network picks
@@ -549,6 +768,35 @@ D.MUTATIONS = {
     { id = "store", name = "FAT RESERVES", blurb = "FRUITING BODIES HOLD 50% MORE" },
     { id = "rings", name = "OLD RINGS", blurb = "FAIRY RINGS +40% DAMAGE, SLOW HARDER" },
     { id = "reach", name = "LONG REACH", blurb = "LINKS REACH 25% FURTHER" },
+
+    -- A seed's own, offered only on a run that brings it.
+    { id = "tendrils", seed = "bean", name = "TENDRILS", blurb = "LINKS FROM THE SPROUT GROW AT ONCE" },
+    { id = "nitro", seed = "bean", name = "NITROGEN FIX", blurb = "TOWERS 2 HOPS FROM THE SPROUT HIT AS IF ON A POCKET ONE RICHER" },
+    { id = "pod", seed = "bean", name = "BEAN POD", blurb = "YOUR NEXT THREE LINKS ARE FREE" },
+
+    { id = "heartwood", seed = "oak", name = "HEARTWOOD", blurb = "THE SPROUT TAKES 30% LESS FROM WHAT GETS THROUGH" },
+    { id = "bark", seed = "oak", name = "BARK", blurb = "LINKS TOUCHING THE SPROUT HAVE X3 HP" },
+    { id = "acorn", seed = "oak", name = "ACORN DROP", blurb = "EVERY 6S AN ACORN FALLS ON THE BUG NEAREST THE SPROUT: 30, AND IT IS STUNNED" },
+    { id = "growth", seed = "oak", name = "RINGS OF GROWTH", blurb = "THE SPROUT GROWS +1 HP EVERY WAVE CLEARED" },
+
+    { id = "ripen", seed = "tomato", name = "RIPENING", blurb = "WAVE CLEAR BONUS +30%" },
+    { id = "splat", seed = "tomato", name = "SPLAT", blurb = "WHAT REACHES THE SPROUT BURSTS A FRUIT: 15 TO BUGS NEAR IT, AND THEY STICK" },
+    { id = "compost", seed = "tomato", name = "COMPOST", blurb = "BODIES LEFT LYING AT A WAVE'S END PAY HALF" },
+    { id = "overripe", seed = "tomato", name = "OVERRIPE", blurb = "+1 SUGAR A SECOND IN A WAVE, BUT HALF THE WAVE CLEAR BONUS" },
+
+    { id = "clock", seed = "dandelion", name = "SEED CLOCK", blurb = "THE SPROUT REGROWS ONE MORE TIME" },
+    { id = "taproot", seed = "dandelion", name = "TAPROOT", blurb = "WHEN IT REGROWS, EVERY CUT LINK REGROWS TOO" },
+    { id = "drift", seed = "dandelion", name = "SEED DRIFT", blurb = "AFTER EACH WAVE A FREE SPORE PUFFER GROWS ON AN EMPTY FED POCKET" },
+    { id = "chute", seed = "dandelion", name = "PARACHUTES", blurb = "THE PULSE COMES BACK 30% SOONER AND LASTS 50% LONGER" },
+
+    { id = "seedhead", seed = "sunflower", name = "SEED HEAD", blurb = "A WAVE CLEARED PAYS +4 FOR EVERY TOWER IN THE SUN" },
+    { id = "helio", seed = "sunflower", name = "HELIOTROPE", blurb = "THE SUN REACHES 3 HOPS, AND HOLDS AT NIGHT" },
+    { id = "stem", seed = "sunflower", name = "TALL STEM", blurb = "FLIERS NEAR THE SPROUT TAKE 8 A SECOND" },
+
+    { id = "digest", seed = "flytrap", name = "DIGEST", blurb = "WHAT THE TRAP EATS PAYS ITS WORTH AGAIN, AT ONCE" },
+    { id = "hairs", seed = "flytrap", name = "TRIGGER HAIRS", blurb = "THE TRAP SNAPS 40% MORE OFTEN" },
+    { id = "sundew", seed = "flytrap", name = "SUNDEW", blurb = "BUGS NEAR THE SPROUT WADE AT HALF SPEED" },
+    { id = "jaws", seed = "flytrap", name = "WIDE JAWS", blurb = "THE TRAP REACHES 40% FURTHER AND EATS BUGS OF UP TO 80 HP" },
 }
 
 return D
