@@ -47,7 +47,7 @@ local function layout()
 
     -- The chips, flowed into rows as wide as the cards.
     local width = max(cols * SW + (cols - 1) * 4, min(avail, 300))
-    local chips, lines, x, line = {}, 1, 0, {}
+    local chips, lines, x = {}, 1, 0
     -- One not met yet has no name until it is faced.
     local function name(kind) return Profile.seen[kind] and D.ENEMIES[kind].name or "???" end
     for _, kind in ipairs(enemiesOf(lv)) do

@@ -1,0 +1,56 @@
+-- Just enough of LÖVE for the rules to run under plain LuaJIT: its random
+-- generator, the very same numbers (xorshift64* seeded through a Wang hash,
+-- as LÖVE 11 does it), a save directory in memory, and a clock.
+
+local ffi = require "ffi"
+local bit = require "bit"
+
+local function wang(key)
+    key = bit.bnot(key) + bit.lshift(key, 21)
+    key = bit.bxor(key, bit.rshift(key, 24))
+    key = (key + bit.lshift(key, 3)) + bit.lshift(key, 8)
+    key = bit.bxor(key, bit.rshift(key, 14))
+    key = (key + bit.lshift(key, 2)) + bit.lshift(key, 4)
+    key = bit.bxor(key, bit.rshift(key, 28))
+    return key + bit.lshift(key, 31)
+end
+
+local function newRandomGenerator(seed)
+    local s = ffi.new("uint64_t", seed or 0)
+    repeat s = wang(s) until s ~= 0ULL
+    local g = {}
+    function g:random(l, u)
+        s = bit.bxor(s, bit.rshift(s, 12))
+        s = bit.bxor(s, bit.lshift(s, 25))
+        s = bit.bxor(s, bit.rshift(s, 27))
+        local r = tonumber(bit.rshift(s * 2685821657736338717ULL, 12)) / 2 ^ 52
+        if l == nil then return r end
+        if u == nil then return math.floor(r * l) + 1 end
+        return math.floor(r * (u - l + 1)) + l
+    end
+    return g
+end
+
+local dice = newRandomGenerator(0)
+
+-- The save directory: file name to contents.
+local files = {}
+
+love = {
+    math = {
+        newRandomGenerator = newRandomGenerator,
+        random = function(...) return dice:random(...) end,
+    },
+    filesystem = {
+        getInfo = function(name) return files[name] and { type = "file", size = #files[name] } or nil end,
+        read = function(name) return files[name] end,
+        write = function(name, data) files[name] = data; return true end,
+    },
+    timer = { getTime = os.clock },
+}
+
+-- For the tests: the save directory itself, and emptying it.
+return {
+    files = files,
+    clearFiles = function() for k in pairs(files) do files[k] = nil end end,
+}

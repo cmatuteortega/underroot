@@ -23,7 +23,6 @@ local T = require "src.tracer"
 local Tiled = require "src.tiled"
 
 local sqrt, max, min, abs, floor, ceil = math.sqrt, math.max, math.min, math.abs, math.floor, math.ceil
-local UNIT = T.UNIT
 local IDX, RAMP = T.IDX, T.RAMP
 local DX, DY, DZ = T.DX, T.DY, T.DZ
 local A = T.Affine

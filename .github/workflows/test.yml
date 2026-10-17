@@ -1,0 +1,36 @@
+# Tests
+#
+# On every push and pull request: luacheck over the code (.luacheckrc says
+# what it holds it to), then the tests (tests/run.lua) under plain LuaJIT --
+# the profile and its save file, the rules played without a screen, and whole
+# runs by the bot, the Crack's build order still winning. No LÖVE: tests/love.lua
+# stands in for the little of it the rules use, its random numbers exactly.
+
+name: Tests
+
+on:
+  push:
+    branches: ['**']
+    paths-ignore:
+      - 'shots/**'
+      - '**.md'
+      - '.claude/**'
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: test-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install LuaJIT and luacheck
+        run: sudo apt-get update -q && sudo apt-get install -y -q luajit lua-check
+      - name: Lint
+        run: luacheck main.lua conf.lua src tests
+      - name: Test
+        run: luajit tests/run.lua

@@ -30,7 +30,13 @@ love . --bot 10 lawn   # dev: another level; add `challenge`, or `generic` for t
                        # map-agnostic player instead of the level's build order,
                        # or `endless` to play on past the win until the sprout falls,
                        # or a seed (oak, tomato, dandelion, sunflower, flytrap)
+luajit tests/run.lua   # dev: the tests, no LÖVE needed (`... run.lua game` for one file)
+luacheck main.lua conf.lua src tests   # dev: the lint CI runs (.luacheckrc)
 ```
+
+`--shots` plays on the same dice every time, so two runs take the same
+pictures, pixel for pixel: a change that should not change how anything looks
+can be checked by comparing them.
 
 ## Playing it
 
@@ -529,6 +535,7 @@ What is new for Underfoot:
 | `src/script.lua` | dev only: the `--shots` run |
 | `src/sheet.lua` | dev only: the `--sheet` model sheet |
 | `src/bot.lua` | dev only: the `--bot` balance runs, a build order a level and the generic player |
+| `tests/` | the tests (`run.lua`), under plain LuaJIT with `love.lua` standing in for LÖVE |
 | `assets/icon/` | the app icon at 40px, in two layers (background, foreground) and put together (`icon.png`, the window's) |
 | `android/icon.py` | bakes the Android launcher icon (legacy and adaptive) out of `assets/icon/` |
 | `desktop/icon.py` | bakes the `.ico`, `.icns` and AppImage icon out of `assets/icon/` |
@@ -537,6 +544,8 @@ What is new for Underfoot:
 
 Two GitHub Actions workflows, the same as Survive School's, build every push
 that touches more than docs; a `v*` tag also puts the files on a GitHub Release.
+A third, `.github/workflows/test.yml`, lints and runs the tests on every push
+and pull request.
 
 - `.github/workflows/android.yml`: the APK (LÖVE for Android 12.0, the game as
   `game.love`), signed with the `ANDROID_KEYSTORE_*` secrets when they are set

@@ -92,9 +92,9 @@ local function nodeScreen(n)
 end
 
 local function waveSummary(wave)
-    local count, order = {}, {}
+    local count = {}
     for _, g in ipairs(wave) do
-        if not count[g[1]] then order[#order + 1] = g[1]; count[g[1]] = 0 end
+        count[g[1]] = count[g[1]] or 0
         count[g[1]] = count[g[1]] + g[2] * (g[1] == "mite" and D.ENEMIES.mite.swarm or 1)
     end
     local parts = {}
@@ -353,7 +353,7 @@ local function draw()
     if nxt and S.game.phase == "build" then right = "NEXT: " .. waveSummary(nxt) .. "   " .. w end
     if S.game.phase == "wave" then
         local left = #S.game.queue
-        for _, e in ipairs(S.game.enemies) do left = left + 1 end
+        for _ in ipairs(S.game.enemies) do left = left + 1 end
         right = left .. " LEFT   " .. w
         if S.game.weather then right = D.WEATHER[S.game.weather].name .. "   " .. right end
     end
@@ -419,7 +419,7 @@ local function draw()
         local bx, by, bw, bh = buttonRect(n)
         local on = S.mode == b.mode
         box(bx, by, bw, bh, on and "n" or "u", on and "l" or (S.hover.button == n and "t" or "o"))
-        local cx, cy = bx + floor(bw / 2), by + bh - 9
+        local cx = bx + floor(bw / 2)
         if b.action then
             -- A thread with a gap in it, the two ends lit while there are cuts
             -- to mend; how many, and what it all costs.

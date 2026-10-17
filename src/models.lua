@@ -1588,7 +1588,8 @@ end
 function M.corpse(kind, h, fruited)
     local hs = step(h, 8)
     return kept("dead" .. kind .. hs .. (fruited and "f" or ""), function()
-        local parts, top = nil, 3
+        local parts
+        local top = 3
         local flip = function(p, lift, s) return place(p, A.scale(s, s, s), A.move(0, lift, 0), A.rotX(math.pi)) end
         if kind == "ant" then
             parts = flip(antParts(0), 3.6, 1.4)

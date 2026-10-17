@@ -384,6 +384,9 @@ local function run(seed, lv, generic, challenge, endless, sprout)
     return g
 end
 
+-- One run, for the tests: the game as the bot left it.
+B.play = run
+
 function B.run(args)
     local runs = tonumber(args[1]) or 4
     local lv, generic, challenge, endless, sprout = D.LEVELS[1], false, false, false, nil

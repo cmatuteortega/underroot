@@ -759,7 +759,7 @@ local function draw()
         elseif s.kind == "shell" then
             local x, y, z = arc(s, 46)
             add(x, y, z, function()
-                local i, j, d = S.world:toImage(x, y, z)
+                local i, j = S.world:toImage(x, y, z)
                 i, j = floor(i), floor(j)
                 put(IDX.o, i - 1, j - 1); put(IDX.o, i + 2, j); put(IDX.o, i, j + 2); put(IDX.o, i - 1, j + 1); put(IDX.o, i + 1, j - 1)
                 put(IDX.n, i, j); put(IDX.n, i + 1, j); put(IDX.u, i, j + 1); put(IDX.u, i + 1, j + 1); put(IDX.t, i, j - 1)
