@@ -55,6 +55,27 @@ function flair.sky.change(to)
     flair.sky.w, flair.sky.out, flair.sky.time = w, w ~= to, flair.sky.STYLE[w].time
 end
 
+-- The sky is now `to` (a weather kind, or false for clear), dt on: the new
+-- picture dithers in over the old. Changed again before it was done, the
+-- picture mostly showing is the one it leaves.
+function flair.sky.update(to, dt)
+    if to ~= flair.sky.to then flair.sky.change(to) end
+    flair.sky.t = min(flair.sky.time, flair.sky.t + dt)
+end
+
+-- The flourishes wearing off.
+function flair.update(dt)
+    flair.pressed = flair.pressed and flair.pressed.t > 0 and flair.pressed or nil
+    if flair.pressed then flair.pressed.t = flair.pressed.t - dt end
+    flair.nut.t = max(0, flair.nut.t - dt)
+    flair.hurt = max(0, flair.hurt - dt)
+    flair.note = max(0, flair.note - dt)
+    if flair.banner then
+        flair.banner.t = flair.banner.t - dt
+        if flair.banner.t <= 0 then flair.banner = nil end
+    end
+end
+
 -- A sound of the HUD's: not anywhere on the board, so dead centre.
 local function sound(name, pitch) Sfx.play(name, 0, 1, pitch) end
 

@@ -57,6 +57,7 @@ local Board = require "src.ui.board"
 local codex = require "src.ui.codex"
 local Title = require "src.ui.title"
 local audio = require "src.ui.audio"
+local Run = require "src.ui.run"
 -- The Spore Bank's screen (what it has and sells is src/profile.lua). `offer` is the
 -- species a first win put up for sale, shown on the way on: { kind, after = button, bought }.
 local bank = {}
@@ -410,34 +411,6 @@ end
 
 --- the run ---------------------------------------------------------------------------
 
-local function start()
-    S.game = Game.new(S.world, S.level, { challenge = S.challenge, loadout = S.chosen, seed = not S.script and Profile.sown[S.level.id] or nil,
-        best = Profile.records[S.level.id], dice = S.script and 1 })
-    layTools(S.game)
-    S.mode, S.drag, S.panx, S.pany, S.selected = "grow", nil, 0, 0, nil
-    S.focus, S.focused = nil, nil
-    S.paused, S.speed = false, 1
-    S.menu = nil
-    flair.sky.change(S.game.weather or false)
-    flair.sky.t = flair.sky.time
-end
-
--- Plays level `n` with the species in `chosen`: its board if it is painted
--- already, else paint it first.
-local function play(n)
-    S.level = D.LEVELS[n]
-    S.menu = nil
-    if S.worlds[S.level.id] then
-        S.world = S.worlds[S.level.id]
-        start()
-        return
-    end
-    S.world = World.new(S.level.map)
-    S.worlds[S.level.id] = S.world
-    S.progress = 0
-    S.painter = coroutine.create(function() S.world:paint() end)
-end
-
 -- Before level `n`: pick what to bring, starting from what was brought last
 -- time (or the level's own suggestion the first time).
 local openLoadout
@@ -454,7 +427,7 @@ local function afterWin(id)
         return
     end
     if id == "endless" then sound("go"); S.game:goEndless()
-    elseif id == "again" then sound("go"); start()
+    elseif id == "again" then sound("go"); Run.start()
     elseif id == "levels" then sound("back"); S.openMenu()
     elseif id == "next" then
         for k, l in ipairs(D.LEVELS) do
@@ -502,7 +475,7 @@ local function setOff()
     Profile.sown[D.LEVELS[S.pick.n].id] = S.pick.seed
     Profile.save()
     S.chosen = list
-    play(S.pick.n)
+    Run.play(S.pick.n)
 end
 
 function love.load(args)
@@ -547,7 +520,7 @@ function love.load(args)
         end
         S.script.level = D.LEVELS[n].id
         for _, a in ipairs(args or {}) do if a == "challenge" then S.challenge = true end end
-        play(n)
+        Run.play(n)
     else
         Title.open()
     end
@@ -1019,7 +992,7 @@ function love.keypressed(key)
     if key == "q" then turnCamera(-1) end
     if key == "p" then S.paused = not S.paused; sound(S.paused and "pause" or "unpause") end
     if key == "r" and S.game.phase == "won" then afterWin("again")
-    elseif key == "r" and (S.game.phase == "lost" or love.keyboard.isDown("lshift")) then sound("go"); start() end
+    elseif key == "r" and (S.game.phase == "lost" or love.keyboard.isDown("lshift")) then sound("go"); Run.start() end
     if key == "m" then
         if S.game.phase == "won" then afterWin("levels") else sound("back"); S.openMenu() end
     end
@@ -1032,15 +1005,7 @@ function love.update(dt)
     if S.script then dt = 1 / 30 end
     Sfx.warm(0.004)
     audio.ambience(dt)
-    flair.pressed = flair.pressed and flair.pressed.t > 0 and flair.pressed or nil
-    if flair.pressed then flair.pressed.t = flair.pressed.t - dt end
-    flair.nut.t = max(0, flair.nut.t - dt)
-    flair.hurt = max(0, flair.hurt - dt)
-    flair.note = max(0, flair.note - dt)
-    if flair.banner then
-        flair.banner.t = flair.banner.t - dt
-        if flair.banner.t <= 0 then flair.banner = nil end
-    end
+    flair.update(dt)
     if S.painter then
         local t0 = love.timer.getTime()
         -- Paint in slices, so the window keeps answering while the board goes down.
@@ -1061,7 +1026,7 @@ function love.update(dt)
                     end
                 end)
             end
-            start()
+            Run.start()
             if S.script then
                 -- The script clicks like a player: it is told where things are
                 -- in window pixels.
@@ -1120,106 +1085,14 @@ function love.update(dt)
     end
     dt = min(dt, 1 / 30)
     if S.script then dt = 1 / 30 end
-    if S.turning then
-        S.turning.t = S.turning.t + dt
-        if S.turning.t >= TURN_TIME then
-            S.turning.old:release()
-            S.turning = nil
-        end
-    end
+    View.update(dt)
 
-    local k = love.keyboard.isDown
-    local pan = 120 * dt
-    if k("left", "a", "right", "d", "up", "w", "down", "s") then S.focus = nil end
-    if k("left", "a") then S.panx = S.panx - pan end
-    if k("right", "d") then S.panx = S.panx + pan end
-    if k("up", "w") then S.pany = S.pany - pan end
-    if k("down", "s") then S.pany = S.pany + pan end
-    -- Something newly selected: ease the camera to put it beside its panel.
-    if S.selected ~= S.focused then
-        S.focused = S.selected
-        S.focus = S.selected and info() and focusOn(S.selected) or nil
-    end
-    if S.focus then
-        local e = 1 - math.exp(-dt * 9)
-        S.panx, S.pany = S.panx + (S.focus.x - S.panx) * e, S.pany + (S.focus.y - S.pany) * e
-        if abs(S.focus.x - S.panx) < 0.5 and abs(S.focus.y - S.pany) < 0.5 then S.panx, S.pany, S.focus = S.focus.x, S.focus.y, nil end
-    end
-    -- Zoomed in, the board is bigger than the screen: let every edge of it be
-    -- reached, with a little ground to spare. With a panel open, further, so a
-    -- tower at the board's edge can still come out beside it. Past the edge the
-    -- camera eases back rather than stopping dead.
-    local limx = max(40, (S.world.w - (S.cw - toBoard(S.inset.l + S.inset.r))) / 2 + 40)
-    local limy = max(60, (S.world.h - (S.ch - toBoard(S.inset.t + S.inset.b + TOP + BOTTOM))) / 2 + 40)
-    if info() then limx, limy = limx + S.cw / 2, limy + S.ch / 2 end
-    local cx, cy = max(-limx, min(limx, S.panx)), max(-limy, min(limy, S.pany))
-    if cx ~= S.panx or cy ~= S.pany then
-        local e = min(1, dt * 12)
-        S.panx, S.pany = S.panx + (cx - S.panx) * e, S.pany + (cy - S.pany) * e
-    end
-    centre()
-
-    -- The sky changed: the new picture dithers in over the old. Changed again
-    -- before it was done, the picture mostly showing is the one it leaves.
-    local sky = S.game.weather or false
-    if sky ~= flair.sky.to then flair.sky.change(sky) end
-    flair.sky.t = min(flair.sky.time, flair.sky.t + dt)
+    flair.sky.update(S.game.weather or false, dt)
 
     if S.script then S.script.update(S.game, dt) end
     findHover()
     audio.hover()
-    if not S.paused then
-        for _ = 1, S.speed do
-            S.game:update(dt)
-            if S.game.events.heart then S.heartFlash, flair.hurt = 0.15, 0.45 end
-            if S.game.events.shake then S.shake = max(S.shake, S.game.events.shake) end
-        end
-        if not S.script then codex.watch(S.game) end
-    end
-    audio.hear()
-    -- A lot coming in at once (a body drunk, a wave's bonus): the count glows.
-    if S.game.nutrients - flair.lastNut >= 3 and (flair.nut.t <= 0 or flair.nut.k ~= "r") then flair.nut = { t = 0.35, k = "w" } end
-    flair.lastNut = S.game.nutrients
-    -- The sprout low: a heartbeat, heard and seen at the screen's edge.
-    local low = S.game.phase == "wave" and S.game.heartHp > 0 and S.game.heartHp < S.game.heartMax * 0.3
-    local b = low and not S.paused and (S.game.clock % 1.2) < 0.15
-    if b and not flair.beat then Sfx.play("stomp", 0, 0.6, 0.6) end
-    flair.beat = b
-    S.heartFlash = max(0, S.heartFlash - dt)
-    S.shake = max(0, S.shake - dt)
-    if S.game.best > (Profile.records[S.level.id] or 0) and not S.script then
-        Profile.records[S.level.id] = S.game.best
-        Profile.save()
-    end
-    -- Spores go into the bank as they are earned, so a run left half way keeps them.
-    if S.game.spores > (S.game.banked or 0) and not S.script then
-        Profile.spores = Profile.spores + S.game.spores - (S.game.banked or 0)
-        S.game.banked = S.game.spores
-        Profile.save()
-    end
-    if S.game.phase == "won" and not S.game.recorded then
-        S.game.recorded = true
-        if not S.script then
-            -- The first win puts the level's species up for sale, shown on the way on.
-            if not Profile.won[S.level.id] and S.level.prize and not Profile.owns(S.level.prize) then S.game.offer = S.level.prize end
-            -- And any seed waiting on it.
-            for _, sd in ipairs(D.SEEDS) do
-                if not Profile.won[S.level.id] and sd.after == S.level.id and not Profile.ownsSeed(sd.id) then S.game.newSeed = sd.id end
-            end
-            Profile.won[S.level.id] = true
-            Profile.save()
-        end
-    end
-    -- What was selected may have been eaten, sterilised, sold or flattened.
-    if S.selected then
-        local gone
-        if S.selected.node then gone = S.selected.node.tower ~= S.selected
-        else
-            gone = true
-            for _, m in ipairs(S.game.mats) do if m == S.selected then gone = false end end
-        end
-        if gone then S.selected = nil end
-    end
+    Run.update(dt)
     if S.script then photograph() end
 end
 

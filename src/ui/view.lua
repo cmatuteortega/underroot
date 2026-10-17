@@ -11,10 +11,10 @@ local Toolbar = require "src.ui.toolbar"
 local Panel = require "src.ui.panel"
 local flair = require "src.ui.flair"
 
-local floor, ceil, max, min = math.floor, math.ceil, math.max, math.min
+local floor, ceil, max, min, abs = math.floor, math.ceil, math.max, math.min, math.abs
 local wide = Draw.wide
 local sound = flair.sound
-local SHORT, TOP, BOTTOM, UI_STEP, ZOOM_STEPS = S.SHORT, S.TOP, S.BOTTOM, S.UI_STEP, S.ZOOM_STEPS
+local SHORT, TOP, BOTTOM, UI_STEP, ZOOM_STEPS, TURN_TIME = S.SHORT, S.TOP, S.BOTTOM, S.UI_STEP, S.ZOOM_STEPS, S.TURN_TIME
 
 -- The board's picture: the window's worth, and pad past each edge of it.
 local function padBoard(l, t, r, b)
@@ -183,7 +183,51 @@ local function focusOn(s)
     return { x = S.panx + toBoard(hx - wx), y = S.pany + toBoard(hy - wy) }
 end
 
+-- The camera, dt on: going round, panned by the keys, easing toward a new
+-- selection, held to the board.
+local function update(dt)
+    if S.turning then
+        S.turning.t = S.turning.t + dt
+        if S.turning.t >= TURN_TIME then
+            S.turning.old:release()
+            S.turning = nil
+        end
+    end
+
+    local k = love.keyboard.isDown
+    local pan = 120 * dt
+    if k("left", "a", "right", "d", "up", "w", "down", "s") then S.focus = nil end
+    if k("left", "a") then S.panx = S.panx - pan end
+    if k("right", "d") then S.panx = S.panx + pan end
+    if k("up", "w") then S.pany = S.pany - pan end
+    if k("down", "s") then S.pany = S.pany + pan end
+    -- Something newly selected: ease the camera to put it beside its panel.
+    if S.selected ~= S.focused then
+        S.focused = S.selected
+        S.focus = S.selected and Panel.info() and focusOn(S.selected) or nil
+    end
+    if S.focus then
+        local e = 1 - math.exp(-dt * 9)
+        S.panx, S.pany = S.panx + (S.focus.x - S.panx) * e, S.pany + (S.focus.y - S.pany) * e
+        if abs(S.focus.x - S.panx) < 0.5 and abs(S.focus.y - S.pany) < 0.5 then S.panx, S.pany, S.focus = S.focus.x, S.focus.y, nil end
+    end
+    -- Zoomed in, the board is bigger than the screen: let every edge of it be
+    -- reached, with a little ground to spare. With a panel open, further, so a
+    -- tower at the board's edge can still come out beside it. Past the edge the
+    -- camera eases back rather than stopping dead.
+    local limx = max(40, (S.world.w - (S.cw - toBoard(S.inset.l + S.inset.r))) / 2 + 40)
+    local limy = max(60, (S.world.h - (S.ch - toBoard(S.inset.t + S.inset.b + TOP + BOTTOM))) / 2 + 40)
+    if Panel.info() then limx, limy = limx + S.cw / 2, limy + S.ch / 2 end
+    local cx, cy = max(-limx, min(limx, S.panx)), max(-limy, min(limy, S.pany))
+    if cx ~= S.panx or cy ~= S.pany then
+        local e = min(1, dt * 12)
+        S.panx, S.pany = S.panx + (cx - S.panx) * e, S.pany + (cy - S.pany) * e
+    end
+    centre()
+end
+
 return {
+    update = update,
     padBoard = padBoard,
     fit = fit,
     toBoard = toBoard,
