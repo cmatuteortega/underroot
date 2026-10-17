@@ -527,7 +527,7 @@ What is new for Underfoot:
 | `src/game.lua` | the rules: the graph, flow, cuts, pruning, regrowth, rings, the pulse, upgrades, towers firing, enemies and bosses moving, corpses, waves, mutations |
 | `src/defs.lua` | every tuning number: link costs, towers, enemies, weather, the levels and their waves |
 | `src/world.lua` | the maps (ASCII), their solids, the one-time paint and its weather versions, the trail's flow field, picking |
-| `src/models.lua` | the sprout, the fruiting bodies at every tier, the enemies, the bosses and their bodies, as ellipsoids, kept by pose |
+| `src/models.lua` | the sprout, the fruiting bodies at every tier, the enemies, the bosses and their bodies, as ellipsoids, kept by pose: one table of `src/models/` (`kit.lua`, `sprout.lua`, `towers.lua`, `enemies.lua`) |
 | `src/tracer.lua` | the isometric camera, lamp, ramps, crease and ink passes, affine maps, the ellipsoid painter |
 | `src/palette.lua` | the thirteen colours and the one-step-darker column |
 | `src/font.lua` | Survive School's 3x5 face |
@@ -562,7 +562,7 @@ to see every size.
 ## Extending
 
 - **A tower**: a row in `D.TOWERS` (`src/defs.lua`) with its `up` branches, a
-  look function in `src/models.lua` (in `TOWER`, with its animation steps in
+  look function in `src/models/towers.lua` (in `TOWER`, with its animation steps in
   `STEPS`), and its behaviour as a `Game` method named in `SHOOTS` in
   `src/game.lua` (or, for one that works all round it, a method of its own name
   listed in `AURAS`). It gets a card in the loadout picker by being in the list,
