@@ -4,6 +4,7 @@
 -- whatever is selected in a run, and for the card tapped in the loadout.
 
 local D = require "src.defs"
+local N = require "src.network"
 local M = require "src.models"
 local Font = require "src.font"
 local Profile = require "src.profile"
@@ -21,8 +22,17 @@ local TOP = S.TOP
 
 local function infoWidth() return wide() and min(150, floor(S.vw * 0.36)) or S.vw - S.inset.l - S.inset.r - 6 end
 
--- The panel of one still locked: no name, no numbers, only how to get it.
-local function lockedLines(what, by, w)
+-- How a species or seed not grown yet is got: the network's node it grows
+-- on, and the level that has to be won first if one does.
+local function howToGrow(id)
+    local row = Profile.nodeOf(id)
+    local state, level = Profile.nodeState(row.id)
+    if state == "locked" then return "WIN " .. level.name .. ", THEN GROW IT ON THE NETWORK." end
+    return "GROW IT ON THE NETWORK: " .. (N.price(Profile.ranks(), row.id) or 0) .. " SPORES."
+end
+
+-- The panel of one still locked behind a win: no name, no numbers, only how to get it.
+local function lockedLines(what, id, w)
     local out, height = {}, 0
     local function add(str, k, x, h)
         x = x or 0
@@ -34,16 +44,19 @@ local function lockedLines(what, by, w)
     add("???", "k", 24, 8)
     add(what .. "   LOCKED", "k", 24)
     if height < 22 then out[#out + 1] = { h = 22 - height }; height = 22 end
-    add("WIN " .. by .. " TO PUT IT UP FOR SALE.", "s")
+    add(howToGrow(id), "s")
     return out, height
 end
+
+-- Shut behind a win: a species or seed still a "???".
+local function hidden(id) return Profile.nodeState(Profile.nodeOf(id).id) == "locked" end
 
 -- The panel's lines, each { s, k (colour), x, h }: the name and role beside
 -- the picture, the long account, the numbers (live, for one on the board),
 -- and both upgrade branches with what is grown, open or shut.
 local function infoLines(kind, t, w)
     local d = D.TOWER[kind]
-    if not t and not Profile.known(kind) then return lockedLines("SPECIES", Profile.prizeOf(kind).name, w) end
+    if not t and not Profile.owns(kind) and hidden(kind) then return lockedLines("SPECIES", kind, w) end
     local out, height = {}, 0
     local function add(str, k, x, h)
         x = x or 0
@@ -53,10 +66,13 @@ local function infoLines(kind, t, w)
         end
     end
     local function gap(h) out[#out + 1] = { h = h }; height = height + h end
-    local function get(k) if t then return S.game:stat(t, k) end return d[k] end
+    -- On the board its numbers as they are; in the loadout as far as the network has grown them.
+    local grown = not t and Profile.grown() or nil
+    local function get(k) if t then return S.game:stat(t, k) end return N.value(grown, kind, k, d[k]) end
+    local cost = t and t.spent or math.floor(get("cost") + 0.5)
 
     add(t and t.branch and d.up[t.branch][t.tier].name or d.name, "w", 24, 8)
-    add(d.role .. "   " .. (t and ("SPENT " .. t.spent) or ("COST " .. d.cost)), "t", 24)
+    add(d.role .. "   " .. (t and ("SPENT " .. cost) or ("COST " .. cost)), "t", 24)
     if height < 22 then gap(22 - height) end
 
     -- On the board: what is wrong with it, if anything.
@@ -72,20 +88,23 @@ local function infoLines(kind, t, w)
 
     -- A species read about first; one on the board puts its numbers and its
     -- upgrades first, so a short panel still has them.
-    if not t then add(d.about, "w"); gap(3) end
+    if not t then
+        add(d.about, "w"); gap(3)
+        if not Profile.owns(kind) then add(howToGrow(kind), "r"); gap(3) end
+    end
     local parts = {}
     if get("damage") then parts[#parts + 1] = "DAMAGE " .. number(get("damage")) end
     if get("every") then parts[#parts + 1] = "EVERY " .. number(get("every")) .. "S" end
     local r = (t and t.node) and S.game:towerRange(t) or get("range")
     if r then parts[#parts + 1] = "RANGE " .. floor(r + 0.5) end
     if get("splash") then parts[#parts + 1] = "SPLASH " .. number(get("splash")) end
-    if kind == "mat" then parts[#parts + 1] = "SLOW " .. floor((1 - (t and S.game:matSlow(t) or d.slow)) * 100 + 0.5) .. "%" end
+    if kind == "mat" then parts[#parts + 1] = "SLOW " .. floor((1 - (t and S.game:matSlow(t) or get("slow"))) * 100 + 0.5) .. "%" end
     if kind == "relay" then
         parts[#parts + 1] = "FLOW X" .. number(get("capMul"))
         parts[#parts + 1] = "DAMAGE +" .. floor(((get("amp") or 1) - 1) * 100 + 0.5) .. "%"
     end
     if t and t.hp and kind ~= "mat" then parts[#parts + 1] = "HP " .. math.ceil(t.hp) .. "/" .. S.game:maxHp(t)
-    elseif not t and d.hp then parts[#parts + 1] = "HP " .. d.hp end
+    elseif not t and d.hp then parts[#parts + 1] = "HP " .. floor(get("hp") + 0.5) end
     -- A number never parted from its name: lines broken between them.
     local line = ""
     for _, part in ipairs(parts) do
@@ -111,9 +130,12 @@ local function infoLines(kind, t, w)
                 out[#out + 1] = { up = u, row = row, blurb = blurb, h = h + 3 }
                 height = height + h + 3
             else
-                local grown = t and t.branch == b and t.tier >= tier
-                local k = grown and "g" or (shut and "k" or "w")
-                add((tier == 1 and "I  " or "II ") .. row.name .. "  " .. (grown and "GROWN" or row.cost), k)
+                local had = t and t.branch == b and t.tier >= tier
+                -- Not yet on the network: it cannot be grown on the board at all.
+                local net = tier <= N.tier(t and S.game.net or grown, kind, b)
+                local k = had and "g" or ((shut or not net) and "k" or "w")
+                local price = t and S.game:upCost(kind, row) or floor(N.value(grown, kind, "cost", row.cost) + 0.5)
+                add((tier == 1 and "I  " or "II ") .. row.name .. "  " .. (had and "GROWN" or (net and price or "NOT ON THE NETWORK")), k)
                 -- On the board only what it can grow now says what it does.
                 if not t then add(row.blurb, "s", 12) end
             end
@@ -126,7 +148,7 @@ end
 -- A seed's panel in the loadout: what it changes, and the mutations it brings.
 local function seedLines(id, w)
     local sd = D.SEED[id]
-    if not Profile.seedKnown(id) then return lockedLines("SEED", D.LEVEL[sd.after].name, w) end
+    if not Profile.ownsSeed(id) and hidden(id) then return lockedLines("SEED", id, w) end
     local out, height = {}, 0
     local function add(str, k, x, h)
         x = x or 0
@@ -137,10 +159,11 @@ local function seedLines(id, w)
     end
     local function gap(h) out[#out + 1] = { h = h }; height = height + h end
     add(sd.name, "w", 24, 8)
-    add("SEED   " .. (sd.price and ("PRICE " .. sd.price) or "FREE"), "t", 24)
+    add("SEED   " .. (Profile.ownsSeed(id) and "GROWN" or "NOT GROWN YET"), "t", 24)
     if height < 22 then gap(22 - height) end
     add(sd.about, "w")
     gap(3)
+    if not Profile.ownsSeed(id) then add(howToGrow(id), "r"); gap(3) end
     add(sd.blurb, "l")
     gap(4)
     add("ITS MUTATIONS", "t")
@@ -167,7 +190,7 @@ local function info()
     local lines, h
     if seed then lines, h = seedLines(seed, w - 8) else lines, h = infoLines(kind, t, w - 8) end
     local P = { kind = kind, seed = seed, t = t, lines = lines, w = w,
-        locked = S.menu == "loadout" and not (seed and Profile.seedKnown(seed) or (not seed and Profile.known(kind))) }
+        locked = S.menu == "loadout" and not (seed and Profile.ownsSeed(seed) or (not seed and Profile.owns(kind))) }
     if S.menu == "loadout" then
         if wide() then
             P.x, P.y, P.h = S.vw - S.inset.r - w - 3, S.inset.t + 3, S.vh - S.inset.t - S.inset.b - 6
@@ -226,7 +249,7 @@ local function draw(P)
             local bx, bw = P.x + 3, P.w - 6
             box(bx, y, bw, l.h - 3, on and "n" or (can and "d" or "o"), can and "l" or "k")
             text((l.up.tier == 1 and "I  " or "II ") .. l.row.name, bx + 2, y + 2, "w")
-            local cost = tostring(l.row.cost)
+            local cost = tostring(l.up.cost)
             if not S.touch then
                 local ups = S.game:upgrades(P.t)
                 cost = (#ups == 1 and "Z/C" or (l.up.branch == ups[1].branch and "Z" or "C")) .. " " .. cost

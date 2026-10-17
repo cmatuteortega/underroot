@@ -27,7 +27,8 @@ S.game = nil
 -- level, kept so a second run of it starts at once), and the level picker.
 S.level = D.LEVELS[1]
 S.worlds = {}
-S.menu = nil -- the level picker is up (true), a level's loadout ("loadout"), or the title ("title")
+S.menu = nil -- the level picker is up (true), a level's loadout ("loadout"), the network ("network"),
+-- the encyclopedia ("codex") or the title ("title")
 S.pick = nil -- the loadout being picked: { n = level, set = { id = true }, enemy = kind }
 S.chosen = nil -- the species the run brings, a list; nil brings them all (the shots)
 S.challenge = false -- challenge mode chosen in the picker

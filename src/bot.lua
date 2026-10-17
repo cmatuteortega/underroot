@@ -12,6 +12,7 @@
 -- player; the build orders are what the balance is tuned against.
 
 local D = require "src.defs"
+local N = require "src.network"
 local World = require "src.world"
 local Game = require "src.game"
 
@@ -192,7 +193,7 @@ function B.generic(g)
         end
         -- The next species on the best pocket it can reach.
         local kind = ROTATION[(next - 1) % #ROTATION + 1]
-        if not g:unlocked(kind) or (D.TOWER[kind].unique and g.uniques[kind]) then
+        if not g:brought(kind) or not g:unlocked(kind) or (D.TOWER[kind].unique and g.uniques[kind]) then
             next = next + 1
         else
             local best, bv, from
@@ -211,7 +212,7 @@ function B.generic(g)
                 end
             end
             if best then
-                local cost = D.TOWER[kind].cost + (best.conn and 0 or g:linkCost(math.sqrt((best.x - from.x) ^ 2 + (best.z - from.z) ^ 2)))
+                local cost = g:towerCost(kind) + (best.conn and 0 or g:linkCost(math.sqrt((best.x - from.x) ^ 2 + (best.z - from.z) ^ 2)))
                 if g.nutrients >= cost + 5 then
                     if not best.conn then
                         local l = g:grow(from, best)
@@ -268,9 +269,15 @@ function B.choose(g)
     return 1
 end
 
-local function run(seed, lv, generic, challenge, endless, sprout)
+-- `extra`, for a run on a network not fully grown: { net = N.grown, loadout =
+-- the species brought, firstWin }. A build order's species not brought is a
+-- puffer instead on a pocket, and left out on the trail; an upgrade not
+-- grown is the other branch, or none.
+local function run(seed, lv, generic, challenge, endless, sprout, extra)
+    extra = extra or {}
     local world = World.new(lv.map)
-    local g = Game.new(world, lv, { challenge = challenge, seed = sprout, dice = seed })
+    local g = Game.new(world, lv, { challenge = challenge, seed = sprout, dice = seed, net = extra.net,
+        loadout = extra.loadout, firstWin = extra.firstWin })
     local PLAN = PLANS[lv.id]
     if generic or not PLAN then
         local act = B.generic(g)
@@ -301,15 +308,16 @@ local function run(seed, lv, generic, challenge, endless, sprout)
             elseif g:canLink(a, b) then local l = g:grow(a, b); done = l and true end
         elseif s[1] == "build" then
             local n = node(s[3])
+            local kind = g:brought(s[2]) and s[2] or "puffer"
             if s.link and not g:linkBetween(n, node(s.link)) then
                 if g:canLink(node(s.link), n) then g:grow(node(s.link), n) else return end
             end
-            if n.tower and n.tower.kind == s[2] then done = true
-            elseif not g:unlocked(s[2]) then return "later"
-            elseif g:canBuild(s[2], n) then done = g:build(s[2], n) and true end
+            if n.tower and n.tower.kind == kind then done = true
+            elseif not g:unlocked(kind) then return "later"
+            elseif g:canBuild(kind, n) then done = g:build(kind, n) and true end
         elseif s[1] == "lay" then
             local m = g:matAt(s[3][1], s[3][2])
-            if m then done = true
+            if m or not g:brought(s[2]) then done = true
             elseif not g:unlocked(s[2]) then return "later"
             else
                 local ok, why = g:canLay(s[2], s[3][1], s[3][2])
@@ -321,8 +329,14 @@ local function run(seed, lv, generic, challenge, endless, sprout)
             local t = n.tower
             if not t and waits[n] then return "later"
             elseif not t or not g:upgrades(t)[1] then done = true
-            elseif g:canUpgrade(t, s[3]) or g:canUpgrade(t, t.branch or s[3]) then
-                done = g:upgrade(t, t.branch or s[3])
+            else
+                -- The branch it asks for, or the one the network has grown.
+                local branch = t.branch or s[3]
+                local ups = g:upgrades(t)
+                local open = false
+                for _, u in ipairs(ups) do if u.branch == branch then open = true end end
+                if not open then branch = ups[1].branch end
+                if g:canUpgrade(t, branch) then done = g:upgrade(t, branch) end
             end
         end
         return done
@@ -358,7 +372,8 @@ local function run(seed, lv, generic, challenge, endless, sprout)
             local s = PLAN[k]
             if s[1] == "build" then
                 local n = node(s[3])
-                if not n.tower and g:canBuild(s[2], n) then g:build(s[2], n) end
+                local kind = g:brought(s[2]) and s[2] or "puffer"
+                if not n.tower and g:canBuild(kind, n) then g:build(kind, n) end
             end
         end
         -- Repair, and prune whatever brine is running down.
@@ -372,7 +387,7 @@ local function run(seed, lv, generic, challenge, endless, sprout)
         end
         if g.phase == "build" then g:startWave() end
         -- Pulse the busiest tower when a boss is on.
-        if g.pulseCd <= 0 then
+        if g.pulseCd <= 0 and g:hasPulse() then
             for _, e in ipairs(g.enemies) do
                 if e.boss then g:pulse(node(lv.id == "crack" and { 7, 5 } or PLAN[2][3])) break end
             end
@@ -386,6 +401,96 @@ end
 
 -- One run, for the tests: the game as the bot left it.
 B.play = run
+
+--- a whole campaign -----------------------------------------------------------------------
+
+-- The species a run brings: those the level's build order grows, in the
+-- order it first grows them, then whatever else is grown, up to the loadout.
+function B.loadout(lv, grown)
+    local list, set = {}, {}
+    local function bring(id)
+        if #list < D.LOADOUT and not set[id] and N.has(grown, "species", id) then list[#list + 1], set[id] = id, true end
+    end
+    for _, s in ipairs(PLANS[lv.id] or {}) do
+        if s[1] == "build" or s[1] == "lay" then bring(s[2]) end
+    end
+    for _, t in ipairs(D.TOWERS) do bring(t.id) end
+    return list
+end
+
+-- How much a node is worth to a player about to play `lv`: what its build
+-- order uses first, the network's own numbers next, the rest after.
+local function want(row, lv, uses)
+    local kind = row.species or row.tower or (row.up and row.up[1])
+    if kind then
+        if not uses[kind] then return 0.4 end
+        if row.species then return 6 end
+        if row.up then return 4 end
+        return 3
+    end
+    if row.world or row.pulse then return 2.5 end
+    if row.vs then
+        for _, k in ipairs(row.vs) do
+            for _, w in ipairs(lv.waves) do for _, grp in ipairs(w) do if grp[1] == k then return 2 end end end
+        end
+        return 0.5
+    end
+    -- Mutations on offer; but no seed but the bean, which is all the bot plants.
+    if row.mutations and not (row.id:match("%.mut$") and row.id ~= "bean.mut") then return 2 end
+    return 0.2
+end
+
+-- Spends a profile's spores on the network the way a player getting ready
+-- for `lv` might: the most wanted for its price first, while any is affordable.
+function B.spend(p, lv)
+    local uses = {}
+    for _, s in ipairs(PLANS[lv.id] or {}) do if s[1] == "build" or s[1] == "lay" then uses[s[2]] = true end end
+    uses.puffer = true
+    while true do
+        local best, bv
+        for _, row in ipairs(D.NETWORK) do
+            if N.state(p, row.id) == "open" then
+                local v = want(row, lv, uses) / N.price(p.net, row.id)
+                if not bv or v > bv then best, bv = row.id, v end
+            end
+        end
+        if not best then return end
+        N.buy(p, best)
+    end
+end
+
+-- Plays the story the way a new player would, from an empty network: the
+-- first level not yet won, the spores into the bank, the bank onto the
+-- network, again. Answers a line a run and what it came to:
+-- { runs, wins = { [level] = run it was won on }, spent, all }.
+function B.campaign(most, quiet, dice)
+    local p = { net = {}, won = {}, seen = {}, spores = 0 }
+    local all = N.total()
+    local out = { wins = {}, log = {} }
+    local lv
+    for r = 1, most or 60 do
+        lv = nil
+        for _, l in ipairs(D.LEVELS) do if not p.won[l.id] then lv = l break end end
+        if not lv then break end
+        B.spend(p, lv)
+        local grown = N.grown(p.net)
+        local g = run(r + (dice or 0), lv, false, false, false, nil,
+            { net = grown, loadout = B.loadout(lv, grown), firstWin = true })
+        p.spores = p.spores + g.spores
+        for k = 1, math.min(g.wave, #lv.waves) do
+            for _, grp in ipairs(lv.waves[k]) do p.seen[grp[1]] = true end
+        end
+        local _, spent = N.total(p.net)
+        local line = ("run %2d  %-14s %-4s wave %2d/%2d  +%3d spores  network %4d/%d (%d%%)")
+            :format(r, lv.name, g.phase, g.wave, #lv.waves, g.spores, spent, all, math.floor(spent / all * 100 + 0.5))
+        out.log[#out.log + 1] = line
+        if not quiet then print(line) end
+        if g.phase == "won" then p.won[lv.id] = true; out.wins[lv.id] = r end
+        out.runs = r
+    end
+    out.spent, out.all, out.profile = select(2, N.total(p.net)), all, p
+    return out
+end
 
 function B.run(args)
     local runs = tonumber(args[1]) or 4

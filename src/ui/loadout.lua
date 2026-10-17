@@ -1,8 +1,10 @@
 -- The loadout, picked before each level: the seed to plant and the species to
--- bring, with what the level sends to answer.
+-- bring, with what the level sends to answer. Only what the network has
+-- grown can come; the rest says where on the network it grows (N opens it).
 
 local T = require "src.tracer"
 local D = require "src.defs"
+local N = require "src.network"
 local Font = require "src.font"
 local Profile = require "src.profile"
 local S = require "src.ui.state"
@@ -11,6 +13,7 @@ local Pixels = require "src.ui.pixels"
 local Panel = require "src.ui.panel"
 local flair = require "src.ui.flair"
 local Run = require "src.ui.run"
+local Network = require "src.ui.network"
 
 local floor, ceil, max, min = math.floor, math.ceil, math.max, math.min
 local color, box, text, centred, wrap, say, inside, wide =
@@ -56,12 +59,11 @@ local function layout()
         chips[#chips + 1] = { kind = kind, line = lines, dx = x, w = w, h = 9, name = name(kind) }
         x = x + w + 3
     end
-    -- The seeds, chips too: a name each, and the price of one not had yet.
+    -- The seeds, chips too: a name each, "???" for one still waiting on a win.
     local seeds, seedRows = {}, 1
     x = 0
     for _, sd in ipairs(D.SEEDS) do
-        local s = Profile.seedKnown(sd.id) and sd.short or "???"
-        if not Profile.ownsSeed(sd.id) and Profile.seedForSale(sd.id) then s = s .. " " .. sd.price end
+        local s = (Profile.ownsSeed(sd.id) or not Network.hidden(sd.id)) and sd.short or "???"
         local w = Font.width(s) + 8
         if x > 0 and x + w > width then seedRows, x = seedRows + 1, 0 end
         seeds[#seeds + 1] = { seed = sd, line = seedRows, dx = x, w = w, h = 11, name = s }
@@ -110,27 +112,27 @@ end
 
 -- A species in or out of the loadout. Full, it says so rather than drop one.
 local function toggleSpecies(id)
-    -- Not had yet: its panel says how to get it.
+    -- Not grown yet: its panel says where on the network it grows.
     if not Profile.owns(id) then S.pick.info = id; deny() return end
     if S.pick.set[id] then S.pick.set[id] = nil; sound("off")
     elseif #picked() >= D.LOADOUT then S.pick.full = 1.5; sound("deny")
     else S.pick.set[id] = true; sound("on") end
 end
 
--- The panel's button: brings or leaves what is had, buys what is for sale.
-local function bringOrBuy(id)
-    if Profile.owns(id) then toggleSpecies(id)
-    elseif Profile.buy(id) then sound("unlock")
-    else deny() end
+-- The panel's button: brings or leaves what is grown; for what is not, opens
+-- the network on the node it grows on.
+local function bringOrGrow(id)
+    if Profile.owns(id) then toggleSpecies(id) else Network.open(id) end
 end
 
--- A seed card or its panel's button: plants what is had, buys what is for
--- sale (and plants it).
-local function plantOrBuy(id)
+-- A seed card or its panel's button: plants what is grown, or opens the
+-- network on it.
+local function plantOrGrow(id)
     if Profile.ownsSeed(id) then
         if S.pick.seed ~= id then S.pick.seed = id; sound("on") end
-    elseif Profile.buySeed(id) then S.pick.seed = id; sound("unlock")
-    else deny() end
+    else
+        Network.open(id)
+    end
 end
 
 -- Before level `n`: pick what to bring, starting from what was brought last
@@ -165,38 +167,20 @@ local function setOff()
     Run.play(S.pick.n)
 end
 
--- The panel's button in the loadout: plant or buy a seed, bring, leave or buy a species.
+-- The panel's button in the loadout: plant a seed, bring or leave a species,
+-- or for one not grown yet, off to the network to grow it.
 local function drawPanelButton(P)
     local b = P.button
-    if b and P.seed then
-        -- A seed: planted, plantable, for sale, or waiting on a win.
-        local sd = D.SEED[P.seed]
-        local s, fill, edge, k
-        if Profile.ownsSeed(sd.id) then
-            local on = S.pick.seed == sd.id
-            s, fill, edge, k = on and "PLANTED" or "PLANT IT", on and "u" or "d", on and "t" or "g", on and "w" or "g"
-        elseif Profile.seedForSale(sd.id) then
-            local can = Profile.spores >= sd.price
-            s = can and ("BUY IT: " .. sd.price .. " SPORES") or (sd.price .. " SPORES. YOU HAVE " .. Profile.spores)
-            fill, edge, k = "u", can and "t" or "k", can and "t" or "r"
-        else
-            s, fill, edge, k = "WIN " .. D.LEVEL[sd.after].name .. " FOR IT", "u", "k", "k"
-        end
-        box(b.x, b.y, b.w, b.h, S.hover.bring and "n" or fill, edge)
-        text(s, b.x + floor((b.w - Font.width(s)) / 2), b.y + 4, k)
-    elseif b and not Profile.owns(P.kind) then
-        -- Not had yet: bought here once a win has put it up for sale.
-        local price = D.TOWER[P.kind].price
-        local s, edge, k
-        if Profile.forSale(P.kind) then
-            local can = Profile.spores >= price
-            s = can and ("BUY IT: " .. price .. " SPORES") or (price .. " SPORES. YOU HAVE " .. Profile.spores)
-            edge, k = can and "t" or "k", can and "t" or "r"
-        else
-            s, edge, k = "WIN " .. Profile.prizeOf(P.kind).name .. " FOR IT", "k", "k"
-        end
-        box(b.x, b.y, b.w, b.h, S.hover.bring and "n" or "u", edge)
-        text(s, b.x + floor((b.w - Font.width(s)) / 2), b.y + 4, k)
+    local id = P.seed or P.kind
+    if b and not (P.seed and Profile.ownsSeed(id) or (not P.seed and Profile.owns(id))) then
+        local s = "GROW IT ON THE NETWORK"
+        box(b.x, b.y, b.w, b.h, S.hover.bring and "n" or "u", "t")
+        text(s, b.x + floor((b.w - Font.width(s)) / 2), b.y + 4, "t")
+    elseif b and P.seed then
+        local on = S.pick.seed == id
+        local s = on and "PLANTED" or "PLANT IT"
+        box(b.x, b.y, b.w, b.h, S.hover.bring and "n" or (on and "u" or "d"), on and "t" or "g")
+        text(s, b.x + floor((b.w - Font.width(s)) / 2), b.y + 4, on and "w" or "g")
     elseif b then
         local inn = S.pick.set[P.kind]
         local full = not inn and #picked() >= D.LOADOUT
@@ -214,19 +198,19 @@ local function draw()
     local list = picked()
     local clock = flair.now()
     centred(lv.name .. (S.challenge and " (CHALLENGE)" or ""), L.top, "g", "o", L.mid)
-    text("SPORES " .. Profile.spores, S.inset.l + 4, S.inset.t + 7, "t")
+    text("SPORES " .. Profile.spores .. say("   N: NETWORK", ""), S.inset.l + 4, S.inset.t + 7, "t")
     local count = #list .. "/" .. D.LOADOUT
     centred("PICK A SEED AND THE SPECIES TO BRING  " .. count, L.top + 11, #list == D.LOADOUT and "l" or "t", "o", L.mid)
     text("COMING", floor(L.mid - Font.width("COMING") / 2), L.chipsY - 9, "s")
     text("SEED", floor(L.mid - Font.width("SEED") / 2), L.seedsY - 7, "s")
     text("SPECIES", floor(L.mid - Font.width("SPECIES") / 2), L.cardsY - 7, "s")
 
-    -- The seeds: the planted one lit green, one had in white, one for sale
-    -- with its price, one still locked dark.
+    -- The seeds: the planted one lit green, one grown in white, one the
+    -- network could grow tan, one still waiting on a win dark.
     for _, c in ipairs(L.seeds) do
         local sd = c.seed
         local own, inn, on = Profile.ownsSeed(sd.id), S.pick.seed == sd.id, S.hover.seed == sd.id
-        local sale = not own and Profile.seedForSale(sd.id)
+        local sale = not own and not Network.hidden(sd.id)
         local edge = inn and "g" or "k"
         if on or S.pick.seedInfo == sd.id then edge = inn and "w" or "t" end
         box(c.x, c.y, c.w, c.h, inn and "d" or (on and "n" or "u"), edge)
@@ -255,17 +239,17 @@ local function draw()
         -- The picture kept to its corner of the card: a shelf or the giant is wider.
         local pic = icon(t.id, nil, 0, inn and (clock * 0.7) % 1 or 0)
         love.graphics.setScissor(c.x, c.y, 21, c.h)
-        local known = Profile.known(t.id)
+        local known = Profile.owns(t.id) or not Network.hidden(t.id)
         blit(pic, c.x + 11, t.id == "mat" and c.y + c.h - 8 or c.y + c.h - 3, not known and CUT or (not inn and T.DARKER2 or nil))
         love.graphics.setScissor()
         local own = Profile.owns(t.id)
         wrap(known and t.name or "???", c.x + 22, c.y + 3, c.w - 24, inn and "w" or (own and "s" or "k"))
-        -- Not had yet: its price once it is for sale, else locked.
+        -- Not grown yet: on the network, or locked behind a win.
         if not own then
-            local sale = Profile.forSale(t.id)
-            text(sale and (t.price .. " SPORES") or "LOCKED", c.x + 22, c.y + c.h - 7, sale and "t" or "k")
+            text(known and "NETWORK" or "LOCKED", c.x + 22, c.y + c.h - 7, known and "t" or "k")
         else
-            text(tostring(t.cost), c.x + 22, c.y + c.h - 7, inn and "l" or "k")
+            local cost = floor(N.value(Profile.grown(), t.id, "cost", t.cost) + 0.5)
+            text(tostring(cost), c.x + 22, c.y + c.h - 7, inn and "l" or "k")
         end
         -- The wave it comes in, given what else is brought.
         local at = D.unlockAt(lv, t.id, S.pick.set)
@@ -299,12 +283,10 @@ local function draw()
     elseif S.hover.seed then
         local sd = D.SEED[S.hover.seed]
         if Profile.ownsSeed(sd.id) then tip, k = sd.name .. ": " .. sd.blurb, "w"
-        elseif Profile.seedForSale(sd.id) then tip, k = sd.name .. ": FOR SALE, " .. sd.price .. " SPORES. YOU HAVE " .. Profile.spores, "t"
-        else tip, k = "???: WIN " .. D.LEVEL[sd.after].name .. " TO PUT IT UP FOR SALE", "k" end
+        else tip, k = Network.howTo(sd.id), Network.hidden(sd.id) and "k" or "t" end
     elseif S.hover.species and not Profile.owns(S.hover.species) then
-        local t = D.TOWER[S.hover.species]
-        if Profile.forSale(t.id) then tip, k = t.name .. ": FOR SALE, " .. t.price .. " SPORES. YOU HAVE " .. Profile.spores, "t"
-        else tip, k = "???: WIN " .. Profile.prizeOf(t.id).name .. " TO PUT IT UP FOR SALE", "k" end
+        local id = S.hover.species
+        tip, k = Network.howTo(id), Network.hidden(id) and "k" or "t"
     elseif S.hover.species then
         local t = D.TOWER[S.hover.species]
         tip, k = t.name .. ": " .. t.blurb, "w"
@@ -378,7 +360,7 @@ local function click(b)
     -- A card opens its panel; the same card again (or the panel's button)
     -- brings it or leaves it, or buys it. Anywhere else shuts the panel.
     if S.hover.bring then
-        if S.pick.seedInfo then plantOrBuy(S.pick.seedInfo) else bringOrBuy(S.pick.info) end
+        if S.pick.seedInfo then plantOrGrow(S.pick.seedInfo) else bringOrGrow(S.pick.info) end
         return
     end
     if S.hover.info then return end
@@ -391,8 +373,8 @@ local function click(b)
         if S.pick.info == S.hover.species then toggleSpecies(S.hover.species) else S.pick.info = S.hover.species; sound("panel") end
         return
     elseif S.hover.seed then
-        -- One had is planted at once, and its panel opens; one not had
-        -- only opens its panel, whose button buys it.
+        -- One grown is planted at once, and its panel opens; one not grown
+        -- only opens its panel, whose button goes to the network.
         S.pick.info = nil
         local id = S.hover.seed
         if Profile.ownsSeed(id) and S.pick.seed ~= id then S.pick.seed = id; sound("on")
@@ -418,6 +400,7 @@ local function key(key)
         return
     end
     if key == "return" or key == "kpenter" or key == "space" then setOff() return end
+    if key == "n" then Network.open() return end
     for _, t in ipairs(D.TOWERS) do
         if key == t.key:lower() then toggleSpecies(t.id) end
     end

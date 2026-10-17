@@ -25,13 +25,17 @@
 --
 -- Upgrades are two numbers on a tower, its branch and its tier; every stat is
 -- read through `stat`, which takes the highest tier's value. Mutations are flags
--- in `mods`, read where the number they change is used.
+-- in `mods`, read where the number they change is used. The network the Spore
+-- Bank has grown (`net`, src/network.lua) is read the same way: every number it
+-- holds back goes through `stat` or one of the few below that a mutation can
+-- change too.
 --
 -- A run is one level: its waves, its starting bank and sprout, which species it
 -- opens when. The weather is a name on the wave, and every number it changes
 -- is read through `sky` where that number is used, the way a mutation is.
 
 local D = require "src.defs"
+local N = require "src.network"
 local World = require "src.world"
 
 local sqrt, max, min, abs, floor, huge = math.sqrt, math.max, math.min, math.abs, math.floor, math.huge
@@ -70,7 +74,9 @@ end
 -- `opts.best` is the most waves held in endless on this level so far;
 -- `opts.loadout`, a list of species ids, is all that can be grown (every
 -- species when it is not given: the bot and the shots bring them all);
--- `opts.seed` is the sprout's seed (a D.SEEDS id, the bean if not given).
+-- `opts.seed` is the sprout's seed (a D.SEEDS id, the bean if not given);
+-- `opts.net`, what the Spore Bank's network has grown (N.grown), holds back
+-- what it has not (the whole network when it is not given).
 function Game.new(world, level, opts)
     local self = setmetatable({ world = world }, Game)
     level, opts = level or D.LEVELS[1], opts or {}
@@ -84,8 +90,10 @@ function Game.new(world, level, opts)
         self.waves[#self.waves + 1] = D.CHALLENGE
         self.challenge = true
     end
+    self.net = opts.net
     self.best = opts.best or 0 -- the endless record, raised as it is beaten
-    self.spores = 0 -- earned for the Spore Bank: a spore a wave cleared, more for a win
+    self.spores = 0 -- earned for the Spore Bank: a few a wave cleared, more for a win
+    self.firstWin = opts.firstWin -- the level not won before: its win pays more
     self.uniques = {} -- the one-per-run species already grown
     if opts.loadout then
         self.loadout = {}
@@ -97,8 +105,8 @@ function Game.new(world, level, opts)
     self.tunnels = {} -- a Mole Cricket's: { a = hole, b = hole, owner = it, open }
     self.seed = D.SEED[opts.seed or "bean"] or D.SEEDS[1]
     local seed = self.seed
-    self.nutrients = level.start + (seed.start or 0)
-    self.heartMax = max(1, floor(level.heart * (seed.heart or 1) + 0.5))
+    self.nutrients = floor(N.world(self.net, "start", level.start) + 0.5) + (seed.start or 0)
+    self.heartMax = max(1, floor(N.world(self.net, "heart", level.heart) * (seed.heart or 1) + 0.5))
     self.heartHp = self.heartMax
     self.regrows = seed.regrow or 0 -- a dandelion's lives left
     self.pods = 0 -- free links left from a Bean Pod
@@ -142,7 +150,7 @@ end
 
 --- numbers a mutation can change --------------------------------------------------------
 
-function Game:linkHp() return D.LINK.hp * (self.mods.thick and 1.5 or 1) end
+function Game:linkHp() return N.world(self.net, "linkHp", D.LINK.hp) * (self.mods.thick and 1.5 or 1) end
 -- What one link holds when whole: an oak's Bark triples those at the sprout.
 function Game:linkFull(l)
     local hp = self:linkHp()
@@ -151,7 +159,7 @@ function Game:linkFull(l)
 end
 function Game:linkReach() return D.LINK.reach * (self.mods.reach and 1.25 or 1) end
 function Game:linkCost(len)
-    local c = D.LINK.cost(len)
+    local c = floor(N.world(self.net, "linkCost", D.LINK.cost(len)) + 0.5)
     if self.mods.cheap then c = max(1, floor(c * 0.75 + 0.5)) end
     return c
 end
@@ -161,7 +169,17 @@ local CLEAR = {}
 function Game:sky() return self.weather and D.WEATHER[self.weather] or CLEAR end
 function Game:pace() return self:sky().pace or 1 end
 
-function Game:pulseCooldown() return D.PULSE.cooldown * (self.mods.pulse and 0.6 or 1) * (self.mods.chute and 0.7 or 1) end
+function Game:linkCap() return N.world(self.net, "linkCap", D.LINK.cap) end
+function Game:linkGrow() return N.world(self.net, "linkGrow", D.LINK.grow) end
+
+-- The pulse: grown on the network, and stronger and quicker back the more it is.
+function Game:hasPulse() return N.has(self.net, "pulse") end
+function Game:pulseCooldown()
+    local f = self.net and self.net.world.pulse or 1
+    return N.scale("less", D.PULSE.cooldown, f) * (self.mods.pulse and 0.6 or 1) * (self.mods.chute and 0.7 or 1)
+end
+function Game:pulseRate() return N.world(self.net, "pulse", D.PULSE.rate) end
+function Game:pulseDamage() return N.world(self.net, "pulse", D.PULSE.damage) end
 function Game:pulseDuration() return D.PULSE.duration * (self.mods.chute and 1.5 or 1) end
 -- A pocket's quality as the towers on it feel it (its power, not its pay): a
 -- bean's Nitrogen Fix makes those near the sprout one richer.
@@ -179,10 +197,12 @@ function Game:sunlit(n)
 end
 -- The sugar paid when a wave is cleared (and on going endless).
 function Game:waveBonus()
-    return floor((D.WAVE_BONUS + 4 * self.wave) * (self.mods.ripen and 1.3 or 1) * (self.mods.overripe and 0.5 or 1))
+    return floor(N.world(self.net, "bonus", D.WAVE_BONUS + 4 * self.wave) * (self.mods.ripen and 1.3 or 1) * (self.mods.overripe and 0.5 or 1))
 end
-function Game:ringDamage() return self.mods.rings and 1.4 or D.RING.damage end
-function Game:ringSlow() return self.mods.rings and 0.55 or D.RING.slow end
+function Game:ringDamage() return N.world(self.net, "ring", self.mods.rings and 1.4 or D.RING.damage) end
+function Game:ringSlow()
+    return N.scale("dampen", self.mods.rings and 0.55 or D.RING.slow, self.net and self.net.world.ring or 1)
+end
 
 --- the network ------------------------------------------------------------------------
 
@@ -252,14 +272,14 @@ function Game:recompute()
     local flow = self:sky().flow or 1
     for _, l in ipairs(self.links) do
         l.thick = l.capMul > 1
-        l.cap = D.LINK.cap * l.capMul * flow
+        l.cap = self:linkCap() * l.capMul * flow
     end
     -- A relay pumps: what it is linked to is fed at its own links' width,
     -- however thin the way to it is.
     for _, n in ipairs(self.nodes) do
         local t = n.tower
         if t and n.conn and t.kind == "relay" then
-            n.cap = max(n.cap, D.LINK.cap * self:stat(t, "capMul") * flow)
+            n.cap = max(n.cap, self:linkCap() * self:stat(t, "capMul") * flow)
         end
     end
     self.fed = 0
@@ -306,7 +326,7 @@ function Game:grow(a, b)
     -- Its cap is set now, not at the next recompute: that waits for it to
     -- arrive, and anything asking about it meanwhile (a hover) needs one.
     local l = { id = self.nextLink, a = a, b = b, len = dist(a, b), cost = cost, state = "grow", grow = 0,
-        bitten = {}, cap = D.LINK.cap, capMul = 1, free = free }
+        bitten = {}, cap = self:linkCap(), capMul = 1, free = free }
     l.hp = self:linkFull(l)
     -- Tendrils: out of the sprout it is there at once.
     if self.mods.tendrils and (a.heart or b.heart) then l.grow = 1 end
@@ -535,7 +555,7 @@ end
 
 -- Send a surge from the Heart down to `node`, overcharging every tower on the way.
 function Game:canPulse(node)
-    return node and node.conn and self.pulseCd <= 0
+    return node and node.conn and self.pulseCd <= 0 and self:hasPulse()
 end
 
 function Game:pulse(node)
@@ -556,18 +576,24 @@ end
 
 --- fruiting bodies ----------------------------------------------------------------------
 
--- A stat of a tower (or a mat or shelf) at its branch and tier.
+-- A stat of a tower (or a mat or shelf) at its branch and tier, as far as
+-- the network has grown it.
 function Game:stat(t, k)
     local d = D.TOWER[t.kind]
     if t.branch then
         local b = d.up[t.branch]
         for tier = t.tier, 1, -1 do
             local v = b[tier][k]
-            if v ~= nil then return v end
+            if v ~= nil then return N.value(self.net, t.kind, k, v) end
         end
     end
-    return d[k]
+    return N.value(self.net, t.kind, k, d[k])
 end
+
+-- What growing a species costs, and one of its upgrades: dearer while the
+-- network has not grown its thrift.
+function Game:towerCost(kind) return floor(N.value(self.net, kind, "cost", D.TOWER[kind].cost) + 0.5) end
+function Game:upCost(kind, row) return floor(N.value(self.net, kind, "cost", row.cost) + 0.5) end
 
 function Game:reserveMax(t)
     local r = self:stat(t, "reserve") or 0
@@ -576,12 +602,15 @@ end
 
 function Game:maxHp(t) return self:stat(t, "hp") or 30 end
 
+-- What the network learned of an enemy's kind: how hard it is hit.
+function Game:vs(kind) return N.vs(self.net, kind) end
+
 -- The wave that has to be cleared before a species can be grown, on this level.
 function Game:unlockAt(kind) return D.unlockAt(self.level, kind, self.loadout) end
 
 -- Was this species brought on the run?
 function Game:brought(kind)
-    return not self.loadout or self.loadout[kind] == true
+    return (not self.loadout or self.loadout[kind] == true) and N.has(self.net, "species", kind)
 end
 
 -- Has the wave that brings this species been cleared?
@@ -596,7 +625,7 @@ function Game:canBuild(kind, node)
     if not self:unlocked(kind) then return false, "UNLOCKS AFTER WAVE " .. self:unlockAt(kind) end
     if d.unique and self.uniques[kind] then return false, "ONE PER RUN" end
     if (node.salted or 0) > 0 then return false, "SALTED" end
-    if self.nutrients < d.cost then return false, "NOT ENOUGH NUTRIENTS" end
+    if self.nutrients < self:towerCost(kind) then return false, "NOT ENOUGH NUTRIENTS" end
     return true
 end
 
@@ -607,16 +636,17 @@ end
 
 function Game:build(kind, node)
     if not self:canBuild(kind, node) then return false end
-    local d = D.TOWER[kind]
-    self.nutrients = self.nutrients - d.cost
-    return self:plant(kind, node, d.cost)
+    local cost = self:towerCost(kind)
+    self.nutrients = self.nutrients - cost
+    return self:plant(kind, node, cost)
 end
 
 -- A fruiting body put on a node, paid for (`cost`) or not.
 function Game:plant(kind, node, cost)
     local d = D.TOWER[kind]
     local t = newTower(kind, cost)
-    t.node, t.reserve, t.hp = node, d.reserve or 0, d.hp or 30
+    t.node, t.hp = node, self:maxHp(t)
+    t.reserve = self:stat(t, "reserve") or 0
     node.tower = t
     if d.unique then self.uniques[kind] = true end
     self:burst(node.x, node.y + 2, node.z, 8, { "l", "c", "w" }, 14)
@@ -627,23 +657,31 @@ function Game:plant(kind, node, cost)
     return t
 end
 
--- The upgrades open to a tower: both branches' first tier, or its branch's next.
+-- The upgrades open to a tower: both branches' first tier, or its branch's
+-- next; only what the network has grown of them. `cost` is what it costs here.
 function Game:upgrades(t)
     local d = D.TOWER[t.kind]
     if not d.up then return {} end
+    local list = {}
+    local function offer(branch, tier)
+        if tier <= N.tier(self.net, t.kind, branch) then
+            local row = d.up[branch][tier]
+            list[#list + 1] = { branch = branch, tier = tier, row = row, cost = self:upCost(t.kind, row) }
+        end
+    end
     if not t.branch then
-        return { { branch = 1, tier = 1, row = d.up[1][1] }, { branch = 2, tier = 1, row = d.up[2][1] } }
+        offer(1, 1)
+        offer(2, 1)
+    elseif t.tier < 2 then
+        offer(t.branch, t.tier + 1)
     end
-    if t.tier < 2 then
-        return { { branch = t.branch, tier = t.tier + 1, row = d.up[t.branch][t.tier + 1] } }
-    end
-    return {}
+    return list
 end
 
 function Game:canUpgrade(t, branch)
     for _, u in ipairs(self:upgrades(t)) do
         if u.branch == branch then
-            if self.nutrients < u.row.cost then return false, "NOT ENOUGH NUTRIENTS", u end
+            if self.nutrients < u.cost then return false, "NOT ENOUGH NUTRIENTS", u end
             return true, nil, u
         end
     end
@@ -654,8 +692,8 @@ function Game:upgrade(t, branch)
     local ok, _, u = self:canUpgrade(t, branch)
     if not ok then return false end
     local before = self:maxHp(t)
-    self.nutrients = self.nutrients - u.row.cost
-    t.branch, t.tier, t.spent = u.branch, u.tier, t.spent + u.row.cost
+    self.nutrients = self.nutrients - u.cost
+    t.branch, t.tier, t.spent = u.branch, u.tier, t.spent + u.cost
     t.grown = 0
     t.hp = (t.hp or before) + (self:maxHp(t) - before)
     local x, y, z = t.node and t.node.x or t.x, t.node and t.node.y or 0, t.node and t.node.z or t.z
@@ -711,18 +749,18 @@ function Game:canLay(kind, c, r)
         end
         if not near then return false, "MUST GROW BESIDE A FED LINK" end
     end
-    if self.nutrients < d.cost then return false, "NOT ENOUGH NUTRIENTS" end
+    if self.nutrients < self:towerCost(kind) then return false, "NOT ENOUGH NUTRIENTS" end
     return true
 end
 
 function Game:lay(kind, c, r)
     if not self:canLay(kind, c, r) then return false end
-    local d = D.TOWER[kind]
-    self.nutrients = self.nutrients - d.cost
-    local m = newTower(kind, d.cost)
+    local cost = self:towerCost(kind)
+    self.nutrients = self.nutrients - cost
+    local m = newTower(kind, cost)
     m.c, m.r, m.x, m.z = c, r, c * TILE + TILE / 2, r * TILE + TILE / 2
     m.y = self.world:groundAt(m.x, m.z)
-    m.life, m.hp = d.life, d.hp
+    m.life, m.hp = self:stat(m, "life"), self:stat(m, "hp")
     self.mats[#self.mats + 1] = m
     self:burst(m.x, 2, m.z, 8, { "l", "c", "w" }, 14)
     self:shock(m.x, m.z, 11, 0.3, kind == "shelf" and "t" or "c", "l")
@@ -977,6 +1015,7 @@ function Game:hurt(e, amount, pierce, quiet)
     -- Under water, or not yet out of the gate: nothing reaches it.
     if e.dead or e.under or e.hidden then return 0 end
     if e.mark > 0 then amount = amount * (e.markMul or 1) end
+    amount = amount * self:vs(e.kind)
     -- On its back, a click beetle is soft.
     if e.state == "belly" then amount = amount * (D.ENEMIES[e.kind].belly or 1) end
     local a = pierce and 0 or self:armor(e)
@@ -1203,7 +1242,7 @@ function Game:update(dt)
         end
         if self.wave >= #self.waves and not self.endless then
             self.phase = "won"
-            self.spores = self.spores + D.SPORES.win
+            self.spores = self.spores + D.SPORES.win + (self.firstWin and D.SPORES.first or 0)
             self:cue("won")
             self:shock(self.heart.x, self.heart.z, 50, 1.2, "g", "l")
             self:motes(self.heart.x, 4, self.heart.z, 40, { "g", "l", "w" }, 26, 26, 1.6)
@@ -1236,7 +1275,9 @@ end
 function Game:offerMutations()
     local pool, own = {}, {}
     for _, m in ipairs(D.MUTATIONS) do
-        if not self.mods[m.id] then
+        -- Only what the network has grown, and nothing for a pulse it has not.
+        if not self.mods[m.id] and N.has(self.net, "mutations", m.id)
+            and (self:hasPulse() or (m.id ~= "pulse" and m.id ~= "chute")) then
             if m.seed == self.seed.id then own[#own + 1] = m
             elseif not m.seed then pool[#pool + 1] = m end
         end
@@ -1447,7 +1488,7 @@ function Game:updateLinks(dt)
             if l.flash <= 0 then l.flash = nil end
         end
         if l.state == "grow" then
-            l.grow = l.grow + quick * dt * 16 / (D.LINK.grow * max(16, l.len))
+            l.grow = l.grow + quick * dt * 16 / (self:linkGrow() * max(16, l.len))
             if l.grow >= 1 then
                 l.state, l.grow, changed = "alive", 1, true
                 l.flash = 0.35
@@ -1559,8 +1600,8 @@ function Game:fire(n, t, d, dt)
     if t.webbed > 0 or t.stun > 0 then return end
     local S = function(k) return self:stat(t, k) end
     local power = t.power or 1
-    local boost = t.boost and D.PULSE.rate or 1
-    if t.boost then power = power * D.PULSE.damage end
+    local boost = t.boost and self:pulseRate() or 1
+    if t.boost then power = power * self:pulseDamage() end
     boost = boost * self:pace()
     if AURAS[t.kind] then return self[t.kind](self, n, t, S, power, boost, dt) end
     if t.kind == "giant" and t.grown < 1 then return end
@@ -1598,7 +1639,7 @@ function Game:puff(n, t, d, S, power, range, list)
     for k = 1, puffs do
         local o = list[(k - 1) % #list + 1]
         self.shots[#self.shots + 1] = { kind = "spore", x0 = n.x, y0 = n.y + 9, z0 = n.z,
-            tx = o.x, tz = o.z, t = 0, flight = 0.45 + 0.05 * k, damage = d.damage * power, splash = S("splash"),
+            tx = o.x, tz = o.z, t = 0, flight = 0.45 + 0.05 * k, damage = S("damage") * power, splash = S("splash"),
             linger = S("linger"), toxin = (S("toxin") or 0) * power }
     end
 end

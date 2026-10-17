@@ -6,6 +6,7 @@
 
 local T = require "src.tracer"
 local D = require "src.defs"
+local N = require "src.network"
 local M = require "src.models"
 local Font = require "src.font"
 local Profile = require "src.profile"
@@ -207,14 +208,12 @@ function codex.where(tab, id)
             end
         end
         return "IT COMES IN CHALLENGE MODE, ON ANY LEVEL"
-    elseif t == "species" then
-        local d = D.TOWER[id]
-        if Profile.forSale(id) then return "FOR SALE IN THE LOADOUT: " .. d.price .. " SPORES" end
-        return "WIN " .. Profile.prizeOf(id).name .. " TO PUT IT UP FOR SALE, THEN BUY IT WITH SPORES"
     end
-    local sd = D.SEED[id]
-    if Profile.seedForSale(id) then return "FOR SALE IN THE LOADOUT: " .. sd.price .. " SPORES" end
-    return "WIN " .. D.LEVEL[sd.after].name .. " TO PUT IT UP FOR SALE, THEN BUY IT WITH SPORES"
+    -- A species or a seed: grown on the network, once what it waits on is done.
+    local row = Profile.nodeOf(id)
+    local state, level = Profile.nodeState(row.id)
+    if state == "locked" then return "WIN " .. level.name .. ", THEN GROW IT ON THE NETWORK WITH SPORES" end
+    return "GROW IT ON THE NETWORK: " .. (N.price(Profile.ranks(), row.id) or 0) .. " SPORES"
 end
 
 -- A page's lines, `w` wide, each { s, k, x, h } as the info panel's, or
@@ -272,6 +271,7 @@ function codex.lines(tab, id, w)
         local d = D.TOWER[id]
         local at = (d.unlock or 0) > 0 and ("   FROM WAVE " .. d.unlock) or ""
         add(d.role .. "   COST " .. d.cost .. at, "t")
+        add("THE NUMBERS FULLY GROWN ON THE NETWORK", "s")
         gap(3)
         note(d.blurb, "w")
         gap(3)
@@ -312,7 +312,7 @@ function codex.lines(tab, id, w)
         end
     else
         local sd = D.SEED[id]
-        add("SEED   " .. (sd.price and ("PRICE " .. sd.price) or "FREE"), "t")
+        add("SEED   " .. (sd.id == "bean" and "THE FIRST" or "GROWN ON THE NETWORK"), "t")
         gap(3)
         note(sd.blurb, "w")
         gap(3)

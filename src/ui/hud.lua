@@ -16,7 +16,7 @@ local Panel = require "src.ui.panel"
 local View = require "src.ui.view"
 local flair = require "src.ui.flair"
 local Run = require "src.ui.run"
-local Bank = require "src.ui.bank"
+local Loadout = require "src.ui.loadout"
 
 local floor, ceil, max, min, abs, sqrt = math.floor, math.ceil, math.max, math.min, math.abs, math.sqrt
 local color, box, text, label, centred, wrapLines, say, inside =
@@ -165,7 +165,7 @@ local function tooltip()
     if S.game.phase == "mutate" then return say("THE NETWORK MUTATES. PICK ONE (1 2 3)", "THE NETWORK MUTATES. PICK ONE"), "l" end
     if S.hover.up then
         local ok, why = S.game:canUpgrade(S.selected, S.hover.up.branch)
-        return "GROW " .. S.hover.up.row.name .. ": " .. S.hover.up.row.cost .. (ok and "" or ("  (" .. why .. ")")), ok and "l" or "r"
+        return "GROW " .. S.hover.up.row.name .. ": " .. S.hover.up.cost .. (ok and "" or ("  (" .. why .. ")")), ok and "l" or "r"
     end
     if S.hover.button then
         local b = BUTTONS[S.hover.button]
@@ -231,7 +231,7 @@ local function tooltip()
         if n.heart then
             -- The seed it grew from, and what it has left to give.
             local sd = S.game.seed
-            local s = sd.name .. ": " .. (sd.price and sd.blurb or "IF IT DIES, YOU LOSE")
+            local s = sd.name .. ": " .. (sd.id ~= "bean" and sd.blurb or "IF IT DIES, YOU LOSE")
             if S.game.regrows > 0 then s = s .. ". REGROWS " .. S.game.regrows .. " MORE" end
             if S.game.pods > 0 then s = s .. ". " .. S.game.pods .. " FREE LINKS" end
             return s, "g"
@@ -242,7 +242,7 @@ local function tooltip()
         if n.pocket.high then s = s .. ". HIGH GROUND" elseif n.pocket.low then s = s .. ". LOW: RAIN WASHES IT" end
         if D.TOWER[S.mode] and not D.TOWER[S.mode].onTrail then
             local ok, why = S.game:canBuild(S.mode, n)
-            if ok then return "GROW " .. D.TOWER[S.mode].name .. " HERE: " .. D.TOWER[S.mode].cost, "l" end
+            if ok then return "GROW " .. D.TOWER[S.mode].name .. " HERE: " .. S.game:towerCost(S.mode), "l" end
             if why then return why, "r" end
         end
         return s, "w"
@@ -266,7 +266,7 @@ local function tooltip()
     if D.TOWER[S.mode] and D.TOWER[S.mode].onTrail and S.hover.c then
         local d = D.TOWER[S.mode]
         local ok, why = S.game:canLay(S.mode, S.hover.c, S.hover.r)
-        if ok then return "GROW " .. d.name .. ": " .. d.cost, "l" end
+        if ok then return "GROW " .. d.name .. ": " .. S.game:towerCost(d.id), "l" end
         if not S.world:distAt(S.hover.c, S.hover.r) then return d.name .. " GOES ON THE TRAIL", "r" end
         return why or "", "r"
     end
@@ -597,8 +597,8 @@ local function draw()
         local y = buttons.bottom + 1
         if Profile.records[S.level.id] then centred("ENDLESS BEST: " .. Profile.records[S.level.id] .. " WAVES", y, "t"); y = y + 10 end
         centred("+" .. S.game.spores .. " SPORES   " .. Profile.spores .. " IN THE BANK", y, "t"); y = y + 10
-        if S.game.offer then centred("NEW IN THE SPORE BANK: " .. D.TOWER[S.game.offer].name, y, "g"); y = y + 10 end
-        if S.game.newSeed then centred("NEW SEED FOR SALE: " .. D.SEED[S.game.newSeed].name, y, "g"); y = y + 10 end
+        -- A first win opens more of the network: what, by name.
+        for _, row in ipairs(S.game.opened or {}) do centred("NEW ON THE NETWORK: " .. row.name, y, "g"); y = y + 10 end
         if last and not S.game.challenge then centred("CHALLENGE MODE IS OPEN", y, "r") end
     elseif S.game.phase == "lost" then
         centred("THE SPROUT HAS WILTED", floor(S.vh / 2) - 24, "r")
@@ -694,6 +694,18 @@ local function under()
     end
 end
 
+-- Won: one of the buttons, or its key.
+local function afterWin(id)
+    if id == "endless" then sound("go"); S.game:goEndless()
+    elseif id == "again" then sound("go"); Run.start()
+    elseif id == "levels" then sound("back"); S.openMenu()
+    elseif id == "next" then
+        for k, l in ipairs(D.LEVELS) do
+            if l == S.level and D.LEVELS[k + 1] then sound("select"); Loadout.open(k + 1) return end
+        end
+    end
+end
+
 local function click(b)
     if S.weatherTip and not S.hover.weather then S.weatherTip = nil end
     if b == 2 then
@@ -741,7 +753,7 @@ local function click(b)
     end
     if S.hover.turn then turnCamera(S.hover.turn) return end
     if S.game.phase == "won" then
-        if S.hover.won then Bank.afterWin(S.hover.won) end
+        if S.hover.won then afterWin(S.hover.won) end
         return
     end
     if S.game.phase == "lost" then sound("click"); S.openMenu() return end
@@ -859,17 +871,17 @@ local function key(key)
         end
     end
     if key == "f" then S.speed = S.speed % 3 + 1; sound("speed", 0.8 + 0.2 * S.speed) end
-    if key == "e" and S.game.phase == "won" then Bank.afterWin("endless") return end
+    if key == "e" and S.game.phase == "won" then afterWin("endless") return end
     if key == "e" then turnCamera(love.keyboard.isDown("lshift", "rshift") and -1 or 1) end
     if key == "q" then turnCamera(-1) end
     if key == "p" then S.paused = not S.paused; sound(S.paused and "pause" or "unpause") end
-    if key == "r" and S.game.phase == "won" then Bank.afterWin("again")
+    if key == "r" and S.game.phase == "won" then afterWin("again")
     elseif key == "r" and (S.game.phase == "lost" or love.keyboard.isDown("lshift")) then sound("go"); Run.start() end
     if key == "m" then
-        if S.game.phase == "won" then Bank.afterWin("levels") else sound("back"); S.openMenu() end
+        if S.game.phase == "won" then afterWin("levels") else sound("back"); S.openMenu() end
     end
     -- Won: on to the next level.
-    if key == "n" and S.game.phase == "won" then Bank.afterWin("next") end
+    if key == "n" and S.game.phase == "won" then afterWin("next") end
 end
 
 return {

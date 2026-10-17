@@ -1,31 +1,41 @@
 -- What the player keeps between runs: the levels won, the endless records,
--- each level's loadout and seed, the Spore Bank, the enemies met and how loud;
--- and what that opens: the levels open, and what the bank has and sells.
+-- each level's loadout and seed, the Spore Bank and the network it has grown,
+-- the enemies met and how loud; and what that opens: the levels open, and
+-- the species and seeds the network has grown (src/network.lua).
 --
 -- It all lives in one file in the save directory, `save.txt`, a line a thing:
 -- a word saying what, then its words.
 --
---   version 1
+--   version 2
 --   won crack pond
 --   endless crack 21
---   loadout crack puffer needle mat inky stink relay seed=oak
+--   loadout crack puffer needle mat seed=oak
 --   spores 40
---   owned inky stink
---   seeds oak
+--   net needle=1 puffer.power=2 oak=1
+--   all 1
 --   seen ant pillbug
 --   sound 0.5
 --
--- A save from before that file is the six it replaced (progress.txt,
--- endless.txt, loadout.txt, bank.txt, seen.txt, sound.txt): read once, and
--- written out as save.txt the next time anything is saved. They are left
--- where they are, read no more.
+-- A version 1 save bought species and seeds outright (`owned`, `seeds`):
+-- what it spent comes back as spores, at the network's rate, to grow them
+-- again. A save from before save.txt is the six files it replaced
+-- (progress.txt, endless.txt, loadout.txt, bank.txt, seen.txt, sound.txt):
+-- read once, and written out as save.txt the next time anything is saved.
+-- They are left where they are, read no more.
 
 local D = require "src.defs"
+local N = require "src.network"
 
 local P = {}
 
 local FILE = "save.txt"
-local VERSION = 1
+local VERSION = 2
+
+-- What a version 1 save paid for what it bought, and how many of today's
+-- spores each of its spores is worth: given back to grow the network with.
+local OLD_PRICE = { stink = 20, shelf = 25, mortar = 30, lamp = 35, cordyceps = 40, giant = 50,
+    oak = 15, tomato = 15, dandelion = 25, sunflower = 35, flytrap = 45 }
+local OLD_RATE = 3
 
 -- Everything back to nothing, as on a first run.
 local function clear()
@@ -34,10 +44,13 @@ local function clear()
     P.loadouts = {} -- the species last brought: { crack = { "puffer", ... } }
     P.sown = {} -- the seed last planted: { crack = "oak" }
     P.spores = 0
-    P.owned = {} -- species bought: { inky = true }
-    P.seeds = {} -- seeds bought: { oak = true }
+    P.net = {} -- the network's ranks: { needle = 1, ["puffer.power"] = 2 }
+    P.all = false -- the whole network on, whatever is grown: for trying it all out
+    P.version = nil -- the save's, as read: an old one is paid back for what it bought
+    P.bought = 0 -- what an old save spent in its Spore Bank
     P.seen = {} -- enemies met: { ant = true }
     P.sound = nil -- 1, 0.5 or 0; nil leaves the sound as it starts
+    P.cache = nil
 end
 
 local function read(name)
@@ -68,9 +81,18 @@ local LINE = {
     won = function(w) for k = 2, #w do if D.LEVEL[w[k]] then P.won[w[k]] = true end end end,
     endless = function(w) if D.LEVEL[w[2]] and tonumber(w[3]) then P.records[w[2]] = tonumber(w[3]) end end,
     loadout = function(w) table.remove(w, 1); loadout(w) end,
+    version = function(w) P.version = tonumber(w[2]) end,
+    all = function(w) P.all = w[2] == "1" end,
     spores = function(w) P.spores = tonumber(w[2]) or 0 end,
-    owned = function(w) for k = 2, #w do if D.TOWER[w[k]] then P.owned[w[k]] = true end end end,
-    seeds = function(w) for k = 2, #w do if D.SEED[w[k]] then P.seeds[w[k]] = true end end end,
+    net = function(w)
+        for k = 2, #w do
+            local id, n = w[k]:match("^(.-)=(%d+)$")
+            if id and D.NET[id] then P.net[id] = math.min(N.ranks(D.NET[id]), tonumber(n)) end
+        end
+    end,
+    -- A version 1 save's: what was bought, to be paid back.
+    owned = function(w) for k = 2, #w do P.bought = P.bought + (OLD_PRICE[w[k]] or 0) end end,
+    seeds = function(w) for k = 2, #w do P.bought = P.bought + (OLD_PRICE[w[k]] or 0) end end,
     seen = function(w) for k = 2, #w do if D.ENEMIES[w[k]] then P.seen[w[k]] = true end end end,
     sound = function(w) P.sound = tonumber(w[2]) end,
 }
@@ -87,12 +109,8 @@ local function readOld()
     data = read("bank.txt")
     if data then
         P.spores = tonumber(data:match("spores%s+(%d+)")) or 0
-        for id in (data:match("owned([^\n]*)") or ""):gmatch("%S+") do
-            if D.TOWER[id] then P.owned[id] = true end
-        end
-        for id in (data:match("seeds([^\n]*)") or ""):gmatch("%S+") do
-            if D.SEED[id] then P.seeds[id] = true end
-        end
+        for id in (data:match("owned([^\n]*)") or ""):gmatch("%S+") do P.bought = P.bought + (OLD_PRICE[id] or 0) end
+        for id in (data:match("seeds([^\n]*)") or ""):gmatch("%S+") do P.bought = P.bought + (OLD_PRICE[id] or 0) end
     end
     data = read("seen.txt")
     if data then for id in data:gmatch("%S+") do if D.ENEMIES[id] then P.seen[id] = true end end end
@@ -110,6 +128,13 @@ function P.load()
         end
     else
         readOld()
+    end
+    -- From before the network: the old bank's spores, and what it spent, at
+    -- today's rate. Saved at once, so it is paid only the once.
+    if (P.version or 1) < VERSION then
+        local old = P.spores + P.bought
+        P.spores, P.bought = old * OLD_RATE, 0
+        if old > 0 then P.save() end
     end
     -- A save from before the encyclopedia: whatever comes on a level won was met there.
     for _, l in ipairs(D.LEVELS) do
@@ -139,59 +164,81 @@ function P.save()
         end
     end
     lines[#lines + 1] = "spores " .. P.spores
-    lines[#lines + 1] = "owned " .. ids(D.TOWERS, P.owned)
-    lines[#lines + 1] = "seeds " .. ids(D.SEEDS, P.seeds)
+    local net = {}
+    for _, row in ipairs(D.NETWORK) do
+        if (P.net[row.id] or 0) > 0 then net[#net + 1] = row.id .. "=" .. P.net[row.id] end
+    end
+    lines[#lines + 1] = "net " .. table.concat(net, " ")
+    if P.all then lines[#lines + 1] = "all 1" end
     lines[#lines + 1] = "seen " .. ids(D.ENEMY_ORDER, P.seen)
     if P.sound then lines[#lines + 1] = "sound " .. P.sound end
     love.filesystem.write(FILE, table.concat(lines, "\n") .. "\n")
 end
 
---- the Spore Bank ---------------------------------------------------------------------
+--- the Spore Bank's network -----------------------------------------------------------------
 
--- Can it be brought? The first six always, the rest once bought.
-function P.owns(id) return D.TOWER[id].starter or P.owned[id] == true end
-
--- The level whose first win puts a species up for sale.
-function P.prizeOf(id)
-    for _, l in ipairs(D.LEVELS) do if l.prize == id then return l end end
+-- The ranks the network counts as grown: what was bought, or with the whole
+-- network switched on (`all`), every rank of every node. What was bought is
+-- kept either way, and is back when it is switched off.
+local EVERYTHING
+function P.ranks()
+    if not P.all then return P.net end
+    EVERYTHING = EVERYTHING or N.everything()
+    return EVERYTHING
 end
 
-function P.forSale(id)
-    local l = P.prizeOf(id)
-    return not P.owns(id) and l ~= nil and P.won[l.id] == true
+-- What the network has grown, for a run (Game.new's `opts.net`). Worked out
+-- again only after a rank is bought or the whole of it switched.
+function P.grown()
+    if not P.cache then P.cache = N.grown(P.ranks()) end
+    return P.cache
 end
 
--- Bought for good, if it is for sale and the spores are there.
+-- The whole network on or off.
+function P.setAll(on)
+    P.all, P.cache = on and true or false, nil
+    P.save()
+end
+
+-- Can it be brought, or planted? Once the network has grown it.
+function P.owns(id) return P.grown().species[id] == true end
+function P.ownsSeed(id) return P.grown().seeds[id] == true end
+
+-- Where a node stands (N.state), and a rank of it bought, saved at once.
+-- With the whole network on, every node stands full and nothing is bought.
+function P.nodeState(id)
+    if P.all then return N.state({ net = P.ranks(), won = P.won, seen = P.seen, spores = P.spores }, id) end
+    return N.state(P, id)
+end
 function P.buy(id)
-    local price = D.TOWER[id].price
-    if not P.forSale(id) or P.spores < price then return false end
-    P.spores = P.spores - price
-    P.owned[id] = true
+    if P.all or not N.buy(P, id) then return false end
+    P.cache = nil
     P.save()
     return true
 end
 
--- Seeds too: the bean from the start, the oak and the tomato for sale from the
--- start, the rest once the level they are `after` is won.
-function P.ownsSeed(id) return not D.SEED[id].price or P.seeds[id] == true end
-
-function P.seedForSale(id)
-    local sd = D.SEED[id]
-    return not P.ownsSeed(id) and (not sd.after or P.won[sd.after] == true)
+-- Every rank sold back, for all it cost: the network starts again from the
+-- sprout, spores in hand to grow it some other way.
+function P.regrow()
+    local _, spent = N.total(P.net)
+    P.spores = P.spores + spent
+    P.net, P.cache = {}, nil
+    P.save()
+    return spent
 end
 
--- Known: had, or up for sale. Anything else is only "???" in the loadout
--- until a win puts it up for sale.
-function P.known(id) return P.owns(id) or P.forSale(id) end
-function P.seedKnown(id) return P.ownsSeed(id) or P.seedForSale(id) end
+-- The network's node a species or seed is grown on, for "GROW IT ON THE NETWORK".
+function P.nodeOf(id)
+    for _, row in ipairs(D.NETWORK) do
+        if row.species == id or row.seed == id then return row end
+    end
+end
 
-function P.buySeed(id)
-    local sd = D.SEED[id]
-    if not P.seedForSale(id) or P.spores < sd.price then return false end
-    P.spores = P.spores - sd.price
-    P.seeds[id] = true
-    P.save()
-    return true
+-- What a level's first win opens on the network: the rows waiting on it.
+function P.opens(level)
+    local list = {}
+    for _, row in ipairs(D.NETWORK) do if row.won == level then list[#list + 1] = row end end
+    return list
 end
 
 -- A level is open once the one before it is won; challenge mode once the last is.

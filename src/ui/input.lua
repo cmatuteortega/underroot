@@ -1,5 +1,5 @@
 -- What the mouse, a finger or a key means: each goes to the screen that is
--- up (src/ui/hud.lua for a run, else the picker, the loadout, the Spore Bank,
+-- up (src/ui/hud.lua for a run, else the picker, the loadout, the network,
 -- the encyclopedia or the title), after what they all share -- panning,
 -- pinching, the wheel, a press that might be a tap or a drag.
 
@@ -11,7 +11,7 @@ local audio = require "src.ui.audio"
 local codex = require "src.ui.codex"
 local Title = require "src.ui.title"
 local Loadout = require "src.ui.loadout"
-local Bank = require "src.ui.bank"
+local Network = require "src.ui.network"
 local Menu = require "src.ui.menu"
 local Hud = require "src.ui.hud"
 
@@ -24,7 +24,7 @@ local input = {}
 
 -- The screen up, the one the pointer and the keys go to: the run's own (the
 -- HUD over the board) when no other is.
-local SCREENS = { title = Title, loadout = Loadout, bank = Bank, codex = codex }
+local SCREENS = { title = Title, loadout = Loadout, network = Network, codex = codex }
 local function screen()
     if not S.menu then return Hud end
     return SCREENS[S.menu] or Menu
@@ -53,6 +53,7 @@ end
 -- where it was and it is a click there; moved first and it pans the board, which
 -- is the only way to pan with one finger.
 local SLOP = 3 -- HUD pixels a tap may wander and still be a tap
+local PINCH_STEP = 1.2 -- how far the fingers spread (or close) for a step of the network's zoom
 
 function input.mousepressed(x, y, b, istouch)
     if S.painter or S.pinch or S.turning then return end
@@ -64,6 +65,8 @@ function input.mousepressed(x, y, b, istouch)
         S.press = { x = S.mouse.x, y = S.mouse.y, wx = x, wy = y, px = S.panx, py = S.pany }
         -- In the encyclopedia a drag scrolls it.
         if S.menu == "codex" then S.press.scroll = codex.getScroll() end
+        -- On the network a drag pans it.
+        if S.menu == "network" then S.press.cam = Network.getCam() end
         return
     end
     click(b)
@@ -112,6 +115,10 @@ function input.mousemoved(x, y)
         codex.setScroll(S.press.scroll - (S.mouse.y - S.press.y))
         return
     end
+    if S.press and S.press.moved and S.press.cam then
+        Network.drag(S.press.cam, S.mouse.x - S.press.x, S.mouse.y - S.press.y)
+        return
+    end
     if pan and (pan == S.mouse.pan or S.press.moved) then
         -- In board pixels: the ground stays under the finger at any zoom.
         S.panx = pan.px - floor((x - pan.wx) / S.zoom)
@@ -122,6 +129,7 @@ end
 
 function input.wheelmoved(_, y)
     if S.menu == "codex" then codex.scrollBy(-y * 14) return end
+    if S.menu == "network" then if y ~= 0 then Network.zoomBy(y > 0 and 1 or -1) end return end
     if y ~= 0 then zoomBy(y > 0 and 1 or -1, love.mouse.getPosition()) end
 end
 
@@ -146,6 +154,12 @@ function input.touchpressed(id, x, y)
     if #ids == 2 then
         S.pinch = { a = ids[1], b = ids[2], s = 1 }
         local d, mx, my = spread()
+        if S.menu == "network" then
+            -- The network zooms a step at a time as the fingers spread or close.
+            S.pinch.d0, S.pinch.x, S.pinch.y = max(d, 1), mx, my
+            S.press, S.drag, S.tapped = nil, nil, nil
+            return
+        end
         S.pinch.d0, S.pinch.x0, S.pinch.y0, S.pinch.x, S.pinch.y = max(d, 1), mx, my, mx, my
         if S.press then S.panx, S.pany = S.press.px, S.press.py; centre() end
         S.press, S.drag, S.tapped = nil, nil, nil
@@ -162,7 +176,18 @@ end
 function input.touchmoved(id, x, y)
     if not S.fingers[id] then return end
     S.fingers[id].x, S.fingers[id].y = x, y
-    if S.pinch and not S.pinch.done then
+    if S.pinch and not S.pinch.done and S.menu == "network" then
+        -- Both fingers moving together drag it; spread or closed by a fifth,
+        -- a zoom step in or out about the point between them.
+        local d, mx, my = spread()
+        Network.drag(Network.getCam(), (mx - S.pinch.x) / S.uz, (my - S.pinch.y) / S.uz)
+        S.pinch.x, S.pinch.y = mx, my
+        local r = d / S.pinch.d0
+        if (r > PINCH_STEP and Network.zoomBy(1, mx / S.uz, my / S.uz))
+            or (r < 1 / PINCH_STEP and Network.zoomBy(-1, mx / S.uz, my / S.uz)) then
+            S.pinch.d0 = d
+        end
+    elseif S.pinch and not S.pinch.done then
         local d, mx, my = spread()
         local lo, hi = stepRange()
         local base = S.zoom - S.zoomStep
@@ -173,7 +198,10 @@ function input.touchmoved(id, x, y)
 end
 
 function input.touchreleased(id)
-    if S.pinch and not S.pinch.done and (id == S.pinch.a or id == S.pinch.b) then
+    if S.pinch and not S.pinch.done and (id == S.pinch.a or id == S.pinch.b) and S.menu == "network" then
+        -- On the network it has zoomed as it went: nothing to settle.
+        S.pinch.done = true
+    elseif S.pinch and not S.pinch.done and (id == S.pinch.a or id == S.pinch.b) then
         local bx, by = S.pinch.x0 / S.zoom + S.camx, S.pinch.y0 / S.zoom + S.camy
         local step = floor(S.zoom * S.pinch.s + 0.5) - (S.zoom - S.zoomStep)
         zoomTo(step, bx, by, S.pinch.x, S.pinch.y)

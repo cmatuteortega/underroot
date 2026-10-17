@@ -28,4 +28,17 @@ return {
             C.eq(g.phase, "won", "seed " .. seed .. ": " .. summary(g))
         end
     end },
+
+    -- The network's balance: from nothing, the build orders lose the Crack a
+    -- few times before it falls, finish the story with the network still far
+    -- from grown, and every level in turn.
+    { "from an empty network the story is won, but not at once", function()
+        local o = B.campaign(30, true)
+        local log = "\n" .. table.concat(o.log, "\n")
+        C.yes(o.wins.crack and o.wins.crack >= 4 and o.wins.crack <= 14, "the Crack falls after a few runs" .. log)
+        local last = o.wins[D.LEVELS[#D.LEVELS].id]
+        C.yes(last, "the story is won within 30 runs" .. log)
+        C.yes(last - o.wins.crack >= #D.LEVELS, "the rest takes more than a run a level" .. log)
+        C.yes(o.spent < o.all * 0.6, "with much of the network still to grow: " .. o.spent .. " of " .. o.all)
+    end },
 }

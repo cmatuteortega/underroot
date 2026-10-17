@@ -1,5 +1,5 @@
--- The level picker, with the encyclopedia's button top left and the sound's
--- switch top right.
+-- The level picker, with the encyclopedia's and the network's buttons top
+-- left and the sound's switch top right.
 
 local D = require "src.defs"
 local Font = require "src.font"
@@ -11,6 +11,7 @@ local flair = require "src.ui.flair"
 local audio = require "src.ui.audio"
 local codex = require "src.ui.codex"
 local Loadout = require "src.ui.loadout"
+local Network = require "src.ui.network"
 
 local floor, ceil, max, min = math.floor, math.ceil, math.max, math.min
 local color, box, text, centred, wrap, say, inside = Draw.color, Draw.box, Draw.text, Draw.centred, Draw.wrap, Draw.say, Draw.inside
@@ -73,7 +74,11 @@ local function draw()
     local cb = codex.button()
     box(cb.x, cb.y, cb.w, cb.h, S.hover.codex and "n" or "u", S.hover.codex and "t" or "c")
     text("ENCYCLOPEDIA", cb.x + 4, cb.y + 4, "w")
-    text("SPORES " .. Profile.spores, cb.x + cb.w + 6, S.inset.t + 7, "t")
+    -- The network's, lit while there are spores for something on it.
+    local nb = Network.button(cb)
+    box(nb.x, nb.y, nb.w, nb.h, S.hover.network and "n" or (nb.ready and "d" or "u"), S.hover.network and "t" or (nb.ready and "g" or "c"))
+    text(nb.s, nb.x + 4, nb.y + 4, nb.ready and "g" or "w")
+    text("SPORES " .. Profile.spores, nb.x + nb.w + 6, S.inset.t + 7, "t")
     local sw = audio.switch()
     local lv = Sfx.level >= 1 and "LOUD" or (Sfx.level > 0 and "QUIET" or "OFF")
     box(sw.x, sw.y, sw.w, sw.h, S.hover.sound and "n" or "u", Sfx.level > 0 and "c" or "k")
@@ -81,10 +86,10 @@ local function draw()
     text(st, sw.x + floor((sw.w - Font.width(st)) / 2), sw.y + 3, Sfx.level > 0 and "l" or "k")
     local hintY = S.vh - S.inset.b - 12
     centred(say("1-" .. #D.LEVELS .. " OR CLICK A LEVEL", "TAP A LEVEL") .. (Profile.challengeOpen() and say("   C: CHALLENGE", "") or "")
-        .. say("   E: ENCYCLOPEDIA", ""), hintY, "s", "o")
+        .. say("   E: ENCYCLOPEDIA   N: NETWORK", ""), hintY, "s", "o")
 end
 
--- What is pointed at: a level, the challenge switch, the encyclopedia or the sound.
+-- What is pointed at: a level, the challenge switch, the encyclopedia, the network or the sound.
 local function hover(mx, my)
     local cards, switch = levelCards()
     for k, c in ipairs(cards) do
@@ -92,6 +97,8 @@ local function hover(mx, my)
     end
     local cb = codex.button()
     if inside(mx, my, cb.x, cb.y, cb.w, cb.h) then S.hover.codex = true return end
+    local nb = Network.button(cb)
+    if inside(mx, my, nb.x, nb.y, nb.w, nb.h) then S.hover.network = true return end
     if Profile.challengeOpen() and inside(mx, my, switch.x, switch.y, switch.w, switch.h) then S.hover.challenge = true end
     local sw = audio.switch()
     if inside(mx, my, sw.x, sw.y, sw.w, sw.h) then S.hover.sound = true end
@@ -103,6 +110,7 @@ local function under()
         return function() return c.x, c.y, c.w, c.h end
     end
     if S.hover.codex then return function() local c = codex.button() return c.x, c.y, c.w, c.h end end
+    if S.hover.network then return function() local c = Network.button(codex.button()) return c.x, c.y, c.w, c.h end end
     if S.hover.challenge then
         local _, c = levelCards()
         return function() return c.x, c.y, c.w, c.h end
@@ -115,6 +123,7 @@ end
 
 local function click(b)
     if S.hover.codex then codex.open() return end
+    if S.hover.network then Network.open() return end
     if S.hover.level and Profile.levelOpen(S.hover.level) then sound("select"); Loadout.open(S.hover.level)
     elseif S.hover.level then deny()
     elseif S.hover.challenge then S.challenge = not S.challenge; sound(S.challenge and "on" or "off")
@@ -123,6 +132,7 @@ end
 
 local function key(key)
     if key == "e" then codex.open() return end
+    if key == "n" then Network.open() return end
     local n = tonumber(key)
     if n and D.LEVELS[n] then
         if Profile.levelOpen(n) then sound("select"); Loadout.open(n) else deny() end

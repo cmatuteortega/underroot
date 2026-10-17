@@ -16,7 +16,8 @@ local function layTools(g)
     BUTTONS[1] = { mode = "regrow", key = "1", name = "REGROW ALL", action = true }
     for _, t in ipairs(D.TOWERS) do
         if not g or g:brought(t.id) then
-            BUTTONS[#BUTTONS + 1] = { mode = t.id, key = t.key, name = t.name, blurb = t.blurb, cost = t.cost, tower = true }
+            BUTTONS[#BUTTONS + 1] = { mode = t.id, key = t.key, name = t.name, blurb = t.blurb, cost = g and g:towerCost(t.id) or t.cost,
+                tower = true }
         end
     end
     BUTTONS[#BUTTONS + 1] = { mode = "prune", key = "X", name = "PRUNE", blurb = "CUT YOUR OWN LINK (HALF BACK) OR CLEAR A TOWER" }
