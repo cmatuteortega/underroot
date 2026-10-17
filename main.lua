@@ -58,9 +58,9 @@ local codex = require "src.ui.codex"
 local Title = require "src.ui.title"
 local audio = require "src.ui.audio"
 local Run = require "src.ui.run"
--- The Spore Bank's screen (what it has and sells is src/profile.lua). `offer` is the
--- species a first win put up for sale, shown on the way on: { kind, after = button, bought }.
-local bank = {}
+local Loadout = require "src.ui.loadout"
+local Bank = require "src.ui.bank"
+local Menu = require "src.ui.menu"
 
 
 --- the screen ----------------------------------------------------------------------
@@ -119,28 +119,6 @@ local function mutationCards()
     return cards
 end
 
--- The level picker: a card a level, in rows of as many as fit across (three
--- on a wide screen, two rows of them; down the middle on a narrow one), and
--- the challenge switch under them once it is open.
-local LW, LH = 124, 50
-local function levelCards()
-    local n = #D.LEVELS
-    local cols = max(1, min(3, floor((S.vw - S.inset.l - S.inset.r - 8 + 6) / (LW + 6))))
-    local rows = ceil(n / cols)
-    local gap = cols == 1 and 4 or 6
-    local cards = {}
-    local y0 = floor(S.vh / 2 - (rows * LH + (rows - 1) * gap) / 2) - 8
-    for k = 1, n do
-        local row, col = floor((k - 1) / cols), (k - 1) % cols
-        local across = min(cols, n - row * cols)
-        local x0 = floor((S.vw - (across * LW + (across - 1) * 6)) / 2)
-        cards[k] = { x = x0 + col * (LW + 6), y = y0 + row * (LH + gap), w = LW, h = LH, n = k }
-    end
-    y0 = y0 + rows * (LH + gap) + 4
-    local switch = { x = floor((S.vw - LW) / 2), y = y0, w = LW, h = 16, challenge = true }
-    return cards, switch
-end
-
 -- What a won level offers, a button each across the middle under the words:
 -- the next level (if there is one), endless, again, the levels. Two rows if
 -- one does not fit across.
@@ -176,138 +154,6 @@ local function wonButtons()
     return list
 end
 
--- The loadout picker: what the level sends (a chip an enemy, bosses last),
--- a card a species under it, and BACK and GO under those, all centred
--- down the screen. A narrow screen takes fewer cards a row.
-local SW, SH = 62, 26
-local function enemiesOf(lv)
-    local seen = {}
-    for _, w in ipairs(lv.waves) do for _, g in ipairs(w) do seen[g[1]] = true end end
-    if S.challenge then for _, g in ipairs(D.CHALLENGE) do seen[g[1]] = true end end
-    local list = {}
-    for _, kind in ipairs(D.ENEMY_ORDER) do if seen[kind] then list[#list + 1] = kind end end
-    return list
-end
-
-local function loadoutLayout()
-    local lv = D.LEVELS[S.pick.n]
-    -- With the panel open the picker keeps to the room it leaves: the left on a
-    -- wide screen, the top on a narrow one.
-    local open = S.pick.info ~= nil or S.pick.seedInfo ~= nil
-    local left, right = S.inset.l, S.vw - S.inset.r
-    if open and wide() then right = S.vw - S.inset.r - Panel.infoWidth() - 6 end
-    local mid = floor((left + right) / 2)
-    local avail = right - left - 8
-    local cols = 6
-    while cols > 2 and cols * SW + (cols - 1) * 4 > avail do cols = cols == 6 and 4 or cols - 1 end
-    local rows = ceil(#D.TOWERS / cols)
-
-    -- The chips, flowed into rows as wide as the cards.
-    local width = max(cols * SW + (cols - 1) * 4, min(avail, 300))
-    local chips, lines, x, line = {}, 1, 0, {}
-    -- One not met yet has no name until it is faced.
-    local function name(kind) return Profile.seen[kind] and D.ENEMIES[kind].name or "???" end
-    for _, kind in ipairs(enemiesOf(lv)) do
-        local w = Font.width(name(kind)) + 6
-        if x > 0 and x + w > width then lines, x = lines + 1, 0 end
-        chips[#chips + 1] = { kind = kind, line = lines, dx = x, w = w, h = 9, name = name(kind) }
-        x = x + w + 3
-    end
-    -- The seeds, chips too: a name each, and the price of one not had yet.
-    local seeds, seedRows = {}, 1
-    x = 0
-    for _, sd in ipairs(D.SEEDS) do
-        local s = Profile.seedKnown(sd.id) and sd.short or "???"
-        if not Profile.ownsSeed(sd.id) and Profile.seedForSale(sd.id) then s = s .. " " .. sd.price end
-        local w = Font.width(s) + 8
-        if x > 0 and x + w > width then seedRows, x = seedRows + 1, 0 end
-        seeds[#seeds + 1] = { seed = sd, line = seedRows, dx = x, w = w, h = 11, name = s }
-        x = x + w + 3
-    end
-
-    local height = 22 + 10 + lines * 12 + 6 + 8 + seedRows * 14 + 8 + rows * (SH + 4) + 6 + 16
-    local y = max(S.inset.t + 4, floor((S.vh - S.inset.b - 12 - height) / 2))
-    if open and not wide() then y = S.inset.t + 4 end
-    local top = y
-    y = y + 32
-    -- Each chip row centred on its own.
-    local function flow(list, y0, step)
-        local ends = {}
-        for _, c in ipairs(list) do ends[c.line] = c.dx + c.w end
-        for _, c in ipairs(list) do
-            c.x = floor(mid - ends[c.line] / 2) + c.dx
-            c.y = y0 + (c.line - 1) * step
-        end
-    end
-    flow(chips, y, 12)
-    y = y + lines * 12 + 6
-    local seedsY = y + 8
-    flow(seeds, seedsY, 14)
-    y = seedsY + seedRows * 14 + 8
-
-    local x0 = floor(mid - (cols * SW + (cols - 1) * 4) / 2)
-    local cards = {}
-    local cardsY = y
-    for k, t in ipairs(D.TOWERS) do
-        local col, row = (k - 1) % cols, floor((k - 1) / cols)
-        cards[k] = { x = x0 + col * (SW + 4), y = y + row * (SH + 4), w = SW, h = SH, t = t }
-    end
-    y = y + rows * (SH + 4) + 6
-    local back = { x = mid - 54, y = y, w = 50, h = 16 }
-    local go = { x = mid + 4, y = y, w = 50, h = 16 }
-    return { top = top, chips = chips, chipsY = top + 32, seeds = seeds, seedsY = seedsY, cards = cards, cardsY = cardsY,
-        back = back, go = go, mid = mid }
-end
-
-local function picked()
-    local list = {}
-    for _, t in ipairs(D.TOWERS) do if S.pick.set[t.id] then list[#list + 1] = t.id end end
-    return list
-end
-
--- A species in or out of the loadout. Full, it says so rather than drop one.
-local function toggleSpecies(id)
-    -- Not had yet: its panel says how to get it.
-    if not Profile.owns(id) then S.pick.info = id; deny() return end
-    if S.pick.set[id] then S.pick.set[id] = nil; sound("off")
-    elseif #picked() >= D.LOADOUT then S.pick.full = 1.5; sound("deny")
-    else S.pick.set[id] = true; sound("on") end
-end
-
--- The panel's button: brings or leaves what is had, buys what is for sale.
-function bank.bringOrBuy(id)
-    if Profile.owns(id) then toggleSpecies(id)
-    elseif Profile.buy(id) then sound("unlock")
-    else deny() end
-end
-
--- A seed card or its panel's button: plants what is had, buys what is for
--- sale (and plants it).
-function bank.plantOrBuy(id)
-    if Profile.ownsSeed(id) then
-        if S.pick.seed ~= id then S.pick.seed = id; sound("on") end
-    elseif Profile.buySeed(id) then S.pick.seed = id; sound("unlock")
-    else deny() end
-end
-
--- The Spore Bank after a first win: the species it put up for sale, BUY and
--- ON (LATER until it is bought) under it, all down the middle.
-function bank.layout()
-    local mid = floor(S.vw / 2)
-    local w = min(200, S.vw - S.inset.l - S.inset.r - 8)
-    local top = floor(S.vh / 2) - 60
-    local card = { x = floor(mid - w / 2), y = top + 24, w = w, h = 48 }
-    local by = card.y + card.h + 20
-    local L = { mid = mid, top = top, card = card }
-    if bank.offer.bought then
-        L.on = { x = mid - 32, y = by, w = 64, h = 16 }
-    else
-        L.buy = { x = mid - 68, y = by, w = 64, h = 16 }
-        L.on = { x = mid + 4, y = by, w = 64, h = 16 }
-    end
-    return L
-end
-
 local function nodeScreen(n)
     local i, j = S.world:toImage(n.x, n.y + (n.heart and 10 or 5), n.z)
     return i, j
@@ -316,46 +162,11 @@ end
 local function findHover()
     S.hover = {}
     local mx, my = S.mouse.x, S.mouse.y
-    if S.menu == "bank" then
-        local L = bank.layout()
-        if L.buy and inside(mx, my, L.buy.x, L.buy.y, L.buy.w, L.buy.h) then S.hover.buy = true end
-        if inside(mx, my, L.on.x, L.on.y, L.on.w, L.on.h) then S.hover.on = true end
-        return
-    end
-    if S.menu == "loadout" then
-        local P = info()
-        if P then
-            if inside(mx, my, P.button.x, P.button.y, P.button.w, P.button.h) then S.hover.bring = true return end
-            if inside(mx, my, P.x, P.y, P.w, P.h) then S.hover.info = true return end
-        end
-        local L = loadoutLayout()
-        for _, c in ipairs(L.chips) do
-            if inside(mx, my, c.x, c.y, c.w, c.h) then S.hover.enemy = c.kind return end
-        end
-        for _, c in ipairs(L.seeds) do
-            if inside(mx, my, c.x, c.y, c.w, c.h) then S.hover.seed = c.seed.id return end
-        end
-        for _, c in ipairs(L.cards) do
-            if inside(mx, my, c.x, c.y, c.w, c.h) then S.hover.species = c.t.id return end
-        end
-        if inside(mx, my, L.back.x, L.back.y, L.back.w, L.back.h) then S.hover.back = true end
-        if inside(mx, my, L.go.x, L.go.y, L.go.w, L.go.h) then S.hover.go = true end
-        return
-    end
+    if S.menu == "bank" then Bank.hover(mx, my) return end
+    if S.menu == "loadout" then Loadout.hover(mx, my) return end
     if S.menu == "codex" then codex.findHover(mx, my) return end
     if S.menu == "title" then return end
-    if S.menu then
-        local cards, switch = levelCards()
-        for k, c in ipairs(cards) do
-            if inside(mx, my, c.x, c.y, c.w, c.h) then S.hover.level = k return end
-        end
-        local cb = codex.button()
-        if inside(mx, my, cb.x, cb.y, cb.w, cb.h) then S.hover.codex = true return end
-        if Profile.challengeOpen() and inside(mx, my, switch.x, switch.y, switch.w, switch.h) then S.hover.challenge = true end
-        local sw = audio.switch()
-        if inside(mx, my, sw.x, sw.y, sw.w, sw.h) then S.hover.sound = true end
-        return
-    end
+    if S.menu then Menu.hover(mx, my) return end
     if S.game.phase == "won" then
         for _, b in ipairs(wonButtons()) do
             if inside(mx, my, b.x, b.y, b.w, b.h) then S.hover.won = b.id return end
@@ -411,73 +222,6 @@ end
 
 --- the run ---------------------------------------------------------------------------
 
--- Before level `n`: pick what to bring, starting from what was brought last
--- time (or the level's own suggestion the first time).
-local openLoadout
-
--- Won: one of the buttons, or its key.
-local function afterWin(id)
-    -- A first win put a species up for sale: the Spore Bank shows it first.
-    if S.game.offer then
-        bank.offer = { kind = S.game.offer, after = id }
-        S.game.offer = nil
-        S.menu = "bank"
-        S.mode, S.drag, S.selected = "grow", nil, nil
-        sound("offer")
-        return
-    end
-    if id == "endless" then sound("go"); S.game:goEndless()
-    elseif id == "again" then sound("go"); Run.start()
-    elseif id == "levels" then sound("back"); S.openMenu()
-    elseif id == "next" then
-        for k, l in ipairs(D.LEVELS) do
-            if l == S.level and D.LEVELS[k + 1] then sound("select"); openLoadout(k + 1) return end
-        end
-    end
-end
-
--- Out of the Spore Bank, on to what the won level's button was for.
-function bank.leave()
-    local id = bank.offer.after
-    bank.offer, S.menu = nil, nil
-    afterWin(id)
-end
-
-function bank.buyOffer()
-    if bank.offer.bought then return end
-    if Profile.buy(bank.offer.kind) then bank.offer.bought = true; sound("unlock") else deny() end
-end
-
-function openLoadout(n)
-    local lv = D.LEVELS[n]
-    S.menu = "loadout"
-    S.mode, S.drag, S.selected = "grow", nil, nil
-    -- The seed planted here last time, if it is still had; else the bean.
-    local seed = Profile.sown[lv.id]
-    S.pick = { n = n, set = {}, full = 0, seed = seed and Profile.ownsSeed(seed) and seed or D.SEEDS[1].id }
-    local dropped = false
-    for _, id in ipairs(Profile.loadouts[lv.id] or lv.loadout or {}) do
-        if Profile.owns(id) then S.pick.set[id] = true else dropped = true end
-    end
-    -- A species not had yet stays home, and the next one had takes its place.
-    for _, t in ipairs(D.TOWERS) do
-        if not dropped or #picked() >= D.LOADOUT then break end
-        if Profile.owns(t.id) then S.pick.set[t.id] = true end
-    end
-end
-
--- Off into the level with what was picked, remembered for next time.
-local function setOff()
-    local list = picked()
-    if #list == 0 then sound("deny") return end
-    sound("go")
-    Profile.loadouts[D.LEVELS[S.pick.n].id] = list
-    Profile.sown[D.LEVELS[S.pick.n].id] = S.pick.seed
-    Profile.save()
-    S.chosen = list
-    Run.play(S.pick.n)
-end
-
 function love.load(args)
     love.graphics.setDefaultFilter("nearest", "nearest")
     love.graphics.setLineStyle("rough")
@@ -529,46 +273,11 @@ end
 -- Whatever is under the pointer that lights up when pressed: how to find its
 -- box again (the layout can move under it while it is lit).
 function flair.under()
-    if S.menu == "bank" then
-        local L = bank.layout()
-        local b = S.hover.buy and L.buy or (S.hover.on and L.on)
-        if b then return function() return b.x, b.y, b.w, b.h end end
-        return
-    end
-    if S.menu == "loadout" then
-        local L = loadoutLayout()
-        if S.hover.back then return function() return L.back.x, L.back.y, L.back.w, L.back.h end end
-        if S.hover.go then return function() return L.go.x, L.go.y, L.go.w, L.go.h end end
-        if S.hover.species then
-            for _, c in ipairs(L.cards) do
-                if c.t.id == S.hover.species then return function() return c.x, c.y, c.w, c.h end end
-            end
-        end
-        if S.hover.seed then
-            for _, c in ipairs(L.seeds) do
-                if c.seed.id == S.hover.seed then return function() return c.x, c.y, c.w, c.h end end
-            end
-        end
-        return
-    end
+    if S.menu == "bank" then return Bank.under() end
+    if S.menu == "loadout" then return Loadout.under() end
     if S.menu == "codex" then return codex.under() end
     if S.menu == "title" then return end
-    if S.menu then
-        if S.hover.level then
-            local c = levelCards()[S.hover.level]
-            return function() return c.x, c.y, c.w, c.h end
-        end
-        if S.hover.codex then return function() local c = codex.button() return c.x, c.y, c.w, c.h end end
-        if S.hover.challenge then
-            local _, c = levelCards()
-            return function() return c.x, c.y, c.w, c.h end
-        end
-        if S.hover.sound then
-            local c = audio.switch()
-            return function() return c.x, c.y, c.w, c.h end
-        end
-        return
-    end
+    if S.menu then return Menu.under() end
     if S.hover.mutation then
         local c = mutationCards()[S.hover.mutation]
         return function() return c.x, c.y, c.w, c.h end
@@ -594,59 +303,11 @@ end
 local function click(b)
     local r = b == 1 and flair.under()
     if r then flair.pressed = { t = 0.18, rect = r } end
-    if S.menu == "bank" then
-        if S.hover.buy then bank.buyOffer()
-        elseif S.hover.on or b == 2 then sound("click"); bank.leave() end
-        return
-    end
-    if S.menu == "loadout" then
-        -- A card opens its panel; the same card again (or the panel's button)
-        -- brings it or leaves it, or buys it. Anywhere else shuts the panel.
-        if S.hover.bring then
-            if S.pick.seedInfo then bank.plantOrBuy(S.pick.seedInfo) else bank.bringOrBuy(S.pick.info) end
-            return
-        end
-        if S.hover.info then return end
-        if b == 2 then
-            sound("back")
-            if S.pick.info or S.pick.seedInfo then S.pick.info, S.pick.seedInfo = nil, nil else S.openMenu() end
-            return
-        elseif S.hover.species then
-            S.pick.seedInfo = nil
-            if S.pick.info == S.hover.species then toggleSpecies(S.hover.species) else S.pick.info = S.hover.species; sound("panel") end
-            return
-        elseif S.hover.seed then
-            -- One had is planted at once, and its panel opens; one not had
-            -- only opens its panel, whose button buys it.
-            S.pick.info = nil
-            local id = S.hover.seed
-            if Profile.ownsSeed(id) and S.pick.seed ~= id then S.pick.seed = id; sound("on")
-            elseif S.pick.seedInfo ~= id then sound("panel")
-            elseif not Profile.ownsSeed(id) then deny() end
-            S.pick.seedInfo = id
-            return
-        elseif S.hover.back then sound("back"); S.openMenu()
-        elseif S.hover.go then setOff()
-        elseif S.hover.enemy then
-            -- Pinned, so a finger (which has no hover) can see the answers too.
-            S.pick.enemy = S.pick.enemy ~= S.hover.enemy and S.hover.enemy or nil
-            sound(S.pick.enemy and "select" or "back")
-        elseif S.pick and (S.pick.info or S.pick.seedInfo) then
-            sound("back")
-        end
-        if S.pick then S.pick.info, S.pick.seedInfo = nil, nil end
-        return
-    end
+    if S.menu == "bank" then Bank.click(b) return end
+    if S.menu == "loadout" then Loadout.click(b) return end
     if S.menu == "codex" then codex.click(b) return end
     if S.menu == "title" then Title.leave() return end
-    if S.menu then
-        if S.hover.codex then codex.open() return end
-        if S.hover.level and Profile.levelOpen(S.hover.level) then sound("select"); openLoadout(S.hover.level)
-        elseif S.hover.level then deny()
-        elseif S.hover.challenge then S.challenge = not S.challenge; sound(S.challenge and "on" or "off")
-        elseif S.hover.sound then Sfx.cycle(); audio.save(); sound("on") end
-        return
-    end
+    if S.menu then Menu.click(b) return end
     if S.weatherTip and not S.hover.weather then S.weatherTip = nil end
     if b == 2 then
         if S.mode ~= "grow" or S.drag or S.selected then sound("back") end
@@ -693,7 +354,7 @@ local function click(b)
     end
     if S.hover.turn then turnCamera(S.hover.turn) return end
     if S.game.phase == "won" then
-        if S.hover.won then afterWin(S.hover.won) end
+        if S.hover.won then Bank.afterWin(S.hover.won) end
         return
     end
     if S.game.phase == "lost" then sound("click"); S.openMenu() return end
@@ -917,34 +578,11 @@ function love.keypressed(key)
         return
     end
     if S.painter then return end
-    if S.menu == "bank" then
-        if key == "b" then bank.buyOffer()
-        elseif key == "return" or key == "kpenter" or key == "space" or key == "escape" then sound("click"); bank.leave() end
-        return
-    end
-    if S.menu == "loadout" then
-        if key == "escape" or key == "backspace" then
-            if S.pick.info or S.pick.seedInfo then S.pick.info, S.pick.seedInfo = nil, nil else S.openMenu() end
-            return
-        end
-        if key == "return" or key == "kpenter" or key == "space" then setOff() return end
-        for _, t in ipairs(D.TOWERS) do
-            if key == t.key:lower() then toggleSpecies(t.id) end
-        end
-        return
-    end
+    if S.menu == "bank" then Bank.key(key) return end
+    if S.menu == "loadout" then Loadout.key(key) return end
     if S.menu == "codex" then codex.key(key) return end
     if S.menu == "title" then Title.leave() return end
-    if S.menu then
-        if key == "e" then codex.open() return end
-        local n = tonumber(key)
-        if n and D.LEVELS[n] then
-            if Profile.levelOpen(n) then sound("select"); openLoadout(n) else deny() end
-        end
-        if key == "c" and Profile.challengeOpen() then S.challenge = not S.challenge; sound(S.challenge and "on" or "off") end
-        if key == "escape" and S.game then sound("back"); S.menu = nil end
-        return
-    end
+    if S.menu then Menu.key(key) return end
     if key == "=" or key == "+" or key == "kp+" then zoomBy(1) end
     if key == "-" or key == "kp-" then zoomBy(-1) end
     if S.game.phase == "mutate" then
@@ -987,17 +625,17 @@ function love.keypressed(key)
         end
     end
     if key == "f" then S.speed = S.speed % 3 + 1; sound("speed", 0.8 + 0.2 * S.speed) end
-    if key == "e" and S.game.phase == "won" then afterWin("endless") return end
+    if key == "e" and S.game.phase == "won" then Bank.afterWin("endless") return end
     if key == "e" then turnCamera(love.keyboard.isDown("lshift", "rshift") and -1 or 1) end
     if key == "q" then turnCamera(-1) end
     if key == "p" then S.paused = not S.paused; sound(S.paused and "pause" or "unpause") end
-    if key == "r" and S.game.phase == "won" then afterWin("again")
+    if key == "r" and S.game.phase == "won" then Bank.afterWin("again")
     elseif key == "r" and (S.game.phase == "lost" or love.keyboard.isDown("lshift")) then sound("go"); Run.start() end
     if key == "m" then
-        if S.game.phase == "won" then afterWin("levels") else sound("back"); S.openMenu() end
+        if S.game.phase == "won" then Bank.afterWin("levels") else sound("back"); S.openMenu() end
     end
     -- Won: on to the next level.
-    if key == "n" and S.game.phase == "won" then afterWin("next") end
+    if key == "n" and S.game.phase == "won" then Bank.afterWin("next") end
 end
 
 function love.update(dt)
@@ -1038,7 +676,7 @@ function love.update(dt)
                     select = function(t) S.selected = t end,
                     selection = function() return S.selected end,
                     menu = function(on) if on then S.openMenu() else S.menu = nil end end,
-                    loadout = function(n) if n then openLoadout(n) else S.menu, S.pick = nil, nil end end,
+                    loadout = function(n) if n then Loadout.open(n) else S.menu, S.pick = nil, nil end end,
                     button = function(name)
                         for n, b in ipairs(BUTTONS) do
                             if b.mode == name then
@@ -1620,261 +1258,6 @@ local function drawHud()
     end
 end
 
-local function drawMenu()
-    color("o")
-    love.graphics.rectangle("fill", 0, 0, S.vw, S.vh)
-    local cards, switch = levelCards()
-    centred("MYCELIO TD", cards[1].y - 30, "g", "o")
-    centred("WHERE DOES THE SPROUT COME UP?", cards[1].y - 18, "t", "o")
-    for k, c in ipairs(cards) do
-        local l = D.LEVELS[k]
-        local open, on = Profile.levelOpen(k), S.hover.level == k
-        box(c.x, c.y, c.w, c.h, on and open and "n" or "u", Profile.won[l.id] and "g" or (open and (on and "l" or "c") or "k"))
-        text(k .. "  " .. l.name, c.x + 4, c.y + 4, open and "w" or "k")
-        if not open then
-            text("WIN " .. D.LEVELS[k - 1].name, c.x + 4, c.y + 14, "r")
-            text("TO OPEN IT", c.x + 4, c.y + 21, "r")
-        else
-            local y = wrap(l.idea, c.x + 4, c.y + 14, c.w - 8, "t")
-            wrap("BOSS: " .. l.boss, c.x + 4, y + 1, c.w - 8, "r")
-            local tag = Profile.won[l.id] and "WON" or (#l.waves .. " WAVES")
-            text(tag, c.x + c.w - Font.width(tag) - 4, c.y + c.h - 8, Profile.won[l.id] and "g" or "s")
-            -- The endless record, bottom left, once there is one.
-            if Profile.records[l.id] then text("BEST " .. Profile.records[l.id], c.x + 4, c.y + c.h - 8, "r") end
-        end
-    end
-    if Profile.challengeOpen() then
-        local c = switch
-        box(c.x, c.y, c.w, c.h, S.hover.challenge and "n" or "u", S.challenge and "r" or "k")
-        local s = "CHALLENGE: " .. (S.challenge and "ON" or "OFF")
-        text(s, c.x + floor((c.w - Font.width(s)) / 2), c.y + 5, S.challenge and "r" or "w")
-        if S.hover.challenge or S.challenge then
-            centred("A LAST WAVE ON ANY LEVEL: THE BOMBARDIER BEETLE", c.y + c.h + 6, "r", "o")
-        end
-    end
-    local cb = codex.button()
-    box(cb.x, cb.y, cb.w, cb.h, S.hover.codex and "n" or "u", S.hover.codex and "t" or "c")
-    text("ENCYCLOPEDIA", cb.x + 4, cb.y + 4, "w")
-    text("SPORES " .. Profile.spores, cb.x + cb.w + 6, S.inset.t + 7, "t")
-    local sw = audio.switch()
-    local lv = Sfx.level >= 1 and "LOUD" or (Sfx.level > 0 and "QUIET" or "OFF")
-    box(sw.x, sw.y, sw.w, sw.h, S.hover.sound and "n" or "u", Sfx.level > 0 and "c" or "k")
-    local st = "SOUND " .. lv
-    text(st, sw.x + floor((sw.w - Font.width(st)) / 2), sw.y + 3, Sfx.level > 0 and "l" or "k")
-    local hintY = S.vh - S.inset.b - 12
-    centred(say("1-" .. #D.LEVELS .. " OR CLICK A LEVEL", "TAP A LEVEL") .. (Profile.challengeOpen() and say("   C: CHALLENGE", "") or "")
-        .. say("   E: ENCYCLOPEDIA", ""), hintY, "s", "o")
-end
-
--- The panel's button in the loadout: plant or buy a seed, bring, leave or buy a species.
-local function drawPanelButton(P)
-    local b = P.button
-    if b and P.seed then
-        -- A seed: planted, plantable, for sale, or waiting on a win.
-        local sd = D.SEED[P.seed]
-        local s, fill, edge, k
-        if Profile.ownsSeed(sd.id) then
-            local on = S.pick.seed == sd.id
-            s, fill, edge, k = on and "PLANTED" or "PLANT IT", on and "u" or "d", on and "t" or "g", on and "w" or "g"
-        elseif Profile.seedForSale(sd.id) then
-            local can = Profile.spores >= sd.price
-            s = can and ("BUY IT: " .. sd.price .. " SPORES") or (sd.price .. " SPORES. YOU HAVE " .. Profile.spores)
-            fill, edge, k = "u", can and "t" or "k", can and "t" or "r"
-        else
-            s, fill, edge, k = "WIN " .. D.LEVEL[sd.after].name .. " FOR IT", "u", "k", "k"
-        end
-        box(b.x, b.y, b.w, b.h, S.hover.bring and "n" or fill, edge)
-        text(s, b.x + floor((b.w - Font.width(s)) / 2), b.y + 4, k)
-    elseif b and not Profile.owns(P.kind) then
-        -- Not had yet: bought here once a win has put it up for sale.
-        local price = D.TOWER[P.kind].price
-        local s, edge, k
-        if Profile.forSale(P.kind) then
-            local can = Profile.spores >= price
-            s = can and ("BUY IT: " .. price .. " SPORES") or (price .. " SPORES. YOU HAVE " .. Profile.spores)
-            edge, k = can and "t" or "k", can and "t" or "r"
-        else
-            s, edge, k = "WIN " .. Profile.prizeOf(P.kind).name .. " FOR IT", "k", "k"
-        end
-        box(b.x, b.y, b.w, b.h, S.hover.bring and "n" or "u", edge)
-        text(s, b.x + floor((b.w - Font.width(s)) / 2), b.y + 4, k)
-    elseif b then
-        local inn = S.pick.set[P.kind]
-        local full = not inn and #picked() >= D.LOADOUT
-        local s = inn and "LEAVE IT AT HOME" or (full and "SIX ALREADY: DROP ONE" or "BRING IT")
-        box(b.x, b.y, b.w, b.h, S.hover.bring and "n" or (inn and "u" or "d"), full and "k" or (inn and "t" or "g"))
-        text(s, b.x + floor((b.w - Font.width(s)) / 2), b.y + 4, full and "k" or (inn and "w" or "g"))
-    end
-end
-
-local function drawLoadout()
-    color("o")
-    love.graphics.rectangle("fill", 0, 0, S.vw, S.vh)
-    local lv = D.LEVELS[S.pick.n]
-    local L = loadoutLayout()
-    local list = picked()
-    local clock = flair.now()
-    centred(lv.name .. (S.challenge and " (CHALLENGE)" or ""), L.top, "g", "o", L.mid)
-    text("SPORES " .. Profile.spores, S.inset.l + 4, S.inset.t + 7, "t")
-    local count = #list .. "/" .. D.LOADOUT
-    centred("PICK A SEED AND THE SPECIES TO BRING  " .. count, L.top + 11, #list == D.LOADOUT and "l" or "t", "o", L.mid)
-    text("COMING", floor(L.mid - Font.width("COMING") / 2), L.chipsY - 9, "s")
-    text("SEED", floor(L.mid - Font.width("SEED") / 2), L.seedsY - 7, "s")
-    text("SPECIES", floor(L.mid - Font.width("SPECIES") / 2), L.cardsY - 7, "s")
-
-    -- The seeds: the planted one lit green, one had in white, one for sale
-    -- with its price, one still locked dark.
-    for _, c in ipairs(L.seeds) do
-        local sd = c.seed
-        local own, inn, on = Profile.ownsSeed(sd.id), S.pick.seed == sd.id, S.hover.seed == sd.id
-        local sale = not own and Profile.seedForSale(sd.id)
-        local edge = inn and "g" or "k"
-        if on or S.pick.seedInfo == sd.id then edge = inn and "w" or "t" end
-        box(c.x, c.y, c.w, c.h, inn and "d" or (on and "n" or "u"), edge)
-        text(c.name, c.x + 4, c.y + 3, inn and "g" or (own and "w" or (sale and "t" or "k")))
-    end
-
-    -- The enemy pointed at (or pinned) lights up what answers it.
-    local enemy = S.hover.enemy or S.pick.enemy
-    local met = enemy and Profile.seen[enemy]
-    local answers = {}
-    for _, id in ipairs(met and D.COUNTERS[enemy] or {}) do answers[id] = true end
-    for _, c in ipairs(L.chips) do
-        local boss = D.ENEMIES[c.kind].boss and Profile.seen[c.kind]
-        local on = enemy == c.kind
-        box(c.x, c.y, c.w, c.h, on and "n" or "u", on and "w" or (boss and "r" or "k"))
-        text(c.name, c.x + 3, c.y + 2, boss and "r" or (Profile.seen[c.kind] and "w" or "k"))
-    end
-
-    for _, c in ipairs(L.cards) do
-        local t = c.t
-        local inn, on, ans = S.pick.set[t.id], S.hover.species == t.id, answers[t.id]
-        local edge = inn and "l" or "k"
-        if ans and floor(clock * 4) % 2 == 0 then edge = "w" end
-        if on or S.pick.info == t.id then edge = inn and "w" or "t" end
-        box(c.x, c.y, c.w, c.h, (inn or on) and "n" or "u", edge)
-        -- The picture kept to its corner of the card: a shelf or the giant is wider.
-        local pic = icon(t.id, nil, 0, inn and (clock * 0.7) % 1 or 0)
-        love.graphics.setScissor(c.x, c.y, 21, c.h)
-        local known = Profile.known(t.id)
-        blit(pic, c.x + 11, t.id == "mat" and c.y + c.h - 8 or c.y + c.h - 3, not known and CUT or (not inn and T.DARKER2 or nil))
-        love.graphics.setScissor()
-        local own = Profile.owns(t.id)
-        wrap(known and t.name or "???", c.x + 22, c.y + 3, c.w - 24, inn and "w" or (own and "s" or "k"))
-        -- Not had yet: its price once it is for sale, else locked.
-        if not own then
-            local sale = Profile.forSale(t.id)
-            text(sale and (t.price .. " SPORES") or "LOCKED", c.x + 22, c.y + c.h - 7, sale and "t" or "k")
-        else
-            text(tostring(t.cost), c.x + 22, c.y + c.h - 7, inn and "l" or "k")
-        end
-        -- The wave it comes in, given what else is brought.
-        local at = D.unlockAt(lv, t.id, S.pick.set)
-        if own and at > 0 then
-            local s = "W" .. at
-            text(s, c.x + c.w - Font.width(s) - 2, c.y + c.h - 7, "k")
-        end
-        if not S.touch then text(t.key, c.x + 1, c.y + 1, "s") end
-        if ans then text("!", c.x + c.w - 4, c.y + 2, "w") end
-    end
-
-    local b, g = L.back, L.go
-    box(b.x, b.y, b.w, b.h, S.hover.back and "n" or "u", S.hover.back and "t" or "k")
-    text("BACK", b.x + floor((b.w - Font.width("BACK")) / 2), b.y + 5, "w")
-    local ready = #list > 0
-    box(g.x, g.y, g.w, g.h, ready and (S.hover.go and "m" or "d") or "u", ready and "g" or "k")
-    text("GROW", g.x + floor((g.w - Font.width("GROW")) / 2), g.y + 5, ready and "g" or "k")
-
-    local P = info()
-    if P then
-        Panel.draw(P)
-        drawPanelButton(P)
-        if S.pick.full > 0 then centred("ONLY " .. D.LOADOUT .. " COME. DROP ONE FIRST", g.y + g.h + 6, "r", "o", L.mid) end
-        return
-    end
-
-    -- One line under it all: what is pointed at, or how it works.
-    local tip, k
-    if S.pick.full > 0 then
-        tip, k = "ONLY " .. D.LOADOUT .. " COME. DROP ONE FIRST", "r"
-    elseif S.hover.seed then
-        local sd = D.SEED[S.hover.seed]
-        if Profile.ownsSeed(sd.id) then tip, k = sd.name .. ": " .. sd.blurb, "w"
-        elseif Profile.seedForSale(sd.id) then tip, k = sd.name .. ": FOR SALE, " .. sd.price .. " SPORES. YOU HAVE " .. Profile.spores, "t"
-        else tip, k = "???: WIN " .. D.LEVEL[sd.after].name .. " TO PUT IT UP FOR SALE", "k" end
-    elseif S.hover.species and not Profile.owns(S.hover.species) then
-        local t = D.TOWER[S.hover.species]
-        if Profile.forSale(t.id) then tip, k = t.name .. ": FOR SALE, " .. t.price .. " SPORES. YOU HAVE " .. Profile.spores, "t"
-        else tip, k = "???: WIN " .. Profile.prizeOf(t.id).name .. " TO PUT IT UP FOR SALE", "k" end
-    elseif S.hover.species then
-        local t = D.TOWER[S.hover.species]
-        tip, k = t.name .. ": " .. t.blurb, "w"
-    elseif enemy and not met then
-        tip, k = "???: NOT MET YET. FACE IT TO LEARN WHAT ANSWERS IT", "k"
-    elseif enemy then
-        local names = {}
-        for _, id in ipairs(D.COUNTERS[enemy] or {}) do names[#names + 1] = D.TOWER[id].name end
-        tip, k = D.ENEMIES[enemy].name .. ": " .. D.ENEMIES[enemy].blurb:gsub("%.?$", ".") .. " ANSWER: " .. table.concat(names, ", "), "t"
-    elseif not ready then
-        tip, k = "BRING AT LEAST ONE", "r"
-    else
-        tip, k = say("CLICK A SEED TO PLANT IT. CLICK A SPECIES TO READ IT, AGAIN TO BRING OR LEAVE IT. POINT AT AN ENEMY FOR ITS ANSWER",
-            "TAP A SEED TO PLANT IT. TAP A SPECIES TO READ IT, AGAIN TO BRING OR LEAVE IT. TAP AN ENEMY FOR ITS ANSWER"), "s"
-    end
-    local room = S.vw - S.inset.l - S.inset.r - 8
-    local y = g.y + g.h + 6
-    -- Too long for one line: broken at words, as many lines as it takes.
-    local line = ""
-    for word in tip:gmatch("%S+") do
-        local try = line == "" and word or line .. " " .. word
-        if Font.width(try) > room then
-            centred(line, y, k, "o")
-            line, y = word, y + 9
-        else
-            line = try
-        end
-    end
-    centred(line, y, k, "o")
-end
-
--- The Spore Bank after a first win: the species it put up for sale, and BUY.
-function bank.draw()
-    color("o")
-    love.graphics.rectangle("fill", 0, 0, S.vw, S.vh)
-    local L = bank.layout()
-    local t = D.TOWER[bank.offer.kind]
-    centred("THE SPORE BANK", L.top, "g", "o", L.mid)
-    centred(S.level.name .. " WON: A NEW SPECIES FOR SALE", L.top + 11, "t", "o", L.mid)
-    local c = L.card
-    box(c.x, c.y, c.w, c.h, "u", bank.offer.bought and "g" or "t")
-    local pic = icon(t.id, nil, 0, (flair.now() * 0.7) % 1)
-    love.graphics.setScissor(c.x, c.y, 24, c.h)
-    blit(pic, c.x + 12, t.id == "mat" and c.y + c.h - 8 or c.y + c.h - 6)
-    love.graphics.setScissor()
-    text(t.name, c.x + 26, c.y + 4, "w")
-    text(t.role, c.x + 26, c.y + 12, "t")
-    love.graphics.setScissor(c.x, c.y, c.w, c.h - 2)
-    wrap(t.about, c.x + 26, c.y + 21, c.w - 30, "s")
-    love.graphics.setScissor()
-    local y = c.y + c.h + 6
-    if bank.offer.bought then
-        centred(t.name .. " IS YOURS. BRING IT FROM THE LOADOUT", y, "g", "o", L.mid)
-    else
-        local can = Profile.spores >= t.price
-        centred("PRICE " .. t.price .. " SPORES   YOU HAVE " .. Profile.spores, y, can and "w" or "r", "o", L.mid)
-        local b = L.buy
-        box(b.x, b.y, b.w, b.h, S.hover.buy and "n" or (can and "d" or "u"), can and "t" or "k")
-        local s = say("B: BUY IT", "BUY IT")
-        text(s, b.x + floor((b.w - Font.width(s)) / 2), b.y + 5, can and "t" or "k")
-        centred(can and "OR BUY IT LATER, BEFORE ANY LEVEL" or "NOT ENOUGH YET: IT WAITS IN THE LOADOUT",
-            b.y + b.h + 6, "s", "o", L.mid)
-    end
-    local b = L.on
-    box(b.x, b.y, b.w, b.h, S.hover.on and "n" or "u", "c")
-    local s = bank.offer.bought and say("ENTER: ON", "ON") or say("ENTER: LATER", "LATER")
-    text(s, b.x + floor((b.w - Font.width(s)) / 2), b.y + 5, "w")
-end
-
 function love.draw()
     -- The HUD's picture starts empty each frame (nothing where the board shows
     -- through) and everything on it is drawn solid, so laying it over the board
@@ -1884,15 +1267,15 @@ function love.draw()
     if S.painter then
         flair.loading()
     elseif S.menu == "loadout" then
-        drawLoadout()
+        Loadout.draw()
     elseif S.menu == "bank" then
-        bank.draw()
+        Bank.draw()
     elseif S.menu == "codex" then
         codex.draw()
     elseif S.menu == "title" then
         Title.draw()
     elseif S.menu then
-        drawMenu()
+        Menu.draw()
     else
         drawHud()
         love.graphics.setCanvas(S.canvas)
