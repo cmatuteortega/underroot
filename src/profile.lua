@@ -12,6 +12,7 @@
 --   loadout crack puffer needle mat seed=oak
 --   spores 40
 --   net needle=1 puffer.power=2 oak=1
+--   all 1
 --   seen ant pillbug
 --   sound 0.5
 --
@@ -44,6 +45,7 @@ local function clear()
     P.sown = {} -- the seed last planted: { crack = "oak" }
     P.spores = 0
     P.net = {} -- the network's ranks: { needle = 1, ["puffer.power"] = 2 }
+    P.all = false -- the whole network on, whatever is grown: for trying it all out
     P.version = nil -- the save's, as read: an old one is paid back for what it bought
     P.bought = 0 -- what an old save spent in its Spore Bank
     P.seen = {} -- enemies met: { ant = true }
@@ -80,6 +82,7 @@ local LINE = {
     endless = function(w) if D.LEVEL[w[2]] and tonumber(w[3]) then P.records[w[2]] = tonumber(w[3]) end end,
     loadout = function(w) table.remove(w, 1); loadout(w) end,
     version = function(w) P.version = tonumber(w[2]) end,
+    all = function(w) P.all = w[2] == "1" end,
     spores = function(w) P.spores = tonumber(w[2]) or 0 end,
     net = function(w)
         for k = 2, #w do
@@ -166,6 +169,7 @@ function P.save()
         if (P.net[row.id] or 0) > 0 then net[#net + 1] = row.id .. "=" .. P.net[row.id] end
     end
     lines[#lines + 1] = "net " .. table.concat(net, " ")
+    if P.all then lines[#lines + 1] = "all 1" end
     lines[#lines + 1] = "seen " .. ids(D.ENEMY_ORDER, P.seen)
     if P.sound then lines[#lines + 1] = "sound " .. P.sound end
     love.filesystem.write(FILE, table.concat(lines, "\n") .. "\n")
@@ -173,11 +177,27 @@ end
 
 --- the Spore Bank's network -----------------------------------------------------------------
 
+-- The ranks the network counts as grown: what was bought, or with the whole
+-- network switched on (`all`), every rank of every node. What was bought is
+-- kept either way, and is back when it is switched off.
+local EVERYTHING
+function P.ranks()
+    if not P.all then return P.net end
+    EVERYTHING = EVERYTHING or N.everything()
+    return EVERYTHING
+end
+
 -- What the network has grown, for a run (Game.new's `opts.net`). Worked out
--- again only after a rank is bought.
+-- again only after a rank is bought or the whole of it switched.
 function P.grown()
-    if not P.cache then P.cache = N.grown(P.net) end
+    if not P.cache then P.cache = N.grown(P.ranks()) end
     return P.cache
+end
+
+-- The whole network on or off.
+function P.setAll(on)
+    P.all, P.cache = on and true or false, nil
+    P.save()
 end
 
 -- Can it be brought, or planted? Once the network has grown it.
@@ -185,9 +205,13 @@ function P.owns(id) return P.grown().species[id] == true end
 function P.ownsSeed(id) return P.grown().seeds[id] == true end
 
 -- Where a node stands (N.state), and a rank of it bought, saved at once.
-function P.nodeState(id) return N.state(P, id) end
+-- With the whole network on, every node stands full and nothing is bought.
+function P.nodeState(id)
+    if P.all then return N.state({ net = P.ranks(), won = P.won, seen = P.seen, spores = P.spores }, id) end
+    return N.state(P, id)
+end
 function P.buy(id)
-    if not N.buy(P, id) then return false end
+    if P.all or not N.buy(P, id) then return false end
     P.cache = nil
     P.save()
     return true

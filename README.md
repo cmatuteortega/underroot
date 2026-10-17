@@ -93,8 +93,10 @@ sugar and mutations -- dimmed while what it grows from is not grown yet, a
 silhouette with a padlock while a win is needed, a blinking green rim when
 there are the spores for it. It opens looking from the sprout towards the
 nearest node there are spores for. Drag (or the arrows) to look round, the
-wheel, a pinch or `+`/`-` to zoom (all the way out the nodes are dots, to see
-the whole network at once); a node clicked shows its panel (what it does, now and at
+wheel or `+`/`-` to zoom a step; on a phone a pinch zooms as the fingers
+spread or close, about the point between them, and both fingers moving drag
+it (all the way out the nodes are dots, to see the whole network at once); a
+node clicked shows its panel (what it does, now and at
 its next rank, and its price), clicked again (or its button, or `G`) grows a
 rank, and the thread to it grows out lit. `TAB` picks the next node there are
 spores for. REGROW, pressed twice, sells the whole network back for every
@@ -105,6 +107,10 @@ from there opens it and comes back).
 *Testing the unlocks.* `love . --spores 100000` puts 100000 spores in the
 bank. On the network's screen, `F8` adds 100000, and so do seven quick taps on
 its SPORES count (for a phone). REGROW gives them all back to try another way.
+ALL (or `A`) switches the whole network on: every node grown, so the loadout,
+the runs and the encyclopedia have everything at its full numbers, with
+nothing spent; switched off, the network is as it was grown. It is kept in the
+save (`all 1`).
 
 *The balance* is tuned against the bot (`src/bot.lua`), which plays a whole
 campaign from an empty network: the first level not won, its spores into the

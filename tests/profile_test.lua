@@ -139,6 +139,26 @@ return {
         C.list(opens, { "stink" }, "what the Crack's first win opens")
     end },
 
+    { "the whole network switched on grows it all, and off is as it was", function()
+        fresh()
+        P.spores = 100
+        P.buy("puffer.power")
+        P.setAll(true)
+        for _, t in ipairs(D.TOWERS) do C.yes(P.owns(t.id), t.id .. " grown") end
+        for _, sd in ipairs(D.SEEDS) do C.yes(P.ownsSeed(sd.id), sd.id .. " grown") end
+        C.eq(P.nodeState("cordyceps"), "full", "even behind a win")
+        C.no(P.buy("needle"), "nothing to buy")
+        C.eq(P.spores, 98, "nothing spent")
+        P.load()
+        C.yes(P.all, "kept in the save")
+        C.yes(P.owns("giant"), "and still all of it")
+        P.setAll(false)
+        C.no(P.owns("needle"), "off, the needle is not grown")
+        C.eq(P.net["puffer.power"], 1, "what was bought is still there")
+        P.load()
+        C.no(P.all, "off is saved too")
+    end },
+
     { "the whole network regrown gives every spore back", function()
         fresh()
         P.spores = 500

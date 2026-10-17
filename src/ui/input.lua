@@ -53,6 +53,7 @@ end
 -- where it was and it is a click there; moved first and it pans the board, which
 -- is the only way to pan with one finger.
 local SLOP = 3 -- HUD pixels a tap may wander and still be a tap
+local PINCH_STEP = 1.2 -- how far the fingers spread (or close) for a step of the network's zoom
 
 function input.mousepressed(x, y, b, istouch)
     if S.painter or S.pinch or S.turning then return end
@@ -153,6 +154,12 @@ function input.touchpressed(id, x, y)
     if #ids == 2 then
         S.pinch = { a = ids[1], b = ids[2], s = 1 }
         local d, mx, my = spread()
+        if S.menu == "network" then
+            -- The network zooms a step at a time as the fingers spread or close.
+            S.pinch.d0, S.pinch.x, S.pinch.y = max(d, 1), mx, my
+            S.press, S.drag, S.tapped = nil, nil, nil
+            return
+        end
         S.pinch.d0, S.pinch.x0, S.pinch.y0, S.pinch.x, S.pinch.y = max(d, 1), mx, my, mx, my
         if S.press then S.panx, S.pany = S.press.px, S.press.py; centre() end
         S.press, S.drag, S.tapped = nil, nil, nil
@@ -169,7 +176,18 @@ end
 function input.touchmoved(id, x, y)
     if not S.fingers[id] then return end
     S.fingers[id].x, S.fingers[id].y = x, y
-    if S.pinch and not S.pinch.done then
+    if S.pinch and not S.pinch.done and S.menu == "network" then
+        -- Both fingers moving together drag it; spread or closed by a fifth,
+        -- a zoom step in or out about the point between them.
+        local d, mx, my = spread()
+        Network.drag(Network.getCam(), (mx - S.pinch.x) / S.uz, (my - S.pinch.y) / S.uz)
+        S.pinch.x, S.pinch.y = mx, my
+        local r = d / S.pinch.d0
+        if (r > PINCH_STEP and Network.zoomBy(1, mx / S.uz, my / S.uz))
+            or (r < 1 / PINCH_STEP and Network.zoomBy(-1, mx / S.uz, my / S.uz)) then
+            S.pinch.d0 = d
+        end
+    elseif S.pinch and not S.pinch.done then
         local d, mx, my = spread()
         local lo, hi = stepRange()
         local base = S.zoom - S.zoomStep
@@ -181,8 +199,7 @@ end
 
 function input.touchreleased(id)
     if S.pinch and not S.pinch.done and (id == S.pinch.a or id == S.pinch.b) and S.menu == "network" then
-        -- On the network, a pinch is a zoom step in or out.
-        if S.pinch.s > 1.15 then Network.zoomBy(1) elseif S.pinch.s < 0.87 then Network.zoomBy(-1) end
+        -- On the network it has zoomed as it went: nothing to settle.
         S.pinch.done = true
     elseif S.pinch and not S.pinch.done and (id == S.pinch.a or id == S.pinch.b) then
         local bx, by = S.pinch.x0 / S.zoom + S.camx, S.pinch.y0 / S.zoom + S.camy

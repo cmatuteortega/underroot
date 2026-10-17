@@ -16,7 +16,9 @@
 --
 -- For testing: `love . --spores 100000` puts that many in the bank, as do F8
 -- on this screen and seven quick taps on its spore count. REGROW (twice)
--- sells the whole network back for every spore it cost.
+-- sells the whole network back for every spore it cost. ALL (or A) switches
+-- the whole network on, every node grown, without spending or losing what
+-- was bought: runs, the loadout and the encyclopedia play it all.
 
 local D = require "src.defs"
 local N = require "src.network"
@@ -37,11 +39,15 @@ local blit, CUT = Pixels.blit, Pixels.CUT
 
 local net = {}
 
-net.STEPS = { 12, 31, 40 } -- HUD pixels a step out from the sprout, at each zoom: the first is dots only
+-- HUD pixels a step out from the sprout, at each zoom: under ICONS the nodes
+-- are dots only, from NAMES each species and seed is named. A pinch, the
+-- wheel or + and - go a step at a time.
+net.STEPS = { 12, 16, 22, 27, 31, 36, 40, 46 }
+net.ICONS, net.NAMES = 22, 40
 net.TESTING = 100000 -- what F8 and the seven taps put in the bank
 
 net.cam = { x = 0, y = 0 } -- the pan, HUD pixels
-net.zoom = 2
+net.zoom = 5
 net.sel = nil -- the node in the panel
 net.grew = {} -- when each node last grew a rank: its thread or its ring lights from then
 net.back = nil -- "loadout" when it was opened from there, to go back to it
@@ -64,7 +70,7 @@ function net.howTo(id)
     local name = D.TOWER[id] and D.TOWER[id].name or D.SEED[id].name
     if state == "locked" then return "???: WIN " .. level.name .. ", THEN GROW IT ON THE NETWORK" end
     if state == "shut" then return name .. ": GROW " .. D.NET[row.at].name .. " ON THE NETWORK FIRST" end
-    return name .. ": GROW IT ON THE NETWORK, " .. N.price(Profile.net, row.id) .. " SPORES. YOU HAVE " .. Profile.spores
+    return name .. ": GROW IT ON THE NETWORK, " .. N.price(Profile.ranks(), row.id) .. " SPORES. YOU HAVE " .. Profile.spores
 end
 
 -- How many nodes there are spores for now: the menu's button shows it.
@@ -123,6 +129,9 @@ function net.layout()
     local rs = net.sure > flair.now() and "SURE? ALL BACK" or "REGROW"
     L.regrow = { s = rs, w = Font.width(rs) + 8, h = 12, y = S.inset.t + 4 }
     L.regrow.x = S.vw - S.inset.r - 4 - L.regrow.w
+    local as = Profile.all and "ALL: ON" or "ALL: OFF"
+    L.all = { s = as, w = Font.width(as) + 8, h = 12, y = S.inset.t + 4 }
+    L.all.x = L.regrow.x - 5 - L.all.w
     L.spores = { x = L.back.x + L.back.w + 6, y = S.inset.t + 4, h = 12 }
     L.spores.s = "SPORES " .. Profile.spores
     L.spores.w = Font.width(L.spores.s) + 4
@@ -152,13 +161,17 @@ local function at(L, id)
     return floor(L.cx + p.x * L.step + 0.5), floor(L.cy + p.y * L.step + 0.5)
 end
 
--- A node's socket: a dot zoomed out, room for its picture zoomed in.
-local SIZE = { { 6, 4, 3 }, { 13, 11, 9 }, { 17, 14, 12 } }
+-- Zoomed in far enough for pictures, and for names.
+local function icons() return net.STEPS[net.zoom] >= net.ICONS end
+local function names() return net.STEPS[net.zoom] >= net.NAMES end
+
+-- A node's socket: a dot zoomed out, room for its picture zoomed in, the
+-- sprout's biggest and a species' or seed's bigger than the rest.
 local function radius(row)
-    local z = SIZE[net.zoom]
-    if not row.at then return z[1] end
-    if row.species or row.seed then return z[2] end
-    return z[3]
+    local step = net.STEPS[net.zoom]
+    local k = not row.at and 1 or ((row.species or row.seed) and 2 or 3)
+    if not icons() then return ({ 6, 4, 3 })[k] end
+    return floor(step * ({ 0.42, 0.355, 0.29 })[k])
 end
 
 -- The pan that puts a node in the middle of the free ground.
@@ -183,15 +196,28 @@ function net.drag(from, dx, dy)
     clampCam()
 end
 
--- Zoomed a step in (+1) or out (-1), about the middle of the screen.
-function net.zoomBy(d)
+-- Zoomed a step in (+1) or out (-1), about the middle of the screen or
+-- about (fx, fy) on it, HUD pixels: what is there stays there. True if it did.
+function net.zoomBy(d, fx, fy)
     local z = max(1, min(#net.STEPS, net.zoom + d))
-    if z == net.zoom then return end
+    if z == net.zoom then return false end
     local f = net.STEPS[z] / net.STEPS[net.zoom]
-    net.cam.x, net.cam.y = net.cam.x * f, net.cam.y * f
+    local L = net.layout()
+    local mx, my = L.area.x + L.area.w / 2, L.area.y + L.area.h / 2
+    fx, fy = (fx or mx) - mx, (fy or my) - my
+    net.cam.x, net.cam.y = fx - (fx - net.cam.x) * f, fy - (fy - net.cam.y) * f
     net.zoom = z
     clampCam()
     sound("zoom")
+    return true
+end
+
+-- The whole network switched on or off.
+function net.toggleAll()
+    Profile.setAll(not Profile.all)
+    sound(Profile.all and "on" or "off")
+    net.note = { s = Profile.all and "THE WHOLE NETWORK IS ON: EVERY NODE GROWN" or "THE NETWORK IS AS GROWN AGAIN",
+        k = Profile.all and "g" or "t", t = flair.now() + 2.5 }
 end
 
 --- what a node says ---------------------------------------------------------------------------
@@ -232,7 +258,7 @@ end
 -- A node's panel, as lines { s, k } `w` wide.
 function net.lines(id, w)
     local row = D.NET[id]
-    local r, n = N.rank(Profile.net, id), N.ranks(row)
+    local r, n = N.rank(Profile.ranks(), id), N.ranks(row)
     local out = {}
     local function add(s, k) for _, l in ipairs(wrapLines(s, w)) do out[#out + 1] = { s = l, k = k } end end
     local function gap() out[#out + 1] = { gap = 3 } end
@@ -297,9 +323,10 @@ end
 local function buttonText(id)
     local state, level = Profile.nodeState(id)
     local row = D.NET[id]
+    if Profile.all and not row.free then return "ALL ON: SWITCH IT OFF TO GROW IT", false, "g" end
     if state == "full" then return row.free and "THERE FROM THE START" or "FULLY GROWN", false, "g" end
-    if state == "open" then return say("G: ", "") .. "GROW IT: " .. N.price(Profile.net, id) .. " SPORES", true, "l" end
-    if state == "poor" then return N.price(Profile.net, id) .. " SPORES. YOU HAVE " .. Profile.spores, false, "r" end
+    if state == "open" then return say("G: ", "") .. "GROW IT: " .. N.price(Profile.ranks(), id) .. " SPORES", true, "l" end
+    if state == "poor" then return N.price(Profile.ranks(), id) .. " SPORES. YOU HAVE " .. Profile.spores, false, "r" end
     if state == "shut" then return "GROW " .. D.NET[row.at].name .. " FIRST", false, "k" end
     if state == "locked" then return "WIN " .. level.name .. " FIRST", false, "r" end
     return "???", false, "k"
@@ -314,7 +341,7 @@ function net.grow(id)
     if not Profile.buy(id) then deny() return false end
     net.grew[id] = flair.now()
     sound((row.species or row.seed) and "unlock" or "grow")
-    local r = N.rank(Profile.net, id)
+    local r = N.rank(Profile.ranks(), id)
     if r >= N.ranks(row) then say2(row.name .. " FULLY GROWN", "g") else say2(row.name .. ": RANK " .. r, "l") end
     return true
 end
@@ -546,7 +573,7 @@ function net.draw()
         for k, row in ipairs(D.NETWORK) do
             local st = states[row.id][1]
             if row.at and st ~= "unknown" then
-                local r = N.rank(Profile.net, row.id)
+                local r = N.rank(Profile.ranks(), row.id)
                 local x0, y0 = at(L, row.at)
                 local x1, y1 = at(L, row.id)
                 local depth = N.layout()[row.id].depth
@@ -593,10 +620,10 @@ function net.draw()
         if st ~= "unknown" then
             local x, y = at(L, row.id)
             local rad = radius(row)
-            local r, n = N.rank(Profile.net, row.id), N.ranks(row)
-            local icons = net.zoom >= 2
+            local r, n = N.rank(Profile.ranks(), row.id), N.ranks(row)
+            local iconic = icons()
             local fill, edge
-            if icons then
+            if iconic then
                 -- A socket dark enough for the picture in it; the edge says where it stands.
                 if not row.at then fill, edge = "d", "g"
                 elseif r >= n then fill, edge = "d", "l"
@@ -625,7 +652,7 @@ function net.draw()
             color(edge)
             love.graphics.circle("fill", x + 0.5, y + 0.5, rad + 1)
             -- Fully grown, a second ring.
-            if icons and r >= n and row.at then
+            if iconic and r >= n and row.at then
                 color("c")
                 love.graphics.circle("fill", x + 0.5, y + 0.5, rad)
                 color(fill)
@@ -634,7 +661,7 @@ function net.draw()
                 color(fill)
                 love.graphics.circle("fill", x + 0.5, y + 0.5, rad)
             end
-            if icons then
+            if iconic then
                 drawIcon(row, st, r, x, y, rad)
                 if st == "locked" then
                     -- A padlock on its edge.
@@ -656,8 +683,8 @@ function net.draw()
                 end
             end
             -- Names: the sprout's, every species' and seed's close up, and the one pointed at.
-            local named = not row.at or (net.zoom >= 3 and (row.species or row.seed))
-                or ((net.sel == row.id or S.hover.netNode == row.id) and net.zoom >= 2)
+            local named = not row.at or (names() and (row.species or row.seed))
+                or ((net.sel == row.id or S.hover.netNode == row.id) and iconic)
             if named then
                 local s = row.name
                 local k = (st == "full" or r > 0) and "w" or ((st == "open" or st == "poor") and "s" or "k")
@@ -670,14 +697,20 @@ function net.draw()
     end
     love.graphics.setScissor()
 
-    -- The top: BACK, the spores, how much is grown, and REGROW.
+    -- The top: BACK, the spores, how much is grown, ALL and REGROW.
     local b = L.back
     box(b.x, b.y, b.w, b.h, S.hover.netBack and "n" or "u", S.hover.netBack and "t" or "k")
     text("BACK", b.x + floor((b.w - Font.width("BACK")) / 2), b.y + 4, "w")
     text(L.spores.s, L.spores.x + 2, L.spores.y + 4, "t")
-    local all, spent = N.total(Profile.net)
+    local all, spent = N.total(Profile.ranks())
     local pct = "NETWORK " .. floor(spent / all * 100) .. "%"
-    text(pct, L.spores.x + L.spores.w + 8, L.spores.y + 4, "c")
+    -- Left out on a screen too narrow for it.
+    if L.spores.x + L.spores.w + 8 + Font.width(pct) < L.all.x - 4 then
+        text(pct, L.spores.x + L.spores.w + 8, L.spores.y + 4, Profile.all and "g" or "c")
+    end
+    local a = L.all
+    box(a.x, a.y, a.w, a.h, S.hover.netAll and "n" or (Profile.all and "d" or "u"), Profile.all and "g" or "k")
+    text(a.s, a.x + 4, a.y + 4, Profile.all and "g" or "s")
     local g = L.regrow
     local sure = net.sure > now
     box(g.x, g.y, g.w, g.h, S.hover.netRegrow and "n" or "u", sure and "r" or "k")
@@ -720,6 +753,7 @@ function net.hover(mx, my)
     local L = net.layout()
     if inside(mx, my, L.back.x, L.back.y, L.back.w, L.back.h) then S.hover.netBack = true return end
     if inside(mx, my, L.regrow.x, L.regrow.y, L.regrow.w, L.regrow.h) then S.hover.netRegrow = true return end
+    if inside(mx, my, L.all.x, L.all.y, L.all.w, L.all.h) then S.hover.netAll = true return end
     if inside(mx, my, L.spores.x, L.spores.y, L.spores.w, L.spores.h) then S.hover.netSpores = true return end
     if L.panel then
         local b = L.panel.button
@@ -745,6 +779,7 @@ function net.under()
     local function rect(b) return function() return b.x, b.y, b.w, b.h end end
     if S.hover.netBack then return rect(L.back) end
     if S.hover.netRegrow then return rect(L.regrow) end
+    if S.hover.netAll then return rect(L.all) end
     if S.hover.netGrow then return rect(L.panel.button) end
 end
 
@@ -755,6 +790,7 @@ function net.click(b)
     end
     if S.hover.netBack then net.close() return end
     if S.hover.netRegrow then regrow() return end
+    if S.hover.netAll then net.toggleAll() return end
     if S.hover.netSpores then
         -- Seven quick taps: spores for testing, on a phone with no F8.
         local now = flair.now()
@@ -799,6 +835,7 @@ function net.key(key)
         if net.sel then net.grow(net.sel) else deny() end
     elseif key == "f8" then testing()
     elseif key == "r" then regrow()
+    elseif key == "a" then net.toggleAll()
     end
 end
 

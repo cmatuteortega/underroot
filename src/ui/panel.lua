@@ -28,7 +28,7 @@ local function howToGrow(id)
     local row = Profile.nodeOf(id)
     local state, level = Profile.nodeState(row.id)
     if state == "locked" then return "WIN " .. level.name .. ", THEN GROW IT ON THE NETWORK." end
-    return "GROW IT ON THE NETWORK: " .. (N.price(Profile.net, row.id) or 0) .. " SPORES."
+    return "GROW IT ON THE NETWORK: " .. (N.price(Profile.ranks(), row.id) or 0) .. " SPORES."
 end
 
 -- The panel of one still locked behind a win: no name, no numbers, only how to get it.
