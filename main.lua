@@ -349,10 +349,18 @@ end
 function love.resize() fit() end
 function love.displayrotated() fit() end
 
--- Sent to the background (a call, the home button): stop the clock rather
--- than let a wave run on unwatched.
+-- Sent to the background (a call, the home button, the phone locked): stop
+-- the clock rather than let a wave run on unwatched, and the sound with it,
+-- until the game is back in front.
+audio.shown = { focus = true, visible = true }
 function love.focus(f)
     if not f and not script and game then paused = true end
+    audio.shown.focus = f
+    Sfx.hide(not (audio.shown.focus and audio.shown.visible))
+end
+function love.visible(v)
+    audio.shown.visible = v
+    Sfx.hide(not (audio.shown.focus and audio.shown.visible))
 end
 
 local RGB8 = {}
@@ -1890,7 +1898,12 @@ end
 function audio.ambience(dt)
     local want = { soil = 0.35 }
     local pitch
-    if game and not menu and not painter then
+    if menu == "title" then
+        -- The night over the title, and the network's hum swelling as it grows.
+        local age = love.timer.getTime() - (flair.title.t0 or 0)
+        want.night, want.hum = 0.3, 0.35 * min(1, age / 4)
+        pitch = 0.9 + 0.2 * min(1, age / 6)
+    elseif game and not menu and not painter then
         local living, surge = 0, false
         for _, l in ipairs(game.links) do
             if l.state == "alive" and l.a.conn then living = living + 1 end
@@ -1906,6 +1919,21 @@ function audio.ambience(dt)
         if paused then for k, v in pairs(want) do want[k] = v * 0.4 end end
     end
     Sfx.update(dt, want, pitch)
+end
+
+-- The title's own sounds: a patter as the network reaches out under the
+-- sprout, then a drink each time the nutrients running up it get there.
+function audio.title()
+    local T0 = flair.title
+    local age = love.timer.getTime() - (T0.t0 or 0)
+    if age < 3 then
+        local k = floor(age / 0.22)
+        if k ~= T0.grew then T0.grew = k; Sfx.play("grow", 0, 0.35, 0.8 + age * 0.15) end
+    else
+        -- A nutrient is lit at the sprout when (d + age * 30) % 48 < 2 at d = 0.
+        local k = floor(age * 30 / 48)
+        if k ~= T0.drank then T0.drank = k; Sfx.play("drink", 0, 0.6) end
+    end
 end
 
 function love.update(dt)
@@ -1982,6 +2010,7 @@ function love.update(dt)
         if pick then pick.full = max(0, (pick.full or 0) - dt) end
         findHover()
         audio.hover()
+        if menu == "title" then audio.title() end
         if script then
             script.update(game, 1 / 30)
             photograph()

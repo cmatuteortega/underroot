@@ -20,7 +20,7 @@ local floor, min, max, abs, sin, exp, sqrt = math.floor, math.min, math.max, mat
 local TAU = 2 * math.pi
 local RATE = 22050
 
-local Sfx = { on = false, level = 1 }
+local Sfx = { on = false, level = 1, away = false }
 
 -- Notes, by name, for the chimes.
 local N = {}
@@ -491,9 +491,11 @@ function Sfx.init()
         todo[#todo + 1] = { name = name }
     end
     table.sort(todo, function(a, b) return a.name < b.name end)
+    -- The loops the title plays first, so it is not silent while the rest render.
     for name, def in pairs(LOOPS) do
         loops[name] = { def = def, vol = 0 }
-        todo[#todo + 1] = { name = name, loop = true }
+        local first = name == "soil" or name == "hum" or name == "night"
+        table.insert(todo, first and 1 or #todo + 1, { name = name, loop = true })
     end
     Sfx.on = true
     return true
@@ -511,7 +513,7 @@ end
 
 -- Plays `name`: `pan` from -1 (left) to 1 (right), `vol` 0..1, `pitch` a factor.
 function Sfx.play(name, pan, vol, pitch)
-    if not Sfx.on or Sfx.level <= 0 then return end
+    if not Sfx.on or Sfx.away or Sfx.level <= 0 then return end
     if not pools[name] then return end
     local p = pool(name)
     local def = p.def
@@ -544,7 +546,7 @@ end
 -- fade out. They ease there rather than jump.
 function Sfx.update(dt, want, hum)
     clock = clock + dt
-    if not Sfx.on then return end
+    if not Sfx.on or Sfx.away then return end
     for name, l in pairs(loops) do
         local target = (want and want[name] or 0) * Sfx.level
         l.vol = l.vol + (target - l.vol) * min(1, dt * 1.5)
@@ -558,6 +560,17 @@ function Sfx.update(dt, want, hum)
         -- A loop not rendered yet waits for `warm` rather than stall a frame.
     end
     if hum and loops.hum and loops.hum.src then loops.hum.src:setPitch(hum) end
+end
+
+-- The game out of sight (the phone locked, the app sent to the background, the
+-- window minimised): everything playing stops where it is, and picks up from
+-- there when it comes back.
+local held
+function Sfx.hide(away)
+    if not Sfx.on or away == Sfx.away then return end
+    Sfx.away = away
+    if away then held = love.audio.pause()
+    elseif held then love.audio.play(held); held = nil end
 end
 
 -- Loud, quiet, off: what the V key goes round.
