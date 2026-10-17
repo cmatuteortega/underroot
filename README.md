@@ -95,6 +95,26 @@ each level's loadout, and the seeds bought are kept in `bank.txt`. The numbers
 are `D.SEEDS` in `src/defs.lua`, and the seeds' mutations are the rows of
 `D.MUTATIONS` with a `seed`.
 
+**The encyclopedia.** The button at the top left of the level picker (`E`)
+opens it: a tab each for the enemies, the species and the seeds, a tile an
+entry with its model painted big, and a fourth tab, STATUSES, the glossary.
+What has not been found yet is a dark cutout of its model with `???` under it:
+an enemy is found by meeting it on the board, a species by having it (the
+first six, or bought) and a seed the same. Click a tile for its page: the model
+up to four times its size on the board (an enemy turning slowly round and
+walking on the spot), and everything about it. An enemy's page has what it
+does, its numbers, the levels it comes on and what answers it; a species' its
+numbers, what it is good against and both upgrade branches with a picture of
+each tier; a seed's its mutations. One not found yet says where to find it.
+Every status or game word written on a page (STUNNED, ARMOR, SALTED, NIGHT and
+the rest) gets a number after it, and the notes at the bottom of the page say
+what each means. `<` and `>` (or the arrow keys) go through a tab's pages, the
+mouse wheel or a drag scrolls, and `Esc` or a right click goes back. The
+enemies met are kept in the save directory (`seen.txt`); a save from before it
+counts everything on the levels already won as met. The words and what they
+say are `D.GLOSSARY` in `src/defs.lua`, and each enemy's page text is its
+`about` there.
+
 Before a level starts you pick the species to bring: six of the twelve. The rest
 stay home and stay off the toolbar. The picker shows every enemy the level sends,
 with bosses in red. Point at one (tap it on a phone) and the species that answer
@@ -137,6 +157,7 @@ chew through any thread they cross.
 | `N` | after a win: on to the next level's loadout |
 | `M` | the level picker (`Esc` there goes back to the run) |
 | `1`–`6`, `C` in the picker | pick a level; challenge mode on or off |
+| `E` in the picker, or its top left button | the encyclopedia: `1`–`4` or left / right for its tabs, a click for a page, left / right through the pages, wheel or up / down to scroll, `Esc` back |
 | click a species in the loadout | read it in the panel; click it again to bring it or leave it (six at most) |
 | a species' key in the loadout | bring it or leave it at once |
 | `Enter` / `Space`, `Esc` in the loadout | grow the level with that loadout; back to the levels |
@@ -160,6 +181,7 @@ keeps clear of the notch and home bar:
 | tap the weather's name in the top bar | what the weather does, in a tip under it; tap it again (or anywhere) to shut it |
 | tap the top bar | pause and resume (the game also pauses when it is sent to the background) |
 | tap a level card, or the challenge switch | play it / challenge on or off |
+| tap ENCYCLOPEDIA in the picker, then a tile | read about it; drag to scroll, `<` `>` for the next, BACK to go back |
 | tap anywhere after a win or loss | back to the level picker |
 
 The bottom line always says either what is under the mouse or the next thing to
@@ -520,7 +542,8 @@ to see every size.
   loadout picker by being in the list, and a toolbar button when brought. Name it
   in `D.COUNTERS` for the enemies it answers. Check every tier with `love . --sheet`.
 - **An enemy**: a row in `D.ENEMIES` and `D.ENEMY_ORDER`, a model, a line in
-  `enemyPicture` in `main.lua`, and a branch in `Game:move` if it does something to
+  `enemyPicture` in `main.lua` and in `codex.POSE` (the encyclopedia's), its page
+  text as an `about`, and a branch in `Game:move` if it does something to
   the network nothing else does. Put it in a wave in `D.WAVES`, and give it its
   answers in `D.COUNTERS`.
 - **A map**: a row in `MAPS` in `src/world.lua`. `E` gates (off the left edge, a
