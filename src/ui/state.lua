@@ -68,4 +68,16 @@ S.shot = nil -- and the whole screen it photographs
 -- how far round and how long it has been at it.
 S.turning = nil
 
+-- To the level picker, with nothing in hand.
+function S.openMenu()
+    S.menu = true
+    S.mode, S.drag, S.selected = "grow", nil, nil
+end
+
+-- A tap on nothing (no pocket, no plant, no thread, off the board) puts
+-- everything down: the tool in hand, a thread being pulled, the selection.
+function S.letGo()
+    S.mode, S.drag, S.selected, S.peek = "grow", nil, nil, nil
+end
+
 return S
