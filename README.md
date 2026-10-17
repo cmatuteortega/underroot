@@ -46,7 +46,7 @@ on top of the level's own growth), its weather now and then shuffled, and a
 Mutation every fourth. Boss waves come every fifth wave (every fourth past 20,
 every third past 40), and from wave 10 each brings an extra boss from the
 level's own, one more every 10 waves. The most waves held in endless on
-each level is kept in the save directory (`endless.txt`) and shown at the bottom
+each level is kept in the save (`save.txt`, see `src/profile.lua`) and shown at the bottom
 left of its card in the level picker.
 
 **The Spore Bank.** A run pays a spore for every wave it clears, endless
@@ -70,7 +70,7 @@ Whichever way on is picked, the Spore Bank comes first, showing the new species
 with BUY (`B`) and LATER (`Enter`). Bought later, it is bought from its card in
 the loadout picker: a species not had yet is dark there, with its price once it
 is for sale (`LOCKED` before), and its panel's button buys it. The spores
-and what was bought are kept in the save directory (`bank.txt`), and the
+and what was bought are kept in the save (`save.txt`), and the
 level picker and the loadout show the spores in the bank, top left. The
 prices and the pay are `price` in `src/defs.lua` and `D.SPORES`.
 
@@ -94,7 +94,7 @@ three offered at every mutation is the seed's (in green) while it has any left.
 
 Tap a seed to plant it and read it in the side panel; one not had yet opens
 its panel, whose button buys it (and plants it). The seed is remembered with
-each level's loadout, and the seeds bought are kept in `bank.txt`. The numbers
+each level's loadout, and the seeds bought are kept in `save.txt`. The numbers
 are `D.SEEDS` in `src/defs.lua`, and the seeds' mutations are the rows of
 `D.MUTATIONS` with a `seed`.
 
@@ -113,7 +113,7 @@ Every status or game word written on a page (STUNNED, ARMOR, SALTED, NIGHT and
 the rest) gets a number after it, and the notes at the bottom of the page say
 what each means. `<` and `>` (or the arrow keys) go through a tab's pages, the
 mouse wheel or a drag scrolls, and `Esc` or a right click goes back. The
-enemies met are kept in the save directory (`seen.txt`); a save from before it
+enemies met are kept in the save (`save.txt`); a save from before it
 counts everything on the levels already won as met. The words and what they
 say are `D.GLOSSARY` in `src/defs.lua`, and each enemy's page text is its
 `about` there.

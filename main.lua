@@ -26,6 +26,8 @@ local D = require "src.defs"
 local M = require "src.models"
 local Font = require "src.font"
 local Sfx = require "src.sfx"
+-- What is kept between runs: wins, records, loadouts, the Spore Bank, the enemies met.
+local Profile = require "src.profile"
 -- The sound's glue to the screen (the sounds themselves are src/sfx.lua).
 local audio = {}
 
@@ -53,113 +55,18 @@ local worlds = {}
 local menu -- the level picker is up (true), a level's loadout ("loadout"), or the title ("title")
 local pick -- the loadout being picked: { n = level, set = { id = true }, enemy = kind }
 local chosen -- the species the run brings, a list; nil brings them all (the shots)
-local loadouts = {} -- each level's last loadout, saved between runs: { crack = { "puffer", ... } }
 local challenge = false -- challenge mode chosen in the picker
-local won = {} -- levels won, saved between runs: { crack = true, ... }
-local records = {} -- the most waves held in endless on each level, saved: { crack = 21, ... }
--- The Spore Bank, saved: spores to spend and the species and seeds bought. `offer` is the
+-- The Spore Bank: buying with the spores in the profile. `offer` is the
 -- species a first win put up for sale, shown on the way on: { kind, after = button, bought }.
--- `sown` is each level's last seed, saved with its loadout ({ crack = "oak" }):
--- the one a run of it grows from.
-local bank = { spores = 0, owned = {}, seeds = {}, sown = {} }
--- The encyclopedia (see "the encyclopedia", near the end): what has been met,
--- and its screen.
+local bank = {}
+-- The encyclopedia (see "the encyclopedia", near the end): its screen.
 local codex = {}
 
--- What has been won lives in the save directory, one level id a line.
 -- How loud: 1, 0.5 or 0 (the V key goes round them), kept between runs.
-function audio.load()
-    local data = love.filesystem.getInfo("sound.txt") and love.filesystem.read("sound.txt")
-    local v = data and tonumber(data:match("[%d%.]+"))
-    if v then Sfx.level = v end
-end
-
-function audio.save() love.filesystem.write("sound.txt", tostring(Sfx.level) .. "\n") end
-
-local function loadProgress()
-    won = {}
-    local data = love.filesystem.getInfo("progress.txt") and love.filesystem.read("progress.txt")
-    if data then for id in data:gmatch("%S+") do won[id] = true end end
-end
-
-local function saveProgress()
-    local ids = {}
-    for _, l in ipairs(D.LEVELS) do if won[l.id] then ids[#ids + 1] = l.id end end
-    love.filesystem.write("progress.txt", table.concat(ids, "\n") .. "\n")
-end
-
--- The endless records too, a line a level: its id and the most waves held.
-local function loadRecords()
-    records = {}
-    local data = love.filesystem.getInfo("endless.txt") and love.filesystem.read("endless.txt")
-    if not data then return end
-    for id, n in data:gmatch("(%S+)%s+(%d+)") do
-        if D.LEVEL[id] then records[id] = tonumber(n) end
-    end
-end
-
-local function saveRecords()
-    local lines = {}
-    for _, l in ipairs(D.LEVELS) do
-        if records[l.id] then lines[#lines + 1] = l.id .. " " .. records[l.id] end
-    end
-    love.filesystem.write("endless.txt", table.concat(lines, "\n") .. "\n")
-end
-
--- Each level's loadout lives in the save directory too, a line a level: its id,
--- the species it brings and the seed (`seed=oak`), which a save from before
--- seeds simply does not have.
-local function loadLoadouts()
-    loadouts, bank.sown = {}, {}
-    local data = love.filesystem.getInfo("loadout.txt") and love.filesystem.read("loadout.txt")
-    if not data then return end
-    for line in data:gmatch("[^\n]+") do
-        local list, id, seed = {}, nil, nil
-        for w in line:gmatch("%S+") do
-            if not id then id = w
-            elseif w:match("^seed=") then seed = D.SEED[w:sub(6)] and w:sub(6)
-            elseif D.TOWER[w] and #list < D.LOADOUT then list[#list + 1] = w end
-        end
-        if id and D.LEVEL[id] and #list > 0 then loadouts[id] = list end
-        if id and D.LEVEL[id] then bank.sown[id] = seed end
-    end
-end
-
-local function saveLoadouts()
-    local lines = {}
-    for _, l in ipairs(D.LEVELS) do
-        if loadouts[l.id] then
-            local seed = bank.sown[l.id]
-            lines[#lines + 1] = l.id .. " " .. table.concat(loadouts[l.id], " ") .. (seed and (" seed=" .. seed) or "")
-        end
-    end
-    love.filesystem.write("loadout.txt", table.concat(lines, "\n") .. "\n")
-end
-
--- The Spore Bank as well: the spores to spend, then the species bought.
-function bank.load()
-    bank.spores, bank.owned, bank.seeds = 0, {}, {}
-    local data = love.filesystem.getInfo("bank.txt") and love.filesystem.read("bank.txt")
-    if not data then return end
-    bank.spores = tonumber(data:match("spores%s+(%d+)")) or 0
-    for id in (data:match("owned([^\n]*)") or ""):gmatch("%S+") do
-        if D.TOWER[id] then bank.owned[id] = true end
-    end
-    for id in (data:match("seeds([^\n]*)") or ""):gmatch("%S+") do
-        if D.SEED[id] then bank.seeds[id] = true end
-    end
-end
-
-function bank.save()
-    local ids, seeds = {}, {}
-    for _, t in ipairs(D.TOWERS) do if bank.owned[t.id] then ids[#ids + 1] = t.id end end
-    for _, sd in ipairs(D.SEEDS) do if bank.seeds[sd.id] then seeds[#seeds + 1] = sd.id end end
-    love.filesystem.write("bank.txt", "spores " .. bank.spores .. "\nowned " .. table.concat(ids, " ")
-        .. "\nseeds " .. table.concat(seeds, " ") .. "\n")
-end
+function audio.save() Profile.sound = Sfx.level; Profile.save() end
 
 -- Can it be brought? The first six always, the rest once bought.
-function bank.owns(id) return D.TOWER[id].starter or bank.owned[id] == true end
+function bank.owns(id) return D.TOWER[id].starter or Profile.owned[id] == true end
 
 -- The level whose first win puts a species up for sale.
 function bank.prizeOf(id)
@@ -168,26 +75,26 @@ end
 
 function bank.forSale(id)
     local l = bank.prizeOf(id)
-    return not bank.owns(id) and l ~= nil and won[l.id] == true
+    return not bank.owns(id) and l ~= nil and Profile.won[l.id] == true
 end
 
 -- Bought for good, if it is for sale and the spores are there.
 function bank.buy(id)
     local price = D.TOWER[id].price
-    if not bank.forSale(id) or bank.spores < price then return false end
-    bank.spores = bank.spores - price
-    bank.owned[id] = true
-    bank.save()
+    if not bank.forSale(id) or Profile.spores < price then return false end
+    Profile.spores = Profile.spores - price
+    Profile.owned[id] = true
+    Profile.save()
     return true
 end
 
 -- Seeds too: the bean from the start, the oak and the tomato for sale from the
 -- start, the rest once the level they are `after` is won.
-function bank.ownsSeed(id) return not D.SEED[id].price or bank.seeds[id] == true end
+function bank.ownsSeed(id) return not D.SEED[id].price or Profile.seeds[id] == true end
 
 function bank.seedForSale(id)
     local sd = D.SEED[id]
-    return not bank.ownsSeed(id) and (not sd.after or won[sd.after] == true)
+    return not bank.ownsSeed(id) and (not sd.after or Profile.won[sd.after] == true)
 end
 
 -- Known: had, or up for sale. Anything else is only "???" in the loadout
@@ -197,10 +104,10 @@ function bank.seedKnown(id) return bank.ownsSeed(id) or bank.seedForSale(id) end
 
 function bank.buySeed(id)
     local sd = D.SEED[id]
-    if not bank.seedForSale(id) or bank.spores < sd.price then return false end
-    bank.spores = bank.spores - sd.price
-    bank.seeds[id] = true
-    bank.save()
+    if not bank.seedForSale(id) or Profile.spores < sd.price then return false end
+    Profile.spores = Profile.spores - sd.price
+    Profile.seeds[id] = true
+    Profile.save()
     return true
 end
 
@@ -209,11 +116,11 @@ end
 -- Flowerpot, the Shed Floor and the Rotting Log came in still has the Pond
 -- Edge and the Lawn.
 local function levelOpen(n)
-    if n == 1 or won[D.LEVELS[n - 1].id] then return true end
-    for k = n, #D.LEVELS do if won[D.LEVELS[k].id] then return true end end
+    if n == 1 or Profile.won[D.LEVELS[n - 1].id] then return true end
+    for k = n, #D.LEVELS do if Profile.won[D.LEVELS[k].id] then return true end end
     return false
 end
-local function challengeOpen() return won[D.LEVELS[#D.LEVELS].id] end
+local function challengeOpen() return Profile.won[D.LEVELS[#D.LEVELS].id] end
 local camx, camy, panx, pany = 0, 0, 0, 0
 local mode = "grow"
 local drag -- the node a link is being pulled from
@@ -934,7 +841,7 @@ local function loadoutLayout()
     local width = max(cols * SW + (cols - 1) * 4, min(avail, 300))
     local chips, lines, x, line = {}, 1, 0, {}
     -- One not met yet has no name until it is faced.
-    local function name(kind) return codex.seen[kind] and D.ENEMIES[kind].name or "???" end
+    local function name(kind) return Profile.seen[kind] and D.ENEMIES[kind].name or "???" end
     for _, kind in ipairs(enemiesOf(lv)) do
         local w = Font.width(name(kind)) + 6
         if x > 0 and x + w > width then lines, x = lines + 1, 0 end
@@ -1140,8 +1047,8 @@ end
 --- the run ---------------------------------------------------------------------------
 
 local function start()
-    game = Game.new(world, level, { challenge = challenge, loadout = chosen, seed = not script and bank.sown[level.id] or nil,
-        best = records[level.id], dice = script and 1 })
+    game = Game.new(world, level, { challenge = challenge, loadout = chosen, seed = not script and Profile.sown[level.id] or nil,
+        best = Profile.records[level.id], dice = script and 1 })
     layTools(game)
     mode, drag, panx, pany, selected = "grow", nil, 0, 0, nil
     focus, focused = nil, nil
@@ -1214,10 +1121,10 @@ function openLoadout(n)
     menu = "loadout"
     mode, drag, selected = "grow", nil, nil
     -- The seed planted here last time, if it is still had; else the bean.
-    local seed = bank.sown[lv.id]
+    local seed = Profile.sown[lv.id]
     pick = { n = n, set = {}, full = 0, seed = seed and bank.ownsSeed(seed) and seed or D.SEEDS[1].id }
     local dropped = false
-    for _, id in ipairs(loadouts[lv.id] or lv.loadout or {}) do
+    for _, id in ipairs(Profile.loadouts[lv.id] or lv.loadout or {}) do
         if bank.owns(id) then pick.set[id] = true else dropped = true end
     end
     -- A species not had yet stays home, and the next one had takes its place.
@@ -1232,9 +1139,9 @@ local function setOff()
     local list = picked()
     if #list == 0 then sound("deny") return end
     sound("go")
-    loadouts[D.LEVELS[pick.n].id] = list
-    bank.sown[D.LEVELS[pick.n].id] = pick.seed
-    saveLoadouts()
+    Profile.loadouts[D.LEVELS[pick.n].id] = list
+    Profile.sown[D.LEVELS[pick.n].id] = pick.seed
+    Profile.save()
     chosen = list
     play(pick.n)
 end
@@ -1244,12 +1151,8 @@ function love.load(args)
     love.graphics.setLineStyle("rough")
     setWindowIcon()
     fit()
-    loadProgress()
-    loadLoadouts()
-    loadRecords()
-    bank.load()
+    Profile.load()
     codex.init()
-    codex.load()
     for _, a in ipairs(args or {}) do
         if a == "--shots" then script = require("src.script") end
         if a == "--bot" then
@@ -1266,7 +1169,7 @@ function love.load(args)
             return
         end
     end
-    audio.load()
+    if Profile.sound then Sfx.level = Profile.sound end
     Sfx.init()
     for _, a in ipairs(args or {}) do
         if a == "--sounds" then
@@ -2129,27 +2032,27 @@ function love.update(dt)
     flair.beat = b
     heartFlash = max(0, heartFlash - dt)
     shake = max(0, shake - dt)
-    if game.best > (records[level.id] or 0) and not script then
-        records[level.id] = game.best
-        saveRecords()
+    if game.best > (Profile.records[level.id] or 0) and not script then
+        Profile.records[level.id] = game.best
+        Profile.save()
     end
     -- Spores go into the bank as they are earned, so a run left half way keeps them.
     if game.spores > (game.banked or 0) and not script then
-        bank.spores = bank.spores + game.spores - (game.banked or 0)
+        Profile.spores = Profile.spores + game.spores - (game.banked or 0)
         game.banked = game.spores
-        bank.save()
+        Profile.save()
     end
     if game.phase == "won" and not game.recorded then
         game.recorded = true
         if not script then
             -- The first win puts the level's species up for sale, shown on the way on.
-            if not won[level.id] and level.prize and not bank.owns(level.prize) then game.offer = level.prize end
+            if not Profile.won[level.id] and level.prize and not bank.owns(level.prize) then game.offer = level.prize end
             -- And any seed waiting on it.
             for _, sd in ipairs(D.SEEDS) do
-                if not won[level.id] and sd.after == level.id and not bank.ownsSeed(sd.id) then game.newSeed = sd.id end
+                if not Profile.won[level.id] and sd.after == level.id and not bank.ownsSeed(sd.id) then game.newSeed = sd.id end
             end
-            won[level.id] = true
-            saveProgress()
+            Profile.won[level.id] = true
+            Profile.save()
         end
     end
     -- What was selected may have been eaten, sterilised, sold or flattened.
@@ -3635,8 +3538,8 @@ local function drawHud()
             text(b.text, b.x + 5, b.y + 5, endless and "r" or "w")
         end
         local y = buttons.bottom + 1
-        if records[level.id] then centred("ENDLESS BEST: " .. records[level.id] .. " WAVES", y, "t"); y = y + 10 end
-        centred("+" .. game.spores .. " SPORES   " .. bank.spores .. " IN THE BANK", y, "t"); y = y + 10
+        if Profile.records[level.id] then centred("ENDLESS BEST: " .. Profile.records[level.id] .. " WAVES", y, "t"); y = y + 10 end
+        centred("+" .. game.spores .. " SPORES   " .. Profile.spores .. " IN THE BANK", y, "t"); y = y + 10
         if game.offer then centred("NEW IN THE SPORE BANK: " .. D.TOWER[game.offer].name, y, "g"); y = y + 10 end
         if game.newSeed then centred("NEW SEED FOR SALE: " .. D.SEED[game.newSeed].name, y, "g"); y = y + 10 end
         if last and not game.challenge then centred("CHALLENGE MODE IS OPEN", y, "r") end
@@ -3649,7 +3552,7 @@ local function drawHud()
             centred("YOU HELD " .. (game.wave - 1) .. " WAVES OF " .. #game.waves, floor(vh / 2) - 12, "w")
         end
         centred(say("R: TRY AGAIN   M: LEVELS", "TAP FOR THE LEVELS"), floor(vh / 2), "l")
-        centred("+" .. game.spores .. " SPORES   " .. bank.spores .. " IN THE BANK", floor(vh / 2) + 24, "t")
+        centred("+" .. game.spores .. " SPORES   " .. Profile.spores .. " IN THE BANK", floor(vh / 2) + 24, "t")
     end
 end
 
@@ -3678,7 +3581,7 @@ local function drawMenu()
     for k, c in ipairs(cards) do
         local l = D.LEVELS[k]
         local open, on = levelOpen(k), hover.level == k
-        box(c.x, c.y, c.w, c.h, on and open and "n" or "u", won[l.id] and "g" or (open and (on and "l" or "c") or "k"))
+        box(c.x, c.y, c.w, c.h, on and open and "n" or "u", Profile.won[l.id] and "g" or (open and (on and "l" or "c") or "k"))
         text(k .. "  " .. l.name, c.x + 4, c.y + 4, open and "w" or "k")
         if not open then
             text("WIN " .. D.LEVELS[k - 1].name, c.x + 4, c.y + 14, "r")
@@ -3686,10 +3589,10 @@ local function drawMenu()
         else
             local y = wrap(l.idea, c.x + 4, c.y + 14, c.w - 8, "t")
             wrap("BOSS: " .. l.boss, c.x + 4, y + 1, c.w - 8, "r")
-            local tag = won[l.id] and "WON" or (#l.waves .. " WAVES")
-            text(tag, c.x + c.w - Font.width(tag) - 4, c.y + c.h - 8, won[l.id] and "g" or "s")
+            local tag = Profile.won[l.id] and "WON" or (#l.waves .. " WAVES")
+            text(tag, c.x + c.w - Font.width(tag) - 4, c.y + c.h - 8, Profile.won[l.id] and "g" or "s")
             -- The endless record, bottom left, once there is one.
-            if records[l.id] then text("BEST " .. records[l.id], c.x + 4, c.y + c.h - 8, "r") end
+            if Profile.records[l.id] then text("BEST " .. Profile.records[l.id], c.x + 4, c.y + c.h - 8, "r") end
         end
     end
     if challengeOpen() then
@@ -3704,7 +3607,7 @@ local function drawMenu()
     local cb = codex.button()
     box(cb.x, cb.y, cb.w, cb.h, hover.codex and "n" or "u", hover.codex and "t" or "c")
     text("ENCYCLOPEDIA", cb.x + 4, cb.y + 4, "w")
-    text("SPORES " .. bank.spores, cb.x + cb.w + 6, inset.t + 7, "t")
+    text("SPORES " .. Profile.spores, cb.x + cb.w + 6, inset.t + 7, "t")
     local sw = audio.switch()
     local lv = Sfx.level >= 1 and "LOUD" or (Sfx.level > 0 and "QUIET" or "OFF")
     box(sw.x, sw.y, sw.w, sw.h, hover.sound and "n" or "u", Sfx.level > 0 and "c" or "k")
@@ -3758,8 +3661,8 @@ function drawInfo(P)
             local on = pick.seed == sd.id
             s, fill, edge, k = on and "PLANTED" or "PLANT IT", on and "u" or "d", on and "t" or "g", on and "w" or "g"
         elseif bank.seedForSale(sd.id) then
-            local can = bank.spores >= sd.price
-            s = can and ("BUY IT: " .. sd.price .. " SPORES") or (sd.price .. " SPORES. YOU HAVE " .. bank.spores)
+            local can = Profile.spores >= sd.price
+            s = can and ("BUY IT: " .. sd.price .. " SPORES") or (sd.price .. " SPORES. YOU HAVE " .. Profile.spores)
             fill, edge, k = "u", can and "t" or "k", can and "t" or "r"
         else
             s, fill, edge, k = "WIN " .. D.LEVEL[sd.after].name .. " FOR IT", "u", "k", "k"
@@ -3771,8 +3674,8 @@ function drawInfo(P)
         local price = D.TOWER[P.kind].price
         local s, edge, k
         if bank.forSale(P.kind) then
-            local can = bank.spores >= price
-            s = can and ("BUY IT: " .. price .. " SPORES") or (price .. " SPORES. YOU HAVE " .. bank.spores)
+            local can = Profile.spores >= price
+            s = can and ("BUY IT: " .. price .. " SPORES") or (price .. " SPORES. YOU HAVE " .. Profile.spores)
             edge, k = can and "t" or "k", can and "t" or "r"
         else
             s, edge, k = "WIN " .. bank.prizeOf(P.kind).name .. " FOR IT", "k", "k"
@@ -3796,7 +3699,7 @@ local function drawLoadout()
     local list = picked()
     local clock = flair.now()
     centred(lv.name .. (challenge and " (CHALLENGE)" or ""), L.top, "g", "o", L.mid)
-    text("SPORES " .. bank.spores, inset.l + 4, inset.t + 7, "t")
+    text("SPORES " .. Profile.spores, inset.l + 4, inset.t + 7, "t")
     local count = #list .. "/" .. D.LOADOUT
     centred("PICK A SEED AND THE SPECIES TO BRING  " .. count, L.top + 11, #list == D.LOADOUT and "l" or "t", "o", L.mid)
     text("COMING", floor(L.mid - Font.width("COMING") / 2), L.chipsY - 9, "s")
@@ -3817,14 +3720,14 @@ local function drawLoadout()
 
     -- The enemy pointed at (or pinned) lights up what answers it.
     local enemy = hover.enemy or pick.enemy
-    local met = enemy and codex.seen[enemy]
+    local met = enemy and Profile.seen[enemy]
     local answers = {}
     for _, id in ipairs(met and D.COUNTERS[enemy] or {}) do answers[id] = true end
     for _, c in ipairs(L.chips) do
-        local boss = D.ENEMIES[c.kind].boss and codex.seen[c.kind]
+        local boss = D.ENEMIES[c.kind].boss and Profile.seen[c.kind]
         local on = enemy == c.kind
         box(c.x, c.y, c.w, c.h, on and "n" or "u", on and "w" or (boss and "r" or "k"))
-        text(c.name, c.x + 3, c.y + 2, boss and "r" or (codex.seen[c.kind] and "w" or "k"))
+        text(c.name, c.x + 3, c.y + 2, boss and "r" or (Profile.seen[c.kind] and "w" or "k"))
     end
 
     for _, c in ipairs(L.cards) do
@@ -3880,11 +3783,11 @@ local function drawLoadout()
     elseif hover.seed then
         local sd = D.SEED[hover.seed]
         if bank.ownsSeed(sd.id) then tip, k = sd.name .. ": " .. sd.blurb, "w"
-        elseif bank.seedForSale(sd.id) then tip, k = sd.name .. ": FOR SALE, " .. sd.price .. " SPORES. YOU HAVE " .. bank.spores, "t"
+        elseif bank.seedForSale(sd.id) then tip, k = sd.name .. ": FOR SALE, " .. sd.price .. " SPORES. YOU HAVE " .. Profile.spores, "t"
         else tip, k = "???: WIN " .. D.LEVEL[sd.after].name .. " TO PUT IT UP FOR SALE", "k" end
     elseif hover.species and not bank.owns(hover.species) then
         local t = D.TOWER[hover.species]
-        if bank.forSale(t.id) then tip, k = t.name .. ": FOR SALE, " .. t.price .. " SPORES. YOU HAVE " .. bank.spores, "t"
+        if bank.forSale(t.id) then tip, k = t.name .. ": FOR SALE, " .. t.price .. " SPORES. YOU HAVE " .. Profile.spores, "t"
         else tip, k = "???: WIN " .. bank.prizeOf(t.id).name .. " TO PUT IT UP FOR SALE", "k" end
     elseif hover.species then
         local t = D.TOWER[hover.species]
@@ -4096,8 +3999,8 @@ function bank.draw()
     if bank.offer.bought then
         centred(t.name .. " IS YOURS. BRING IT FROM THE LOADOUT", y, "g", "o", L.mid)
     else
-        local can = bank.spores >= t.price
-        centred("PRICE " .. t.price .. " SPORES   YOU HAVE " .. bank.spores, y, can and "w" or "r", "o", L.mid)
+        local can = Profile.spores >= t.price
+        centred("PRICE " .. t.price .. " SPORES   YOU HAVE " .. Profile.spores, y, can and "w" or "r", "o", L.mid)
         local b = L.buy
         box(b.x, b.y, b.w, b.h, hover.buy and "n" or (can and "d" or "u"), can and "t" or "k")
         local s = say("B: BUY IT", "BUY IT")
@@ -4150,38 +4053,21 @@ function codex.init()
     end
     table.sort(codex.forms, function(a, b) return #a[1] > #b[1] end)
 end
--- The enemies met live in the save directory, one id a line.
-function codex.load()
-    codex.seen = {}
-    local data = love.filesystem.getInfo("seen.txt") and love.filesystem.read("seen.txt")
-    if data then for id in data:gmatch("%S+") do if D.ENEMIES[id] then codex.seen[id] = true end end end
-    -- A save from before the encyclopedia: whatever comes on a level won was met there.
-    for _, l in ipairs(D.LEVELS) do
-        if won[l.id] then for _, w in ipairs(l.waves) do for _, g in ipairs(w) do codex.seen[g[1]] = true end end end
-    end
-end
-
-function codex.save()
-    local ids = {}
-    for _, id in ipairs(D.ENEMY_ORDER) do if codex.seen[id] then ids[#ids + 1] = id end end
-    love.filesystem.write("seen.txt", table.concat(ids, "\n") .. "\n")
-end
-
 -- Whatever is out on the board now has been met.
 function codex.watch(g)
     local new = false
     for _, e in ipairs(g.enemies) do
         local k = codex.whole[e.kind] or e.kind
-        if not e.hidden and not codex.seen[k] then codex.seen[k], new = true, true end
+        if not e.hidden and not Profile.seen[k] then Profile.seen[k], new = true, true end
     end
-    if new then codex.save() end
+    if new then Profile.save() end
 end
 
 function codex.list(tab) return codex.ids[codex.TABS[tab].id] end
 
 function codex.found(tab, id)
     local t = codex.TABS[tab].id
-    if t == "enemies" then return codex.seen[id] == true end
+    if t == "enemies" then return Profile.seen[id] == true end
     if t == "species" then return bank.owns(id) end
     return bank.ownsSeed(id)
 end
@@ -4338,7 +4224,7 @@ end
 codex.pages = {}
 function codex.lines(tab, id, w)
     local found = codex.found(tab, id)
-    local key = tab .. id .. ":" .. w .. (found and "f" or "") .. bank.spores
+    local key = tab .. id .. ":" .. w .. (found and "f" or "") .. Profile.spores
     if codex.pages[key] then return codex.pages[key] end
     local out, notes = {}, { list = {}, at = {} }
     local function add(str, k, x, h)
@@ -4405,7 +4291,7 @@ function codex.lines(tab, id, w)
         local good, unmet = {}, 0
         for _, kind in ipairs(D.ENEMY_ORDER) do
             for _, k in ipairs(D.COUNTERS[kind] or {}) do
-                if k == id and codex.seen[kind] then good[#good + 1] = D.ENEMIES[kind].name
+                if k == id and Profile.seen[kind] then good[#good + 1] = D.ENEMIES[kind].name
                 elseif k == id then unmet = unmet + 1 end
             end
         end
