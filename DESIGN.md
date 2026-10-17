@@ -98,6 +98,20 @@ Inky Cap earns from kills, out front; the Truffle earns from keeping its links
 whole, at the back. With both, and the Turkey Tail beside the Relay, neither
 economy nor support rests on one species, and a Mortar no longer needs a Relay.
 
+**How they look.** In the same style as the rest: a real fungus, a new model
+for every tier, an idle breath or sway, a kick when it fires, and coming up out
+of the ground when it is grown. Each reads apart from the other twelve at a
+glance, and the Truffle is the only one that hides in the soil.
+
+| Tower | Base model | Idle / firing | Branch A tiers | Branch B tiers |
+| --- | --- | --- | --- | --- |
+| Fly Agaric | The classic toadstool: a red domed cap with white warts on a white stalk, with a ring and a bulb at its foot | The cap sways; firing, it tips up at the flier and flicks a wart off as the shot | Fly Bane: the cap flattens wider and darker red. Muscaria: a smaller toadstool beside it, a faint haze over both | Muscimol: the cap goes orange-gold, the warts glow faintly. Ibotenic: the rim curls up into a cup and the glow pulses out of time with everything else |
+| Earthstar | A brown papery ball with a small mouth at the top, on a star of 6 to 8 split-back arms | The arms flex as if feeling the ground; firing, they press flat, the ball drops, spores puff from the mouth and a ring of dust runs out | Deep Listener: more and longer arms, curled down into the soil. Seismic: faint cracks run out across the ground to the arm tips | Puff Quake: a heavier ball on thicker arms. Cave-in: it stands on its arm tips like the arched earthstar and drops harder |
+| Oyster Mushroom | A cluster of grey-blue fans growing sideways off a stump, gills showing underneath | The fans' edges ripple; firing, a fan flicks and a sticky drop leaves the gills | Nematode Trap: fine beaded threads hang from the gills. Lasso: they become long loops trailing to the ground | Corrode: the fans go yellow, like the golden oyster, and drip. Dissolve: the drips hiss and leave a pale stain under it |
+| Bleeding Tooth | A lumpy white cap beaded with blood-red drops, a mat of short teeth underneath. Its sap shows as dark red beads along its links, so you can see how far round a loop it reaches | The drops swell and shrink; when a sapped link is chewed a drop bursts and runs down the side | Clotting: the drops darken and harden into brown knobs. Scab: the cap is half crusted over | Hemotoxin: the teeth grow longer and stick out past the rim. Thorn Sap: the drops are bright and run all the time |
+| Truffle | Mostly hidden: a low mound of soil with a crack across it, the top of a dark knobbly truffle showing through | The mound rises and falls very slowly. At a wave's end the crack opens and a gold glint pops up, bigger for every uncut wave; dug at, the soil scatters and the glint fades | Aged: a bigger mound, more truffle showing. Black Diamond: a faint sheen on the knobs | Truffle Scent: wavy scent lines rise from the crack. Truffle Hound: a second, smaller mound beside it, a decoy for the ants |
+| Turkey Tail | Thin flat brackets stacked up a stub, each banded brown, cream and rust like a fanned tail | The bands shimmer in a slow wave from base to edge, as if keeping a beat, and speed up while it boosts. One band takes the colour of each different species in reach, so a mixed cluster stripes it like a rainbow | Mycelial Pump: thicker brackets with teal rings like the Relay's. Capillary: thin teal threads run down into the soil | Versicolor: more and wider brackets. Rainbow: the bands are coloured right through and shimmer all the time |
+
 ## Enemies
 
 Twelve enemies, designed so that each one pressures the network in a different way
