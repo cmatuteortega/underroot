@@ -177,7 +177,7 @@ function Game:sunlit(n)
 end
 -- The sugar paid when a wave is cleared (and on going endless).
 function Game:waveBonus()
-    return floor((D.WAVE_BONUS + 4 * self.wave) * (self.mods.ripen and 1.3 or 1))
+    return floor((D.WAVE_BONUS + 4 * self.wave) * (self.mods.ripen and 1.3 or 1) * (self.mods.overripe and 0.5 or 1))
 end
 function Game:ringDamage() return self.mods.rings and 1.4 or D.RING.damage end
 function Game:ringSlow() return self.mods.rings and 0.55 or D.RING.slow end
@@ -1267,9 +1267,6 @@ function Game:mutate(n)
         self.pods = self.pods + 3
     elseif m.id == "clock" then
         self.regrows = self.regrows + 1
-    elseif m.id == "overripe" then
-        self.heartMax = max(1, self.heartMax - 4)
-        self.heartHp = min(self.heartHp, self.heartMax)
     end
     self.choices = nil
     self.phase = "build"
