@@ -5,6 +5,11 @@
 -- something. Buying a node's first rank grows its thread out from the one
 -- it grows from, so the network spreads as it is bought.
 --
+-- Each node shows what it grows: the species (at the tier an upgrade node
+-- brings), the seed, the enemy a field note is on, or a glyph for the
+-- network's own numbers; dimmed while it waits, a silhouette behind a win.
+-- Zoomed out the nodes are only dots, to see the whole of it at once.
+--
 -- Drag (or the arrows) to pan, the wheel, a pinch or + and - to zoom. A node
 -- tapped is shown in the panel; tapped again, or its button, or G, grows a
 -- rank. TAB picks the next node there are spores for.
@@ -18,17 +23,21 @@ local N = require "src.network"
 local Font = require "src.font"
 local Profile = require "src.profile"
 local S = require "src.ui.state"
+local T = require "src.tracer"
+local M = require "src.models"
 local Draw = require "src.ui.draw"
+local Pixels = require "src.ui.pixels"
 local flair = require "src.ui.flair"
 
 local floor, max, min, sqrt = math.floor, math.max, math.min, math.sqrt
 local color, box, text, wrapLines, number, say, inside, wide =
     Draw.color, Draw.box, Draw.text, Draw.wrapLines, Draw.number, Draw.say, Draw.inside, Draw.wide
 local sound, deny = flair.sound, flair.deny
+local blit, CUT = Pixels.blit, Pixels.CUT
 
 local net = {}
 
-net.STEPS = { 15, 22, 30 } -- HUD pixels a step out from the sprout, at each zoom
+net.STEPS = { 12, 31, 40 } -- HUD pixels a step out from the sprout, at each zoom: the first is dots only
 net.TESTING = 100000 -- what F8 and the seven taps put in the bank
 
 net.cam = { x = 0, y = 0 } -- the pan, HUD pixels
@@ -82,6 +91,20 @@ function net.open(id)
     if id then
         local row = Profile.nodeOf(id)
         if row then net.sel = row.id; net.centre(row.id) end
+    else
+        -- Halfway from the sprout to the nearest node there are spores for,
+        -- so both are on the screen.
+        local near
+        for _, row in ipairs(D.NETWORK) do
+            if Profile.nodeState(row.id) == "open" and (not near or N.layout()[row.id].depth < N.layout()[near].depth) then
+                near = row.id
+            end
+        end
+        net.cam.x, net.cam.y = 0, 0
+        if near then
+            local p = N.layout()[near]
+            net.cam.x, net.cam.y = -p.x * net.STEPS[net.zoom] / 2, -p.y * net.STEPS[net.zoom] / 2
+        end
     end
     sound("panel")
 end
@@ -129,10 +152,13 @@ local function at(L, id)
     return floor(L.cx + p.x * L.step + 0.5), floor(L.cy + p.y * L.step + 0.5)
 end
 
+-- A node's socket: a dot zoomed out, room for its picture zoomed in.
+local SIZE = { { 6, 4, 3 }, { 13, 11, 9 }, { 17, 14, 12 } }
 local function radius(row)
-    if not row.at then return 6 end
-    if row.species or row.seed then return 4 end
-    return 3
+    local z = SIZE[net.zoom]
+    if not row.at then return z[1] end
+    if row.species or row.seed then return z[2] end
+    return z[3]
 end
 
 -- The pan that puts a node in the middle of the free ground.
@@ -146,7 +172,7 @@ end
 
 -- Kept so the network cannot be dragged out of sight.
 local function clampCam()
-    local reach = 10 * net.STEPS[net.zoom]
+    local reach = 13 * net.STEPS[net.zoom]
     net.cam.x = max(-reach, min(reach, net.cam.x))
     net.cam.y = max(-reach, min(reach, net.cam.y))
 end
@@ -324,6 +350,153 @@ local function regrow()
     end
 end
 
+--- each node's picture ------------------------------------------------------------------------
+
+local FACE = 0.35 -- the way a model faces: a little to the right of towards you, as in the encyclopedia
+local NOTE = {
+    notes = function() return M.spider, { FACE, 0 } end,
+    ["notes.ants"] = function() return M.ant, { FACE, 0 } end,
+    ["notes.shells"] = function() return M.pillbug, { FACE, false, 0 } end,
+    ["notes.crawlers"] = function() return M.centipede, { FACE, 0, 0.9 } end,
+    ["notes.fliers"] = function() return M.gnat, { FACE, 0 } end,
+    ["notes.diggers"] = function() return M.springtail, { FACE, 0, 0 } end,
+    ["notes.soft"] = function() return M.slug, { FACE, 0 } end,
+}
+
+-- The model a node shows, and what to ask it for; nil for a glyph. An
+-- upgrade shows the tier its next rank grows.
+local function model(row, r)
+    if not row.at or row.id == "root" then return M.sprout, { 0, "bean" } end
+    local kind = row.species or row.tower
+    if kind then return M.tower, { kind, nil, 0, 0, 0 } end
+    if row.up then return M.tower, { row.up[1], row.up[2], min(2, r + 1), 0, 0 } end
+    local seed = row.seed or row.id:match("^(%w+)%.mut$")
+    if seed then return M.sprout, { 0, seed } end
+    if NOTE[row.id] then return NOTE[row.id]() end
+    if row.id == "harvest" then return M.corpse, { "ant", FACE } end
+end
+
+-- What of a picture is drawn, not its margins: { x, y, w, h } in it.
+local inks = setmetatable({}, { __mode = "k" })
+local function ink(p)
+    local b = inks[p]
+    if b then return b end
+    local x0, y0, x1, y1 = p.w, p.h, -1, -1
+    for j = 0, p.h - 1 do
+        for i = 0, p.w - 1 do
+            if p.key[j * p.w + i] ~= 0 then x0, x1, y0, y1 = min(x0, i), max(x1, i), min(y0, j), max(y1, j) end
+        end
+    end
+    b = x1 < 0 and { x = 0, y = 0, w = p.w, h = p.h } or { x = x0, y = y0, w = x1 - x0 + 1, h = y1 - y0 + 1 }
+    inks[p] = b
+    return b
+end
+
+-- Its picture, painted at the size whose drawn part fills a `box` pixels square.
+local pics = {}
+local function picture(row, r, box)
+    local f, args = model(row, r)
+    if not f then return end
+    local key = row.id .. ":" .. (row.up and min(2, r + 1) or 0) .. ":" .. box
+    local p = pics[key]
+    if p then return p end
+    local b = ink(f(unpack(args)))
+    local s = max(0.25, min(2, floor(min(box / b.w, box / b.h) * 4) / 4))
+    p = s == 1 and f(unpack(args)) or M.scaled(s, f, unpack(args))
+    pics[key] = p
+    return p
+end
+
+-- The network's own numbers have no model: a few strokes each, `r` the room.
+local function line(x0, y0, x1, y1) love.graphics.line(floor(x0) + 0.5, floor(y0) + 0.5, floor(x1) + 0.5, floor(y1) + 0.5) end
+local function drop(x, y, r)
+    love.graphics.circle("fill", floor(x) + 0.5, floor(y + r * 0.3) + 0.5, r * 0.55)
+    love.graphics.polygon("fill", x - r * 0.5, y + r * 0.15, x + r * 0.5, y + r * 0.15, x, y - r * 0.7)
+end
+local GLYPH = {
+    -- A thread forking.
+    hyphae = function(x, y, r, a, b)
+        color(a); line(x, y + r * 0.7, x, y); line(x, y, x - r * 0.55, y - r * 0.6); line(x, y, x + r * 0.6, y - r * 0.45)
+        color(b); line(x - r * 0.55, y - r * 0.6, x - r * 0.75, y - r * 0.2); line(x + r * 0.6, y - r * 0.45, x + r * 0.5, y - r * 0.8)
+    end,
+    -- Three threads side by side, nutrients along them.
+    ["hyphae.cap"] = function(x, y, r, a, b)
+        for k = -1, 1 do color(a); line(x - r * 0.7, y + k * r * 0.45, x + r * 0.7, y + k * r * 0.45) end
+        color(b)
+        for k = -1, 1 do love.graphics.rectangle("fill", floor(x + k * r * 0.35), floor(y + k * r * 0.45) - 1, 2, 3) end
+    end,
+    -- A short thread, cut.
+    ["hyphae.cost"] = function(x, y, r, a, b)
+        color(a); line(x - r * 0.7, y + r * 0.5, x - r * 0.1, y - r * 0.1); line(x + r * 0.15, y - r * 0.15, x + r * 0.7, y - r * 0.6)
+        color(b); line(x - r * 0.25, y - r * 0.45, x + r * 0.3, y + r * 0.3)
+    end,
+    -- A thread shooting out.
+    ["hyphae.grow"] = function(x, y, r, a, b)
+        color(a); line(x - r * 0.7, y + r * 0.6, x + r * 0.5, y - r * 0.5)
+        color(b); line(x + r * 0.6, y - r * 0.6, x + r * 0.05, y - r * 0.55); line(x + r * 0.6, y - r * 0.6, x + r * 0.55, y - r * 0.05)
+    end,
+    -- A ring of nodes.
+    ring = function(x, y, r, a, b)
+        color(a); love.graphics.circle("line", floor(x) + 0.5, floor(y) + 0.5, r * 0.6)
+        color(b)
+        for k = 0, 4 do
+            local t = k / 5 * 2 * math.pi - math.pi / 2
+            love.graphics.rectangle("fill", floor(x + math.cos(t) * r * 0.6) - 1, floor(y + math.sin(t) * r * 0.6) - 1, 3, 3)
+        end
+    end,
+    -- A surge.
+    pulse = function(x, y, r, a, b)
+        color(a)
+        love.graphics.polygon("fill", x + r * 0.25, y - r * 0.8, x - r * 0.45, y + r * 0.1, x, y + r * 0.1)
+        love.graphics.polygon("fill", x, y - r * 0.05, x + r * 0.45, y - r * 0.05, x - r * 0.25, y + r * 0.8)
+        color(b); love.graphics.rectangle("fill", floor(x) - 1, floor(y) - 1, 2, 2)
+    end,
+    -- Spores: what mutates.
+    spores = function(x, y, r, a, b)
+        color(a)
+        love.graphics.circle("fill", floor(x - r * 0.35) + 0.5, floor(y + r * 0.3) + 0.5, r * 0.3)
+        love.graphics.circle("fill", floor(x + r * 0.35) + 0.5, floor(y + r * 0.25) + 0.5, r * 0.25)
+        love.graphics.circle("fill", floor(x) + 0.5, floor(y - r * 0.35) + 0.5, r * 0.32)
+        color(b); love.graphics.rectangle("fill", floor(x) - 1, floor(y - r * 0.4) - 1, 2, 2)
+    end,
+    -- Sugar: a drop of it, or a few.
+    sap = function(x, y, r, a, b)
+        color(a); drop(x, y, r)
+        color(b); love.graphics.rectangle("fill", floor(x - r * 0.15), floor(y + r * 0.1), 1, 2)
+    end,
+    store = function(x, y, r, a)
+        color(a); drop(x - r * 0.35, y + r * 0.3, r * 0.5); drop(x + r * 0.35, y + r * 0.3, r * 0.5); drop(x, y - r * 0.3, r * 0.5)
+    end,
+}
+GLYPH["pulse.power"] = GLYPH.pulse
+GLYPH["lore.wild"], GLYPH["lore.soil"] = GLYPH.spores, GLYPH.spores
+
+-- How a node's picture looks by where it stands: dimmed while it waits on
+-- what it grows from, a silhouette behind a win.
+local function remapOf(st)
+    if st == "locked" then return CUT end
+    if st == "shut" then return T.DARKER end
+end
+
+local function drawIcon(row, st, r, x, y, rad)
+    local box = rad * 2 - 3
+    local pic = picture(row, r, box)
+    if pic then
+        local sx, sy, sw, sh = love.graphics.getScissor()
+        love.graphics.intersectScissor(x - rad, y - rad, rad * 2 + 1, rad * 2 + 1)
+        local b = ink(pic)
+        blit(pic, x - b.x - floor(b.w / 2) + pic.oi, y - b.y - floor(b.h / 2) + pic.oj, remapOf(st))
+        love.graphics.setScissor(sx, sy, sw, sh)
+        return
+    end
+    local g = GLYPH[row.id]
+    if not g then return end
+    local a, b = "l", "w"
+    if st == "locked" then a, b = "o", "o"
+    elseif st == "shut" then a, b = "k", "s" end
+    g(x, y, rad, a, b)
+end
+
 --- drawing ---------------------------------------------------------------------------------
 
 -- A hypha from (x0, y0) to (x1, y1), bowed a little to one side (the same
@@ -421,8 +594,18 @@ function net.draw()
             local x, y = at(L, row.id)
             local rad = radius(row)
             local r, n = N.rank(Profile.net, row.id), N.ranks(row)
+            local icons = net.zoom >= 2
             local fill, edge
-            if not row.at then fill, edge = "g", "m"
+            if icons then
+                -- A socket dark enough for the picture in it; the edge says where it stands.
+                if not row.at then fill, edge = "d", "g"
+                elseif r >= n then fill, edge = "d", "l"
+                elseif r > 0 then fill, edge = "d", (st == "open" and blink) and "g" or "c"
+                elseif st == "open" then fill, edge = "u", blink and "g" or "m"
+                elseif st == "poor" then fill, edge = "u", "t"
+                elseif st == "locked" then fill, edge = "u", "r"
+                else fill, edge = "u", "k" end
+            elseif not row.at then fill, edge = "g", "m"
             elseif r >= n then fill, edge = "l", "c"
             elseif r > 0 then fill, edge = "c", (st == "open" and blink) and "g" or "l"
             elseif st == "open" then fill, edge = "d", blink and "g" or "m"
@@ -441,9 +624,26 @@ function net.draw()
             end
             color(edge)
             love.graphics.circle("fill", x + 0.5, y + 0.5, rad + 1)
-            color(fill)
-            love.graphics.circle("fill", x + 0.5, y + 0.5, rad)
-            if st == "locked" then
+            -- Fully grown, a second ring.
+            if icons and r >= n and row.at then
+                color("c")
+                love.graphics.circle("fill", x + 0.5, y + 0.5, rad)
+                color(fill)
+                love.graphics.circle("fill", x + 0.5, y + 0.5, rad - 1)
+            else
+                color(fill)
+                love.graphics.circle("fill", x + 0.5, y + 0.5, rad)
+            end
+            if icons then
+                drawIcon(row, st, r, x, y, rad)
+                if st == "locked" then
+                    -- A padlock on its edge.
+                    local lx, ly = x + floor(rad * 0.55), y + floor(rad * 0.45)
+                    color("o"); love.graphics.rectangle("fill", lx - 1, ly - 3, 7, 8)
+                    color("r"); love.graphics.rectangle("fill", lx, ly, 5, 4)
+                    love.graphics.rectangle("line", lx + 1.5, ly - 1.5, 2, 2)
+                end
+            elseif st == "locked" then
                 color("r")
                 love.graphics.rectangle("fill", x - 1, y - 1, 3, 3)
             end
@@ -455,9 +655,10 @@ function net.draw()
                     love.graphics.rectangle("fill", x - floor(w / 2) + (k2 - 1) * 2, y + rad + 3, 1, 1)
                 end
             end
-            -- Names: the sprout's own branches and every species and seed, more as it zooms in.
-            local named = not row.at or row.at == "sprout" or row.species or row.seed or net.zoom >= 3
-            if named and net.zoom >= 2 or (not row.at) then
+            -- Names: the sprout's, every species' and seed's close up, and the one pointed at.
+            local named = not row.at or (net.zoom >= 3 and (row.species or row.seed))
+                or ((net.sel == row.id or S.hover.netNode == row.id) and net.zoom >= 2)
+            if named then
                 local s = row.name
                 local k = (st == "full" or r > 0) and "w" or ((st == "open" or st == "poor") and "s" or "k")
                 local tx, ty = x - floor(Font.width(s) / 2), y + rad + (n > 1 and 6 or 3)

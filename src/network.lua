@@ -172,8 +172,9 @@ end
 -- it spreads out, each node a step further than the one it grows from, the
 -- way round shared out by the tips each branch ends in. A tip near the
 -- middle needs a wider wedge than one far out to stand as far from its
--- neighbours, so each counts 1/depth: every tip gets the same room. The
--- first ring stands two steps out, not one, for the room its names take.
+-- neighbours, so each counts for less the further out it is. The first ring
+-- stands four steps out, so the nodes near the middle have room for their
+-- pictures too.
 function N.layout()
     if N.places then return N.places end
     local kids, tips = {}, {}
@@ -187,7 +188,7 @@ function N.layout()
     local function count(id, depth)
         local n = 0
         for _, k in ipairs(kids[id]) do n = n + count(k, depth + 1) end
-        tips[id] = math.max(1 / math.max(1, depth), n)
+        tips[id] = math.max(1 / (depth + 3), n)
         return tips[id]
     end
     local root = D.NETWORK[1].id
@@ -195,7 +196,7 @@ function N.layout()
     local places = {}
     local function place(id, depth, a0, a1)
         local a = (a0 + a1) / 2
-        local out = depth > 0 and depth + 1 or 0
+        local out = depth > 0 and depth + 3 or 0
         places[id] = { x = math.cos(a) * out, y = math.sin(a) * out, depth = depth, angle = a }
         local at = a0
         for _, k in ipairs(kids[id]) do

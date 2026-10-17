@@ -86,8 +86,15 @@ every number through `Game:stat` and the few helpers a mutation can change too
 (see `src/network.lua`); upgrade branches not grown are not offered on the
 board, and mutations not grown are not offered at all.
 
-The network's screen: drag (or the arrows) to look round, the wheel, a pinch
-or `+`/`-` to zoom; a node clicked shows its panel (what it does, now and at
+The network's screen: every node shows what it grows in a round socket --
+the species (an upgrade node at the tier its next rank brings), the seed, the
+enemy a field note is on, or a glyph for the hyphae, the ring, the pulse,
+sugar and mutations -- dimmed while what it grows from is not grown yet, a
+silhouette with a padlock while a win is needed, a blinking green rim when
+there are the spores for it. It opens looking from the sprout towards the
+nearest node there are spores for. Drag (or the arrows) to look round, the
+wheel, a pinch or `+`/`-` to zoom (all the way out the nodes are dots, to see
+the whole network at once); a node clicked shows its panel (what it does, now and at
 its next rank, and its price), clicked again (or its button, or `G`) grows a
 rank, and the thread to it grows out lit. `TAB` picks the next node there are
 spores for. REGROW, pressed twice, sells the whole network back for every
