@@ -80,15 +80,7 @@ function net.ready()
     return n
 end
 
--- Its button on the level picker, right of the encyclopedia's.
-function net.button(after)
-    local s = "NETWORK"
-    local n = net.ready()
-    if n > 0 then s = s .. " " .. n end
-    return { x = after.x + after.w + 5, y = after.y, w = Font.width(s) + 8, h = 12, s = s, ready = n > 0 }
-end
-
--- Opened from the level picker or the loadout; with `id` (a species or seed),
+-- Opened from the home screen or the loadout; with `id` (a species or seed),
 -- on the node it grows on.
 function net.open(id)
     net.back = S.menu == "loadout" and "loadout" or nil
@@ -117,7 +109,7 @@ end
 
 function net.close()
     sound("back")
-    if net.back == "loadout" and S.pick then S.menu = "loadout" else S.openMenu() end
+    if net.back == "loadout" and S.pick then S.menu = "loadout" else S.openHome() end
 end
 
 --- where things are ---------------------------------------------------------------------------

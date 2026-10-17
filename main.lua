@@ -197,7 +197,7 @@ function love.update(dt)
         if S.pick then S.pick.full = max(0, (S.pick.full or 0) - dt) end
         Input.findHover()
         audio.hover()
-        if S.menu == "title" then Title.sounds() end
+        if S.menu == "title" or S.menu == "home" or S.menu == "settings" then Title.sounds() end
         if S.script then
             S.script.update(S.game, 1 / 30)
             photograph()

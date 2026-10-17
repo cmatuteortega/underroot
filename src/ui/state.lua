@@ -28,7 +28,8 @@ S.game = nil
 S.level = D.LEVELS[1]
 S.worlds = {}
 S.menu = nil -- the level picker is up (true), a level's loadout ("loadout"), the network ("network"),
--- the encyclopedia ("codex") or the title ("title")
+-- the encyclopedia ("codex"), the title ("title"), the home screen after it ("home")
+-- or the settings ("settings")
 S.pick = nil -- the loadout being picked: { n = level, set = { id = true }, enemy = kind }
 S.chosen = nil -- the species the run brings, a list; nil brings them all (the shots)
 S.challenge = false -- challenge mode chosen in the picker
@@ -72,6 +73,12 @@ S.turning = nil
 -- To the level picker, with nothing in hand.
 function S.openMenu()
     S.menu = true
+    S.mode, S.drag, S.selected = "grow", nil, nil
+end
+
+-- To the home screen, the one past the title the other screens go back to.
+function S.openHome()
+    S.menu = "home"
     S.mode, S.drag, S.selected = "grow", nil, nil
 end
 

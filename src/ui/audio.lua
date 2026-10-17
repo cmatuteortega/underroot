@@ -1,6 +1,6 @@
 -- The sound's glue to the screen (the sounds themselves are src/sfx.lua):
 -- what the game cued, panned to where it happened; the loops under it all; a
--- tick when the pointer comes onto something; the level picker's switch.
+-- tick when the pointer comes onto something.
 
 local D = require "src.defs"
 local Sfx = require "src.sfx"
@@ -20,16 +20,13 @@ audio.shown = { focus = true, visible = true }
 -- How loud: 1, 0.5 or 0 (the V key goes round them), kept between runs.
 function audio.save() Profile.sound = Sfx.level; Profile.save() end
 
--- The level picker's sound switch, top right: a finger has no V key.
-function audio.switch() return { x = S.vw - S.inset.r - 62, y = S.inset.t + 4, w = 58, h = 12 } end
-
 -- A tick when the pointer comes onto something that can be pressed (never
 -- for a finger, which has no hover).
 function audio.hover()
     local k = S.hover.button or S.hover.wave or S.hover.turn or (S.hover.up and S.hover.up.branch + 100) or S.hover.mutation
         or S.hover.level or S.hover.challenge or S.hover.sound or S.hover.species or S.hover.back or S.hover.go or S.hover.enemy
-        or S.hover.bring or S.hover.weather or S.hover.won or (S.hover.buy and "buy") or (S.hover.on and "on")
-    if k ~= nil then k = tostring(k) .. (S.hover.up and "u" or S.hover.mutation and "m" or S.hover.level and "l" or "") end
+        or S.hover.bring or S.hover.weather or S.hover.won or (S.hover.buy and "buy") or (S.hover.on and "on") or S.hover.home
+    if k ~= nil then k = tostring(k) .. (S.hover.up and "u" or S.hover.mutation and "m" or S.hover.level and "l" or S.hover.home and "h" or S.hover.sound and "s" or "") end
     if k and k ~= flair.lastHover and not S.touch then sound("hover") end
     flair.lastHover = k
 end
@@ -67,7 +64,7 @@ end
 function audio.ambience(dt)
     local want = { soil = 0.35 }
     local pitch
-    if S.menu == "title" then
+    if S.menu == "title" or S.menu == "home" or S.menu == "settings" then
         -- The night over the title, and the network's hum swelling as it grows.
         local age = flair.now() - (Title.t0 or 0)
         want.night, want.hum = 0.3, 0.35 * min(1, age / 4)

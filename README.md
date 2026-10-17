@@ -40,7 +40,11 @@ can be checked by comparing them.
 
 ## Playing it
 
-It opens on the level picker. The Crack is open; winning a level opens the next
+It opens on the title; a key, click or tap sends the sprout and the ground
+down and brings up the home screen's four ways on: LEVELS (`L`, the level
+picker), NETWORK (`N`), ENCYCLOPEDIA (`E`) and SETTINGS (`S`, the sound for
+now). The network, the encyclopedia and the settings go back to it, and so
+does BACK on the level picker. The Crack is open; winning a level opens the next
 (what is won is kept in the save directory), and winning the Lawn opens challenge
 mode, which adds a last wave with the Bombardier Beetle to any level.
 
@@ -58,8 +62,7 @@ left of its card in the level picker.
 **The Spore Bank and its network.** A run pays 6 spores for every wave it
 clears, endless included, 12 more for a win and 20 more again for a level's
 first win; they go into the bank as they come, so a lost run keeps them.
-Spores are spent on the **network** (`N`, or the NETWORK button beside the
-encyclopedia's): a web of 100-odd nodes spreading out from the sprout in the
+Spores are spent on the **network** (NETWORK on the home screen, or `N` there): a web of 100-odd nodes spreading out from the sprout in the
 middle, each bought a rank at a time, and each only once the node it grows
 from has a rank. A first run has the Spore Puffer, the bean and three
 mutations, and everything held back; a fully grown network is the game as
@@ -150,8 +153,7 @@ each level's loadout, and the seeds bought are kept in `save.txt`. The numbers
 are `D.SEEDS` in `src/defs.lua`, and the seeds' mutations are the rows of
 `D.MUTATIONS` with a `seed`.
 
-**The encyclopedia.** The button at the top left of the level picker (`E`)
-opens it: a tab each for the enemies, the species and the seeds, a tile an
+**The encyclopedia.** ENCYCLOPEDIA on the home screen (`E`) opens it: a tab each for the enemies, the species and the seeds, a tile an
 entry with its model painted big, and a fourth tab, STATUSES, the glossary.
 What has not been found yet is a dark cutout of its model with `???` under it:
 an enemy is found by meeting it on the board, a species by having it (the
@@ -210,14 +212,15 @@ chew through any thread they cross.
 | drag on open ground, middle drag, arrows / WASD | pan |
 | `R` | restart after a win or loss (`Shift+R` any time) |
 | `N` | after a win: on to the next level's loadout |
-| `M` | the level picker (`Esc` there goes back to the run) |
+| `L` `N` `E` `S` (or `1`–`4`) on the home screen | the levels, the network, the encyclopedia, the settings (`Esc` back to the title) |
+| `M` | the level picker (`Esc` or BACK there goes back to the run, or to the home screen) |
 | `1`–`6`, `C` in the picker | pick a level; challenge mode on or off |
-| `E` in the picker, or its top left button | the encyclopedia: `1`–`4` or left / right for its tabs, a click for a page, left / right through the pages, wheel or up / down to scroll, `Esc` back |
+| `E` on the home screen | the encyclopedia: `1`–`4` or left / right for its tabs, a click for a page, left / right through the pages, wheel or up / down to scroll, `Esc` back |
 | click a species in the loadout | read it in the panel; click it again to bring it or leave it (six at most) |
 | a species' key in the loadout | bring it or leave it at once |
 | `Enter` / `Space`, `Esc` in the loadout | grow the level with that loadout; back to the levels |
 | mouse wheel, `+` / `-` | zoom in and out (whole steps) |
-| `V` | sound loud / quiet / off (kept between runs; the level picker has a switch for it too) |
+| `V` | sound loud / quiet / off (kept between runs; SETTINGS on the home screen has it too, left / right there) |
 | `F11` / `Alt+Enter` | back to a window (it opens fullscreen) |
 
 On a phone or tablet it plays with one finger, fullscreen, either way up (a
@@ -236,7 +239,8 @@ keeps clear of the notch and home bar:
 | tap the weather's name in the top bar | what the weather does, in a tip under it; tap it again (or anywhere) to shut it |
 | tap the top bar | pause and resume (the game also pauses when it is sent to the background) |
 | tap a level card, or the challenge switch | play it / challenge on or off |
-| tap ENCYCLOPEDIA in the picker, then a tile | read about it; drag to scroll, `<` `>` for the next, BACK to go back |
+| tap LEVELS, NETWORK, ENCYCLOPEDIA or SETTINGS on the home screen | the level picker, the network, the encyclopedia, the sound's three levels; BACK to come back |
+| tap ENCYCLOPEDIA on the home screen, then a tile | read about it; drag to scroll, `<` `>` for the next, BACK to go back |
 | tap anywhere after a win or loss | back to the level picker |
 
 The bottom line always says either what is under the mouse or the next thing to
@@ -566,7 +570,7 @@ What is new for Underfoot:
 | `src/ui/toolbar.lua` | the toolbar's buttons and where they sit |
 | `src/ui/panel.lua` | the info panel for a species, a fruiting body or a seed |
 | `src/ui/input.lua` | mouse, fingers and keys: taps, drags, pans, pinches, the wheel, handed to the screen that is up |
-| `src/ui/title.lua`, `menu.lua`, `loadout.lua`, `network.lua`, `codex.lua` | the title, the level picker, the loadout, the Spore Bank's network, the encyclopedia |
+| `src/ui/title.lua`, `home.lua`, `settings.lua`, `menu.lua`, `loadout.lua`, `network.lua`, `codex.lua` | the title, the home screen after it, the settings, the level picker, the loadout, the Spore Bank's network, the encyclopedia |
 | `src/ui/run.lua` | starting a run and each frame of it: the rules stepped, and what the profile keeps |
 | `src/ui/flair.lua`, `audio.lua` | the HUD's flourishes and the weather's coming and going; the sound's glue to the screen |
 | `src/profile.lua` | what is kept between runs (`save.txt`): wins, records, loadouts, the spores and the network's ranks, enemies met |

@@ -358,9 +358,6 @@ function codex.height(lines)
     return h
 end
 
--- The level picker's button for it, top left.
-function codex.button() return { x = S.inset.l + 4, y = S.inset.t + 4, w = Font.width("ENCYCLOPEDIA") + 8, h = 12 } end
-
 -- The grid: BACK, the tabs, and a tile an entry, as many across as fit,
 -- scrolled under the tabs. `scroll` is kept in reach.
 function codex.layout()
@@ -430,7 +427,7 @@ end
 
 function codex.back()
     sound("back")
-    if codex.page then codex.page = nil else S.openMenu() end
+    if codex.page then codex.page = nil else S.openHome() end
 end
 
 -- To the entry `d` along from the one open, round the ends.

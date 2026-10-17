@@ -1,6 +1,6 @@
 -- What the mouse, a finger or a key means: each goes to the screen that is
 -- up (src/ui/hud.lua for a run, else the picker, the loadout, the network,
--- the encyclopedia or the title), after what they all share -- panning,
+-- the encyclopedia, the settings, the home screen or the title), after what they all share -- panning,
 -- pinching, the wheel, a press that might be a tap or a drag.
 
 local Sfx = require "src.sfx"
@@ -12,6 +12,8 @@ local codex = require "src.ui.codex"
 local Title = require "src.ui.title"
 local Loadout = require "src.ui.loadout"
 local Network = require "src.ui.network"
+local Home = require "src.ui.home"
+local Settings = require "src.ui.settings"
 local Menu = require "src.ui.menu"
 local Hud = require "src.ui.hud"
 
@@ -24,7 +26,7 @@ local input = {}
 
 -- The screen up, the one the pointer and the keys go to: the run's own (the
 -- HUD over the board) when no other is.
-local SCREENS = { title = Title, loadout = Loadout, network = Network, codex = codex }
+local SCREENS = { title = Title, home = Home, settings = Settings, loadout = Loadout, network = Network, codex = codex }
 local function screen()
     if not S.menu then return Hud end
     return SCREENS[S.menu] or Menu

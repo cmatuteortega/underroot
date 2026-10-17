@@ -1,6 +1,7 @@
 -- The title, the first thing up when the game opens: the name over the
 -- night, the sprout on the ground and the network growing out under it, lit
--- by nutrients on their way up. Any key, click or tap goes on to the levels.
+-- by nutrients on their way up. Any key, click or tap sends the sprout down and
+-- the home screen's choices up (src/ui/home.lua).
 
 local M = require "src.models"
 local Font = require "src.font"
@@ -18,13 +19,16 @@ local sound = flair.sound
 local title = {}
 
 function title.open()
-    S.menu, title.t0 = "title", flair.now()
+    S.menu, title.t0, title.down = "title", flair.now(), nil
     S.mode, S.drag, S.selected = "grow", nil, nil
 end
 
+-- Tapped: the sprout and the ground under it go down, and the home screen's
+-- choices come up in the sky they leave.
 function title.leave()
     sound("select")
-    S.openMenu()
+    title.down = flair.now()
+    S.openHome()
 end
 
 -- The threads under the sprout, grown once for a screen size: each a list of
@@ -55,20 +59,53 @@ function title.grow(cx, gy)
     return threads
 end
 
-function title.draw()
+-- How far the ground goes down once the title is tapped, making room in the
+-- sky for the home screen's choices (src/ui/home.lua), and how long it takes.
+title.DROP_TIME = 0.7
+function title.ground() return floor(S.vh * 0.6), max(floor(S.vh * 0.6), floor(S.vh * 0.88)) end
+
+-- How far down the ground is now: none on the title, all the way once it has
+-- dropped, eased between.
+function title.drop()
+    local gy, low = title.ground()
+    if not title.down then return 0 end
+    local f = min(1, (flair.now() - title.down) / title.DROP_TIME)
+    return floor((low - gy) * f * f * (3 - 2 * f) + 0.5)
+end
+
+-- Where the name goes and how big (x, y, scale), where the lettering under it
+-- ends, and where the top of the sprout is once the ground has dropped: what
+-- the home screen fits its choices between.
+function title.marks()
+    local gy, low = title.ground()
+    local name = "MYCELIO TD"
+    local s = max(1, min(5, floor((S.vw - 24) / Font.width(name))))
+    local x, y = floor((S.vw - Font.width(name) * s) / 2), max(S.inset.t + 8, floor(gy * 0.3) - 3 * s)
+    return x, y, s, y + 6 * s + 11, low - M.sprout(0).oj
+end
+
+-- The night, the ground `drop` pixels lower than the title has it, the network
+-- and the sprout on it, and the name over it all. Shared by the title, the home
+-- screen and the settings.
+function title.scene(drop)
     local T0 = title
     local age = flair.now() - (T0.t0 or 0)
-    local cx, gy = floor(S.vw / 2), floor(S.vh * 0.6)
-    if T0.w ~= S.vw or T0.h ~= S.vh then T0.w, T0.h, T0.threads = S.vw, S.vh, T0.grow(cx, gy) end
+    local cx = floor(S.vw / 2)
+    local gy0, low = title.ground()
+    if T0.w ~= S.vw or T0.h ~= S.vh then T0.w, T0.h, T0.threads = S.vw, S.vh, T0.grow(cx, gy0) end
+    local gy = gy0 + drop
     color("o")
     love.graphics.rectangle("fill", 0, 0, S.vw, S.vh)
-    -- A few stars, each blinking on its own beat.
+    -- A few stars, each blinking on its own beat, strewn down to where the
+    -- ground ends up so the dropping ground uncovers more of them.
     local rng = love.math.newRandomGenerator(3)
-    for _ = 1, floor(S.vw * gy / 900) do
-        local x, y, beat = rng:random(0, S.vw - 1), rng:random(0, gy - 4), rng:random() * 6
-        if (age + beat) % 6 > 0.4 then
+    for _ = 1, floor(S.vw * low / 900) do
+        local x, y, beat = rng:random(0, S.vw - 1), rng:random(0, low - 4), rng:random() * 6
+        if y < gy - 4 and (age + beat) % 6 > 0.4 then
             color(rng:random() < 0.3 and "s" or "k")
             love.graphics.rectangle("fill", x, y, 1, 1)
+        else
+            rng:random()
         end
     end
     -- The ground: a lip of lit soil, then deep soil to the bottom.
@@ -83,17 +120,16 @@ function title.draw()
     local reach = age * 45
     for _, t in ipairs(T0.threads) do
         for _, p in ipairs(t) do
-            if p.d > reach then break end
+            if p.d > reach or p.y + drop >= S.vh then break end
             local lit = (p.d + age * 30) % 48 < 2
             color(lit and "l" or (p.d > reach - 3 and "l" or "c"))
-            love.graphics.rectangle("fill", p.x, p.y, 1, 1)
+            love.graphics.rectangle("fill", p.x, p.y + drop, 1, 1)
         end
     end
     blit(M.sprout(0), cx, gy)
     -- The name, as big as the screen's width allows, on a teal shadow.
     local name = "MYCELIO TD"
-    local s = max(1, min(5, floor((S.vw - 24) / Font.width(name))))
-    local x, y = floor((S.vw - Font.width(name) * s) / 2), max(S.inset.t + 8, floor(gy * 0.3) - 3 * s)
+    local x, y, s = title.marks()
     love.graphics.push()
     love.graphics.translate(x, y)
     love.graphics.scale(s, s)
@@ -104,6 +140,11 @@ function title.draw()
     love.graphics.pop()
     local sub = "A TOWER DEFENSE UNDER A SPROUT"
     text(sub, floor((S.vw - Font.width(sub)) / 2), y + 6 * s + 6, "t")
+end
+
+function title.draw()
+    title.scene(0)
+    local age = flair.now() - (title.t0 or 0)
     if age % 1.2 < 0.8 then
         centred(say("PRESS ANY KEY", "TAP TO BEGIN"), S.vh - S.inset.b - 14, "w", "o")
     end
