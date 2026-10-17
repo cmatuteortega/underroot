@@ -168,10 +168,12 @@ cleared, more for a win.
 
 - **New species:** the first six species are there from the start. Each level's
   first win puts one of the other six up for sale, bought for good with spores.
-  For now this is all spores buy.
-- **Sprout seeds:** pick the plant at the end of the path. An oak sapling is tough,
-  a tomato pays more sugar, a dandelion regrows once after dying, a bean sprout
-  speeds up growth.
+- **Sprout seeds:** pick the plant at the end of the path, with the loadout. An
+  oak sapling is tough, a tomato pays more sugar, a dandelion regrows once after
+  dying, a sunflower makes what grows near it hit harder by day, a flytrap bites
+  what comes close; the bean is the plain sprout, its mutations about growing.
+  Each seed brings mutations of its own, and one is always among the three on
+  offer, so the seed decides what the network can become.
 - **Colony traits:** small permanent bonuses, deliberately modest so skill matters
   more than grind.
 

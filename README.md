@@ -27,7 +27,8 @@ love . --sounds        # dev: every sound and loop written as a .wav (sounds/), 
 love . --bot 10        # dev: plays the Crack headless 10 times, prints how it went
 love . --bot 10 lawn   # dev: another level; add `challenge`, or `generic` for the
                        # map-agnostic player instead of the level's build order,
-                       # or `endless` to play on past the win until the sprout falls
+                       # or `endless` to play on past the win until the sprout falls,
+                       # or a seed (oak, tomato, dandelion, sunflower, flytrap)
 ```
 
 ## Playing it
@@ -71,6 +72,28 @@ is for sale (`LOCKED` before), and its panel's button buys it. The spores
 and what was bought are kept in the save directory (`bank.txt`), and the
 level picker and the loadout show the spores in the bank, top left. The
 prices and the pay are `price` in `src/defs.lua` and `D.SPORES`.
+
+**Sprout seeds.** Spores buy seeds too, and each run grows from one, picked in
+the loadout (the row of chips over the species). The sprout looks the same
+whatever it grew from; point at it (tap it on a phone) and its seed's name
+shows over it, with what it does on the line at the bottom. Each seed changes
+the sprout's numbers and brings three or four mutations of its own: one of the
+three offered at every mutation is the seed's (in green) while it has any left.
+
+| seed | price | what it does | its mutations |
+| --- | --- | --- | --- |
+| Bean Sprout | free | the sprout as it was | Tendrils (links out of the sprout grow at once), Nitrogen Fix (towers 2 hops from it hit as on a pocket one richer), Bean Pod (three free links) |
+| Oak Sapling | 15 | sprout +50% HP, links grow 25% slower | Heartwood (30% less from leaks), Bark (links at the sprout ×3 HP), Acorn Drop (every 6 s, 30 and a stun on the bug nearest it), Rings of Growth (+1 HP a wave) |
+| Tomato Seedling | 15 | sugar +10%, +10 to start, sprout −40% HP | Ripening (clear bonus +30%), Splat (a leak bursts a fruit: 15 and sticky to bugs near it), Compost (bodies left at a wave's end pay half), Overripe (+1 sugar/s, −4 sprout HP) |
+| Dandelion | 25, once the Flowerpot is won | killed, it regrows once at half HP and the wave goes on | Seed Clock (one more regrow), Taproot (regrowing mends every cut link), Seed Drift (a free Spore Puffer on an empty fed pocket after each wave), Parachutes (pulse 30% sooner, 50% longer) |
+| Sunflower | 35, once the Rotting Log is won | towers within 2 hops of it +15% damage, but not at night | Seed Head (+4 a sunlit tower at a wave's end), Heliotrope (3 hops, and at night too), Tall Stem (fliers near it take 8/s) |
+| Venus Flytrap | 45, once the Lawn is won | sugar −10%; every 2.5 s it snaps at the nearest bug within 26: eats it whole at 40 HP or less (and heals 0.5), else bites for 20 | Digest (what it eats pays its worth again), Trigger Hairs (40% more snaps), Sundew (bugs near it at half speed), Wide Jaws (40% further, eats up to 80 HP) |
+
+Tap a seed to plant it and read it in the side panel; one not had yet opens
+its panel, whose button buys it (and plants it). The seed is remembered with
+each level's loadout, and the seeds bought are kept in `bank.txt`. The numbers
+are `D.SEEDS` in `src/defs.lua`, and the seeds' mutations are the rows of
+`D.MUTATIONS` with a `seed`.
 
 Before a level starts you pick the species to bring: six of the twelve. The rest
 stay home and stay off the toolbar. The picker shows every enemy the level sends,
@@ -317,7 +340,8 @@ own picture of the board.
 **Mutations.** After the waves a level names (3, 5, 8, 10 and 12 on the Crack) the
 game holds while you pick one of three for the rest of the run: thick hyphae, quick growth, cheaper links, bodies
 worth more, more sugar, a quicker pulse, deeper roots (+5 sprout), fatter
-reserves, older rings (+40%), or longer reach.
+reserves, older rings (+40%), or longer reach; or one of the seed's own (see
+Sprout seeds above), always one of the three while the seed has any left.
 
 Every number is a row in `src/defs.lua`. The doc says they are placeholders to
 tune in playtesting, and they are. Upgrade tiers only name what they change:

@@ -65,7 +65,7 @@ the game; the numbers behind every ticked item are rows in `src/defs.lua`.
 
 ### Progression
 - [x] Spore Bank: spores for waves cleared and wins; six species to start, each level's first win puts one of the other six up for sale, bought with spores
-- [ ] Sprout seeds: oak, tomato, dandelion, bean
+- [x] Sprout seeds: six, picked with the loadout (bean free; oak and tomato for sale from the start; dandelion, sunflower and flytrap after the Flowerpot, the Rotting Log and the Lawn), each with its own numbers, a trait and three or four mutations of its own, one of them on offer every time the network mutates
 - [ ] Colony traits
 
 ### Levels

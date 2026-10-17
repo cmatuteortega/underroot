@@ -57,9 +57,11 @@ local loadouts = {} -- each level's last loadout, saved between runs: { crack = 
 local challenge = false -- challenge mode chosen in the picker
 local won = {} -- levels won, saved between runs: { crack = true, ... }
 local records = {} -- the most waves held in endless on each level, saved: { crack = 21, ... }
--- The Spore Bank, saved: spores to spend and the species bought. `offer` is the
+-- The Spore Bank, saved: spores to spend and the species and seeds bought. `offer` is the
 -- species a first win put up for sale, shown on the way on: { kind, after = button, bought }.
-local bank = { spores = 0, owned = {} }
+-- `sown` is each level's last seed, saved with its loadout ({ crack = "oak" }):
+-- the one a run of it grows from.
+local bank = { spores = 0, owned = {}, seeds = {}, sown = {} }
 
 -- What has been won lives in the save directory, one level id a line.
 -- How loud: 1, 0.5 or 0 (the V key goes round them), kept between runs.
@@ -101,45 +103,56 @@ local function saveRecords()
     love.filesystem.write("endless.txt", table.concat(lines, "\n") .. "\n")
 end
 
--- Each level's loadout lives in the save directory too, a line a level: its id
--- and then the species it brings.
+-- Each level's loadout lives in the save directory too, a line a level: its id,
+-- the species it brings and the seed (`seed=oak`), which a save from before
+-- seeds simply does not have.
 local function loadLoadouts()
-    loadouts = {}
+    loadouts, bank.sown = {}, {}
     local data = love.filesystem.getInfo("loadout.txt") and love.filesystem.read("loadout.txt")
     if not data then return end
     for line in data:gmatch("[^\n]+") do
-        local list, id = {}, nil
+        local list, id, seed = {}, nil, nil
         for w in line:gmatch("%S+") do
             if not id then id = w
+            elseif w:match("^seed=") then seed = D.SEED[w:sub(6)] and w:sub(6)
             elseif D.TOWER[w] and #list < D.LOADOUT then list[#list + 1] = w end
         end
         if id and D.LEVEL[id] and #list > 0 then loadouts[id] = list end
+        if id and D.LEVEL[id] then bank.sown[id] = seed end
     end
 end
 
 local function saveLoadouts()
     local lines = {}
     for _, l in ipairs(D.LEVELS) do
-        if loadouts[l.id] then lines[#lines + 1] = l.id .. " " .. table.concat(loadouts[l.id], " ") end
+        if loadouts[l.id] then
+            local seed = bank.sown[l.id]
+            lines[#lines + 1] = l.id .. " " .. table.concat(loadouts[l.id], " ") .. (seed and (" seed=" .. seed) or "")
+        end
     end
     love.filesystem.write("loadout.txt", table.concat(lines, "\n") .. "\n")
 end
 
 -- The Spore Bank as well: the spores to spend, then the species bought.
 function bank.load()
-    bank.spores, bank.owned = 0, {}
+    bank.spores, bank.owned, bank.seeds = 0, {}, {}
     local data = love.filesystem.getInfo("bank.txt") and love.filesystem.read("bank.txt")
     if not data then return end
     bank.spores = tonumber(data:match("spores%s+(%d+)")) or 0
     for id in (data:match("owned([^\n]*)") or ""):gmatch("%S+") do
         if D.TOWER[id] then bank.owned[id] = true end
     end
+    for id in (data:match("seeds([^\n]*)") or ""):gmatch("%S+") do
+        if D.SEED[id] then bank.seeds[id] = true end
+    end
 end
 
 function bank.save()
-    local ids = {}
+    local ids, seeds = {}, {}
     for _, t in ipairs(D.TOWERS) do if bank.owned[t.id] then ids[#ids + 1] = t.id end end
-    love.filesystem.write("bank.txt", "spores " .. bank.spores .. "\nowned " .. table.concat(ids, " ") .. "\n")
+    for _, sd in ipairs(D.SEEDS) do if bank.seeds[sd.id] then seeds[#seeds + 1] = sd.id end end
+    love.filesystem.write("bank.txt", "spores " .. bank.spores .. "\nowned " .. table.concat(ids, " ")
+        .. "\nseeds " .. table.concat(seeds, " ") .. "\n")
 end
 
 -- Can it be brought? The first six always, the rest once bought.
@@ -161,6 +174,24 @@ function bank.buy(id)
     if not bank.forSale(id) or bank.spores < price then return false end
     bank.spores = bank.spores - price
     bank.owned[id] = true
+    bank.save()
+    return true
+end
+
+-- Seeds too: the bean from the start, the oak and the tomato for sale from the
+-- start, the rest once the level they are `after` is won.
+function bank.ownsSeed(id) return not D.SEED[id].price or bank.seeds[id] == true end
+
+function bank.seedForSale(id)
+    local sd = D.SEED[id]
+    return not bank.ownsSeed(id) and (not sd.after or won[sd.after] == true)
+end
+
+function bank.buySeed(id)
+    local sd = D.SEED[id]
+    if not bank.seedForSale(id) or bank.spores < sd.price then return false end
+    bank.spores = bank.spores - sd.price
+    bank.seeds[id] = true
     bank.save()
     return true
 end
@@ -648,19 +679,49 @@ local function infoLines(kind, t, w)
     return out, height
 end
 
+-- A seed's panel in the loadout: what it changes, and the mutations it brings.
+function bank.seedLines(id, w)
+    local sd = D.SEED[id]
+    local out, height = {}, 0
+    local function add(str, k, x, h)
+        x = x or 0
+        for _, l in ipairs(wrapLines(str, w - x)) do
+            out[#out + 1] = { s = l, k = k, x = x, h = h or 7 }
+            height = height + (h or 7)
+        end
+    end
+    local function gap(h) out[#out + 1] = { h = h }; height = height + h end
+    add(sd.name, "w", 24, 8)
+    add("SEED   " .. (sd.price and ("PRICE " .. sd.price) or "FREE"), "t", 24)
+    if height < 22 then gap(22 - height) end
+    add(sd.about, "w")
+    gap(3)
+    add(sd.blurb, "l")
+    gap(4)
+    add("ITS MUTATIONS", "t")
+    for _, m in ipairs(D.MUTATIONS) do
+        if m.seed == id then
+            add(m.name, "w")
+            add(m.blurb, "s", 8)
+        end
+    end
+    return out, height
+end
+
 -- The panel open now, laid out: nil if there is none.
 local function info()
-    local kind, t
+    local kind, t, seed
     if menu == "loadout" then
-        kind = pick and pick.info
+        kind, seed = pick and pick.info, pick and pick.seedInfo
     elseif not menu and game and (game.phase == "build" or game.phase == "wave") then
         if selected then kind, t = selected.kind, selected
         elseif peek and peek == mode then kind = peek end
     end
-    if not kind then return end
+    if not kind and not seed then return end
     local w = infoWidth()
-    local lines, h = infoLines(kind, t, w - 8)
-    local P = { kind = kind, t = t, lines = lines, w = w }
+    local lines, h
+    if seed then lines, h = bank.seedLines(seed, w - 8) else lines, h = infoLines(kind, t, w - 8) end
+    local P = { kind = kind, seed = seed, t = t, lines = lines, w = w }
     if menu == "loadout" then
         if wide() then
             P.x, P.y, P.h = vw - inset.r - w - 3, inset.t + 3, vh - inset.t - inset.b - 6
@@ -790,7 +851,7 @@ local function loadoutLayout()
     local lv = D.LEVELS[pick.n]
     -- With the panel open the picker keeps to the room it leaves: the left on a
     -- wide screen, the top on a narrow one.
-    local open = pick.info ~= nil
+    local open = pick.info ~= nil or pick.seedInfo ~= nil
     local left, right = inset.l, vw - inset.r
     if open and wide() then right = vw - inset.r - infoWidth() - 6 end
     local mid = floor((left + right) / 2)
@@ -809,23 +870,41 @@ local function loadoutLayout()
         chips[#chips + 1] = { kind = kind, line = lines, dx = x, w = w, h = 9, name = name(kind) }
         x = x + w + 3
     end
+    -- The seeds, chips too: a name each, and the price of one not had yet.
+    local seeds, seedRows = {}, 1
+    x = 0
+    for _, sd in ipairs(D.SEEDS) do
+        local s = sd.short
+        if not bank.ownsSeed(sd.id) and bank.seedForSale(sd.id) then s = s .. " " .. sd.price end
+        local w = Font.width(s) + 8
+        if x > 0 and x + w > width then seedRows, x = seedRows + 1, 0 end
+        seeds[#seeds + 1] = { seed = sd, line = seedRows, dx = x, w = w, h = 11, name = s }
+        x = x + w + 3
+    end
 
-    local height = 22 + 10 + lines * 12 + 6 + rows * (SH + 4) + 6 + 16
+    local height = 22 + 10 + lines * 12 + 6 + 8 + seedRows * 14 + 8 + rows * (SH + 4) + 6 + 16
     local y = max(inset.t + 4, floor((vh - inset.b - 12 - height) / 2))
     if open and not wide() then y = inset.t + 4 end
     local top = y
     y = y + 32
     -- Each chip row centred on its own.
-    local ends = {}
-    for _, c in ipairs(chips) do ends[c.line] = c.dx + c.w end
-    for _, c in ipairs(chips) do
-        c.x = floor(mid - ends[c.line] / 2) + c.dx
-        c.y = y + (c.line - 1) * 12
+    local function flow(list, y0, step)
+        local ends = {}
+        for _, c in ipairs(list) do ends[c.line] = c.dx + c.w end
+        for _, c in ipairs(list) do
+            c.x = floor(mid - ends[c.line] / 2) + c.dx
+            c.y = y0 + (c.line - 1) * step
+        end
     end
+    flow(chips, y, 12)
     y = y + lines * 12 + 6
+    local seedsY = y + 8
+    flow(seeds, seedsY, 14)
+    y = seedsY + seedRows * 14 + 8
 
-    local cards = {}
     local x0 = floor(mid - (cols * SW + (cols - 1) * 4) / 2)
+    local cards = {}
+    local cardsY = y
     for k, t in ipairs(D.TOWERS) do
         local col, row = (k - 1) % cols, floor((k - 1) / cols)
         cards[k] = { x = x0 + col * (SW + 4), y = y + row * (SH + 4), w = SW, h = SH, t = t }
@@ -833,7 +912,8 @@ local function loadoutLayout()
     y = y + rows * (SH + 4) + 6
     local back = { x = mid - 54, y = y, w = 50, h = 16 }
     local go = { x = mid + 4, y = y, w = 50, h = 16 }
-    return { top = top, chips = chips, chipsY = top + 32, cards = cards, back = back, go = go, mid = mid }
+    return { top = top, chips = chips, chipsY = top + 32, seeds = seeds, seedsY = seedsY, cards = cards, cardsY = cardsY,
+        back = back, go = go, mid = mid }
 end
 
 local function picked()
@@ -855,6 +935,15 @@ end
 function bank.bringOrBuy(id)
     if bank.owns(id) then toggleSpecies(id)
     elseif bank.buy(id) then sound("unlock")
+    else deny() end
+end
+
+-- A seed card or its panel's button: plants what is had, buys what is for
+-- sale (and plants it).
+function bank.plantOrBuy(id)
+    if bank.ownsSeed(id) then
+        if pick.seed ~= id then pick.seed = id; sound("on") end
+    elseif bank.buySeed(id) then pick.seed = id; sound("unlock")
     else deny() end
 end
 
@@ -899,6 +988,9 @@ local function findHover()
         local L = loadoutLayout()
         for _, c in ipairs(L.chips) do
             if inside(mx, my, c.x, c.y, c.w, c.h) then hover.enemy = c.kind return end
+        end
+        for _, c in ipairs(L.seeds) do
+            if inside(mx, my, c.x, c.y, c.w, c.h) then hover.seed = c.seed.id return end
         end
         for _, c in ipairs(L.cards) do
             if inside(mx, my, c.x, c.y, c.w, c.h) then hover.species = c.t.id return end
@@ -973,7 +1065,8 @@ end
 --- the run ---------------------------------------------------------------------------
 
 local function start()
-    game = Game.new(world, level, { challenge = challenge, loadout = chosen, best = records[level.id] })
+    game = Game.new(world, level, { challenge = challenge, loadout = chosen, seed = not script and bank.sown[level.id] or nil,
+        best = records[level.id] })
     layTools(game)
     mode, drag, panx, pany, selected = "grow", nil, 0, 0, nil
     focus, focused = nil, nil
@@ -1043,7 +1136,9 @@ function openLoadout(n)
     local lv = D.LEVELS[n]
     menu = "loadout"
     mode, drag, selected = "grow", nil, nil
-    pick = { n = n, set = {}, full = 0 }
+    -- The seed planted here last time, if it is still had; else the bean.
+    local seed = bank.sown[lv.id]
+    pick = { n = n, set = {}, full = 0, seed = seed and bank.ownsSeed(seed) and seed or D.SEEDS[1].id }
     local dropped = false
     for _, id in ipairs(loadouts[lv.id] or lv.loadout or {}) do
         if bank.owns(id) then pick.set[id] = true else dropped = true end
@@ -1061,6 +1156,7 @@ local function setOff()
     if #list == 0 then sound("deny") return end
     sound("go")
     loadouts[D.LEVELS[pick.n].id] = list
+    bank.sown[D.LEVELS[pick.n].id] = pick.seed
     saveLoadouts()
     chosen = list
     play(pick.n)
@@ -1198,6 +1294,11 @@ function flair.under()
                 if c.t.id == hover.species then return function() return c.x, c.y, c.w, c.h end end
             end
         end
+        if hover.seed then
+            for _, c in ipairs(L.seeds) do
+                if c.seed.id == hover.seed then return function() return c.x, c.y, c.w, c.h end end
+            end
+        end
         return
     end
     if menu then
@@ -1248,14 +1349,28 @@ local function click(b)
     if menu == "loadout" then
         -- A card opens its panel; the same card again (or the panel's button)
         -- brings it or leaves it, or buys it. Anywhere else shuts the panel.
-        if hover.bring then bank.bringOrBuy(pick.info) return end
+        if hover.bring then
+            if pick.seedInfo then bank.plantOrBuy(pick.seedInfo) else bank.bringOrBuy(pick.info) end
+            return
+        end
         if hover.info then return end
         if b == 2 then
             sound("back")
-            if pick.info then pick.info = nil else openMenu() end
+            if pick.info or pick.seedInfo then pick.info, pick.seedInfo = nil, nil else openMenu() end
             return
         elseif hover.species then
+            pick.seedInfo = nil
             if pick.info == hover.species then toggleSpecies(hover.species) else pick.info = hover.species; sound("panel") end
+            return
+        elseif hover.seed then
+            -- One had is planted at once, and its panel opens; one not had
+            -- only opens its panel, whose button buys it.
+            pick.info = nil
+            local id = hover.seed
+            if bank.ownsSeed(id) and pick.seed ~= id then pick.seed = id; sound("on")
+            elseif pick.seedInfo ~= id then sound("panel")
+            elseif not bank.ownsSeed(id) then deny() end
+            pick.seedInfo = id
             return
         elseif hover.back then sound("back"); openMenu()
         elseif hover.go then setOff()
@@ -1263,10 +1378,10 @@ local function click(b)
             -- Pinned, so a finger (which has no hover) can see the answers too.
             pick.enemy = pick.enemy ~= hover.enemy and hover.enemy or nil
             sound(pick.enemy and "select" or "back")
-        elseif pick and pick.info then
+        elseif pick and (pick.info or pick.seedInfo) then
             sound("back")
         end
-        if pick then pick.info = nil end
+        if pick then pick.info, pick.seedInfo = nil, nil end
         return
     end
     if menu then
@@ -1582,7 +1697,7 @@ function love.keypressed(key)
     end
     if menu == "loadout" then
         if key == "escape" or key == "backspace" then
-            if pick.info then pick.info = nil else openMenu() end
+            if pick.info or pick.seedInfo then pick.info, pick.seedInfo = nil, nil else openMenu() end
             return
         end
         if key == "return" or key == "kpenter" or key == "space" then setOff() return end
@@ -1902,6 +2017,10 @@ function love.update(dt)
         if not script then
             -- The first win puts the level's species up for sale, shown on the way on.
             if not won[level.id] and level.prize and not bank.owns(level.prize) then game.offer = level.prize end
+            -- And any seed waiting on it.
+            for _, sd in ipairs(D.SEEDS) do
+                if not won[level.id] and sd.after == level.id and not bank.ownsSeed(sd.id) then game.newSeed = sd.id end
+            end
             won[level.id] = true
             saveProgress()
         end
@@ -2865,7 +2984,7 @@ end
 local function tooltip()
     if hover.mutation then
         local m = game.choices[hover.mutation]
-        return m.name .. ": " .. m.blurb, "l"
+        return (m.seed and (game.seed.short .. " ") or "") .. m.name .. ": " .. m.blurb, m.seed and "g" or "l"
     end
     if game.phase == "mutate" then return say("THE NETWORK MUTATES. PICK ONE (1 2 3)", "THE NETWORK MUTATES. PICK ONE"), "l" end
     if hover.up then
@@ -2933,7 +3052,14 @@ local function tooltip()
     end
     if hover.node then
         local n = hover.node
-        if n.heart then return "THE SPROUT. IF IT DIES, YOU LOSE", "g" end
+        if n.heart then
+            -- The seed it grew from, and what it has left to give.
+            local sd = game.seed
+            local s = sd.name .. ": " .. (sd.price and sd.blurb or "IF IT DIES, YOU LOSE")
+            if game.regrows > 0 then s = s .. ". REGROWS " .. game.regrows .. " MORE" end
+            if game.pods > 0 then s = s .. ". " .. game.pods .. " FREE LINKS" end
+            return s, "g"
+        end
         local s = n.pocket.kind:upper() .. ": " .. n.quality:upper() .. " POCKET"
         if (n.salted or 0) > 0 then s = s .. ", SALTED" end
         if n.quality == "rich" then s = s .. ". +30% POWER, PAYS SUGAR" elseif n.quality == "poor" then s = s .. ". -25% POWER" end
@@ -3097,6 +3223,14 @@ local function drawHud()
         end
     end
 
+    -- The sprout pointed at (or tapped): the seed it grew from, over it.
+    if hover.node == game.heart then
+        local h = game.heart
+        local sx, sy = toHud(world:toImage(h.x, h.y + 30, h.z))
+        local name = game.seed.name
+        label(name, sx - floor(Font.width(name) / 2), sy - 4, "g", "o")
+    end
+
     -- Words in the world.
     for _, t in ipairs(game.texts) do
         local i, j = world:toImage(t.x, t.y, t.z)
@@ -3255,8 +3389,10 @@ local function drawHud()
         local cs = mutationCards()
         centred("THE NETWORK MUTATES", cs[1].y - 14, "l", "o")
         for k, c in ipairs(cs) do
-            box(c.x, c.y, c.w, c.h, hover.mutation == k and "n" or "u", hover.mutation == k and "l" or "c")
-            text(c.m.name, c.x + 4, c.y + 4, "l")
+            -- The seed's own is in its green.
+            local own = c.m.seed ~= nil
+            box(c.x, c.y, c.w, c.h, hover.mutation == k and "n" or "u", hover.mutation == k and "l" or (own and "g" or "c"))
+            text(c.m.name, c.x + 4, c.y + 4, own and "g" or "l")
             if not touch then text(tostring(k), c.x + c.w - 6, c.y + 4, "s") end
             -- The blurb, broken into lines that fit the card.
             local line, y = "", c.y + 14
@@ -3288,6 +3424,7 @@ local function drawHud()
         if records[level.id] then centred("ENDLESS BEST: " .. records[level.id] .. " WAVES", y, "t"); y = y + 10 end
         centred("+" .. game.spores .. " SPORES   " .. bank.spores .. " IN THE BANK", y, "t"); y = y + 10
         if game.offer then centred("NEW IN THE SPORE BANK: " .. D.TOWER[game.offer].name, y, "g"); y = y + 10 end
+        if game.newSeed then centred("NEW SEED FOR SALE: " .. D.SEED[game.newSeed].name, y, "g"); y = y + 10 end
         if last and not game.challenge then centred("CHALLENGE MODE IS OPEN", y, "r") end
     elseif game.phase == "lost" then
         centred("THE SPROUT HAS WILTED", floor(vh / 2) - 24, "r")
@@ -3366,9 +3503,10 @@ function drawInfo(P)
     love.graphics.setScissor(P.x, P.y, P.w, P.h)
     local clock = love.timer.getTime()
     local t = P.t
-    local pic = icon(P.kind, t and t.branch, t and t.tier or 0, (clock * 0.7) % 1)
+    local pic = P.seed and M.sprout(0) or icon(P.kind, t and t.branch, t and t.tier or 0, (clock * 0.7) % 1)
     love.graphics.setScissor(P.x, P.y, 22, 24)
-    blit(pic, P.x + 12, P.kind == "mat" and P.y + 16 or P.y + 22)
+    -- The sprout is taller than the corner: its leaves and the top of its stem.
+    blit(pic, P.x + 12, P.seed and P.y + 30 or (P.kind == "mat" and P.y + 16 or P.y + 22))
     love.graphics.setScissor(P.x, P.y, P.w, P.h - (P.button and 20 or 0))
     for _, l in ipairs(P.lines) do
         local y = l.y
@@ -3392,7 +3530,23 @@ function drawInfo(P)
     end
     love.graphics.setScissor()
     local b = P.button
-    if b and not bank.owns(P.kind) then
+    if b and P.seed then
+        -- A seed: planted, plantable, for sale, or waiting on a win.
+        local sd = D.SEED[P.seed]
+        local s, fill, edge, k
+        if bank.ownsSeed(sd.id) then
+            local on = pick.seed == sd.id
+            s, fill, edge, k = on and "PLANTED" or "PLANT IT", on and "u" or "d", on and "t" or "g", on and "w" or "g"
+        elseif bank.seedForSale(sd.id) then
+            local can = bank.spores >= sd.price
+            s = can and ("BUY IT: " .. sd.price .. " SPORES") or (sd.price .. " SPORES. YOU HAVE " .. bank.spores)
+            fill, edge, k = "u", can and "t" or "k", can and "t" or "r"
+        else
+            s, fill, edge, k = "WIN " .. D.LEVEL[sd.after].name .. " FOR IT", "u", "k", "k"
+        end
+        box(b.x, b.y, b.w, b.h, hover.bring and "n" or fill, edge)
+        text(s, b.x + floor((b.w - Font.width(s)) / 2), b.y + 4, k)
+    elseif b and not bank.owns(P.kind) then
         -- Not had yet: bought here once a win has put it up for sale.
         local price = D.TOWER[P.kind].price
         local s, edge, k
@@ -3424,8 +3578,22 @@ local function drawLoadout()
     centred(lv.name .. (challenge and " (CHALLENGE)" or ""), L.top, "g", "o", L.mid)
     text("SPORES " .. bank.spores, inset.l + 4, inset.t + 7, "t")
     local count = #list .. "/" .. D.LOADOUT
-    centred("PICK THE SPECIES TO BRING  " .. count, L.top + 11, #list == D.LOADOUT and "l" or "t", "o", L.mid)
+    centred("PICK A SEED AND THE SPECIES TO BRING  " .. count, L.top + 11, #list == D.LOADOUT and "l" or "t", "o", L.mid)
     text("COMING", floor(L.mid - Font.width("COMING") / 2), L.chipsY - 9, "s")
+    text("SEED", floor(L.mid - Font.width("SEED") / 2), L.seedsY - 7, "s")
+    text("SPECIES", floor(L.mid - Font.width("SPECIES") / 2), L.cardsY - 7, "s")
+
+    -- The seeds: the planted one lit green, one had in white, one for sale
+    -- with its price, one still locked dark.
+    for _, c in ipairs(L.seeds) do
+        local sd = c.seed
+        local own, inn, on = bank.ownsSeed(sd.id), pick.seed == sd.id, hover.seed == sd.id
+        local sale = not own and bank.seedForSale(sd.id)
+        local edge = inn and "g" or "k"
+        if on or pick.seedInfo == sd.id then edge = inn and "w" or "t" end
+        box(c.x, c.y, c.w, c.h, inn and "d" or (on and "n" or "u"), edge)
+        text(c.name, c.x + 4, c.y + 3, inn and "g" or (own and "w" or (sale and "t" or "k")))
+    end
 
     -- The enemy pointed at (or pinned) lights up what answers it.
     local enemy = hover.enemy or pick.enemy
@@ -3487,6 +3655,11 @@ local function drawLoadout()
     local tip, k
     if pick.full > 0 then
         tip, k = "ONLY " .. D.LOADOUT .. " COME. DROP ONE FIRST", "r"
+    elseif hover.seed then
+        local sd = D.SEED[hover.seed]
+        if bank.ownsSeed(sd.id) then tip, k = sd.name .. ": " .. sd.blurb, "w"
+        elseif bank.seedForSale(sd.id) then tip, k = sd.name .. ": FOR SALE, " .. sd.price .. " SPORES. YOU HAVE " .. bank.spores, "t"
+        else tip, k = sd.name .. ": WIN " .. D.LEVEL[sd.after].name .. " TO PUT IT UP FOR SALE", "k" end
     elseif hover.species and not bank.owns(hover.species) then
         local t = D.TOWER[hover.species]
         if bank.forSale(t.id) then tip, k = t.name .. ": FOR SALE, " .. t.price .. " SPORES. YOU HAVE " .. bank.spores, "t"
@@ -3501,8 +3674,8 @@ local function drawLoadout()
     elseif not ready then
         tip, k = "BRING AT LEAST ONE", "r"
     else
-        tip, k = say("CLICK A SPECIES TO READ IT, AGAIN TO BRING OR LEAVE IT. POINT AT AN ENEMY FOR ITS ANSWER",
-            "TAP A SPECIES TO READ IT, AGAIN TO BRING OR LEAVE IT. TAP AN ENEMY FOR ITS ANSWER"), "s"
+        tip, k = say("CLICK A SEED TO PLANT IT. CLICK A SPECIES TO READ IT, AGAIN TO BRING OR LEAVE IT. POINT AT AN ENEMY FOR ITS ANSWER",
+            "TAP A SEED TO PLANT IT. TAP A SPECIES TO READ IT, AGAIN TO BRING OR LEAVE IT. TAP AN ENEMY FOR ITS ANSWER"), "s"
     end
     local room = vw - inset.l - inset.r - 8
     local y = g.y + g.h + 6

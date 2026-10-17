@@ -203,6 +203,36 @@ for id, price in pairs({ stink = 20, shelf = 25, mortar = 30, lamp = 35, cordyce
     D.TOWER[id].price = price
 end
 D.SPORES = { wave = 1, win = 10 }
+
+-- Sprout seeds: the plant at the end of the trail, picked with the loadout.
+-- Spores buy them too: the bean is there from the start, the oak and the
+-- tomato are for sale from the start, the rest once `after` is won. `heart`,
+-- `income` and `grow` scale the level's sprout, its sugar and how fast links
+-- grow; `start` adds to its nutrients. Each brings mutations of its own (MUTATIONS rows with its
+-- `seed`), one of which is on offer every time the network mutates.
+D.SEEDS = {
+    { id = "bean", name = "BEAN SPROUT", short = "BEAN",
+        blurb = "AS IT COMES: NOTHING GAINED, NOTHING GIVEN UP",
+        about = "THE SPROUT YOU KNOW. ITS MUTATIONS ARE ABOUT GROWING: QUICK THREADS, RICHER POCKETS, FREE LINKS." },
+    { id = "oak", name = "OAK SAPLING", short = "OAK", price = 15, heart = 1.5, grow = 0.75,
+        blurb = "SPROUT +50% HP, BUT LINKS GROW 25% SLOWER",
+        about = "TOUGH AND SLOW. IT TAKES THE HITS SO THE NETWORK CAN BE THIN. ITS MUTATIONS HARDEN IT AND THE THREADS AT ITS FOOT." },
+    { id = "tomato", name = "TOMATO SEEDLING", short = "TOMATO", price = 15, heart = 0.6, income = 1.1, start = 10,
+        blurb = "SUGAR +10%, +10 TO START, SPROUT -40% HP",
+        about = "RICH BUT SOFT. MORE TO SPEND ON EVERY WAVE, AND LESS ROOM FOR A LEAK. ITS MUTATIONS PAY MORE, OR BURST ON WHAT GETS THROUGH." },
+    { id = "dandelion", name = "DANDELION", short = "DANDELION", price = 25, after = "flowerpot", regrow = 1,
+        blurb = "KILLED, IT REGROWS ONCE AT HALF HEALTH",
+        about = "A WEED: KILL IT AND IT COMES BACK, ONCE, AT HALF ITS HP, AND THE WAVE GOES ON. ITS MUTATIONS SPREAD IT ON THE WIND." },
+    { id = "sunflower", name = "SUNFLOWER", short = "SUNFLOWER", price = 35, after = "log", sun = { hops = 2, damage = 1.15 },
+        blurb = "TOWERS 2 HOPS FROM IT HIT 15% HARDER, BUT NOT AT NIGHT",
+        about = "IT FACES THE SUN, AND WHAT GROWS CLOSE TO IT HITS HARDER BY DAY. AT NIGHT IT HANGS ITS HEAD. ITS MUTATIONS FEED ON THE LIGHT." },
+    { id = "flytrap", name = "VENUS FLYTRAP", short = "FLYTRAP", price = 45, after = "lawn", income = 0.9,
+        trap = { range = 26, every = 2.5, bite = 20, eat = 40, heal = 0.5 },
+        blurb = "SNAPS AT BUGS NEAR IT. EATS SMALL ONES. SUGAR -10%",
+        about = "IT BITES WHAT COMES CLOSE: A BUG WITH 40 HP LEFT OR LESS IS EATEN WHOLE, AND HEALS IT A LITTLE. ITS MUTATIONS SHARPEN THE TRAP." },
+}
+D.SEED = {}
+for _, s in ipairs(D.SEEDS) do D.SEED[s.id] = s end
 D.SELL = 0.6
 
 -- Enemies. `chew` is damage a second to a link it stops on; `bite` is damage a
@@ -573,6 +603,35 @@ D.MUTATIONS = {
     { id = "store", name = "FAT RESERVES", blurb = "FRUITING BODIES HOLD 50% MORE" },
     { id = "rings", name = "OLD RINGS", blurb = "FAIRY RINGS +40% DAMAGE, SLOW HARDER" },
     { id = "reach", name = "LONG REACH", blurb = "LINKS REACH 25% FURTHER" },
+
+    -- A seed's own, offered only on a run that brings it.
+    { id = "tendrils", seed = "bean", name = "TENDRILS", blurb = "LINKS FROM THE SPROUT GROW AT ONCE" },
+    { id = "nitro", seed = "bean", name = "NITROGEN FIX", blurb = "TOWERS 2 HOPS FROM THE SPROUT HIT AS IF ON A POCKET ONE RICHER" },
+    { id = "pod", seed = "bean", name = "BEAN POD", blurb = "YOUR NEXT THREE LINKS ARE FREE" },
+
+    { id = "heartwood", seed = "oak", name = "HEARTWOOD", blurb = "THE SPROUT TAKES 30% LESS FROM WHAT GETS THROUGH" },
+    { id = "bark", seed = "oak", name = "BARK", blurb = "LINKS TOUCHING THE SPROUT HAVE X3 HP" },
+    { id = "acorn", seed = "oak", name = "ACORN DROP", blurb = "EVERY 6S AN ACORN FALLS ON THE BUG NEAREST THE SPROUT: 30, AND IT IS STUNNED" },
+    { id = "growth", seed = "oak", name = "RINGS OF GROWTH", blurb = "THE SPROUT GROWS +1 HP EVERY WAVE CLEARED" },
+
+    { id = "ripen", seed = "tomato", name = "RIPENING", blurb = "WAVE CLEAR BONUS +30%" },
+    { id = "splat", seed = "tomato", name = "SPLAT", blurb = "WHAT REACHES THE SPROUT BURSTS A FRUIT: 15 TO BUGS NEAR IT, AND THEY STICK" },
+    { id = "compost", seed = "tomato", name = "COMPOST", blurb = "BODIES LEFT LYING AT A WAVE'S END PAY HALF" },
+    { id = "overripe", seed = "tomato", name = "OVERRIPE", blurb = "+1 SUGAR A SECOND IN A WAVE, BUT THE SPROUT -4 HP" },
+
+    { id = "clock", seed = "dandelion", name = "SEED CLOCK", blurb = "THE SPROUT REGROWS ONE MORE TIME" },
+    { id = "taproot", seed = "dandelion", name = "TAPROOT", blurb = "WHEN IT REGROWS, EVERY CUT LINK REGROWS TOO" },
+    { id = "drift", seed = "dandelion", name = "SEED DRIFT", blurb = "AFTER EACH WAVE A FREE SPORE PUFFER GROWS ON AN EMPTY FED POCKET" },
+    { id = "chute", seed = "dandelion", name = "PARACHUTES", blurb = "THE PULSE COMES BACK 30% SOONER AND LASTS 50% LONGER" },
+
+    { id = "seedhead", seed = "sunflower", name = "SEED HEAD", blurb = "A WAVE CLEARED PAYS +4 FOR EVERY TOWER IN THE SUN" },
+    { id = "helio", seed = "sunflower", name = "HELIOTROPE", blurb = "THE SUN REACHES 3 HOPS, AND HOLDS AT NIGHT" },
+    { id = "stem", seed = "sunflower", name = "TALL STEM", blurb = "FLIERS NEAR THE SPROUT TAKE 8 A SECOND" },
+
+    { id = "digest", seed = "flytrap", name = "DIGEST", blurb = "WHAT THE TRAP EATS PAYS ITS WORTH AGAIN, AT ONCE" },
+    { id = "hairs", seed = "flytrap", name = "TRIGGER HAIRS", blurb = "THE TRAP SNAPS 40% MORE OFTEN" },
+    { id = "sundew", seed = "flytrap", name = "SUNDEW", blurb = "BUGS NEAR THE SPROUT WADE AT HALF SPEED" },
+    { id = "jaws", seed = "flytrap", name = "WIDE JAWS", blurb = "THE TRAP REACHES 40% FURTHER AND EATS BUGS OF UP TO 80 HP" },
 }
 
 return D

@@ -180,7 +180,7 @@ function B.generic(g)
     end
     local next, laid, upTurn = 1, 0, 0
     return function()
-        if g.phase == "mutate" then g:mutate(1) end
+        if g.phase == "mutate" then g:mutate(B.choose(g)) end
         -- Repair, and prune whatever brine is running down.
         for _, e in ipairs(g.enemies) do
             if e.slide and e.slide.state == "alive" then g:prune(e.slide) end
@@ -261,10 +261,17 @@ local function going(g, endless, clock)
     return g.phase ~= "won" and g.phase ~= "lost" and clock < (endless and 7200 or 3600)
 end
 
-local function run(seed, lv, generic, challenge, endless)
+-- The mutation it takes: the first offered, but not Seed Drift, whose free
+-- puffers take the pockets a build order is saving.
+function B.choose(g)
+    for k, m in ipairs(g.choices) do if m.id ~= "drift" then return k end end
+    return 1
+end
+
+local function run(seed, lv, generic, challenge, endless, sprout)
     love.math.setRandomSeed(seed)
     local world = World.new(lv.map)
-    local g = Game.new(world, lv, { challenge = challenge })
+    local g = Game.new(world, lv, { challenge = challenge, seed = sprout })
     local PLAN = PLANS[lv.id]
     if generic or not PLAN then
         local act = B.generic(g)
@@ -345,7 +352,7 @@ local function run(seed, lv, generic, challenge, endless)
     end
     local clock = 0
     while going(g, endless, clock) do
-        if g.phase == "mutate" then g:mutate(1) end
+        if g.phase == "mutate" then g:mutate(B.choose(g)) end
         act()
         -- Rebuild what slugs ate and brine sterilised: walk the plan again from the top.
         for k = 1, step - 1 do
@@ -380,18 +387,20 @@ end
 
 function B.run(args)
     local runs = tonumber(args[1]) or 4
-    local lv, generic, challenge, endless = D.LEVELS[1], false, false, false
+    local lv, generic, challenge, endless, sprout = D.LEVELS[1], false, false, false, nil
     for _, a in ipairs(args) do
         if D.LEVEL[a] then lv = D.LEVEL[a] end
+        if D.SEED[a] then sprout = a end
         if a == "generic" then generic = true end
         if a == "challenge" then challenge = true end
         if a == "endless" then endless = true end
     end
-    print(lv.name .. (challenge and " (challenge)" or "") .. ((generic or not PLANS[lv.id]) and ", generic player" or ""))
+    print(lv.name .. (challenge and " (challenge)" or "") .. ((generic or not PLANS[lv.id]) and ", generic player" or "")
+        .. (sprout and (", " .. D.SEED[sprout].name) or ""))
     local won = 0
     for seed = 1, runs do
         local t0 = love.timer.getTime()
-        local g = run(seed, lv, generic, challenge, endless)
+        local g = run(seed, lv, generic, challenge, endless, sprout)
         if g.phase == "won" or g.endless then won = won + 1 end
         if g.endless then print("   endless: held " .. g.cleared .. " waves") end
         local leaks = {}
