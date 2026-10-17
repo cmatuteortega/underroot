@@ -449,7 +449,7 @@ end
 
 -- What is pointed at: hover.cback, hover.ctab (a tab), hover.ctile (an entry)
 -- or hover.cstep (an arrow, -1 or 1).
-function codex.findHover(mx, my)
+function codex.hover(mx, my)
     if codex.page then
         local P = codex.pageLayout()
         if inside(mx, my, P.back.x, P.back.y, P.back.w, P.back.h) then S.hover.cback = true end

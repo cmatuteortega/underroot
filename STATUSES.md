@@ -3,8 +3,8 @@
 Every status in the game: what causes it, what it does, how long it lasts, what
 ends it, and how it shows on the board. The numbers are the base values, with
 upgrade values in brackets, as `src/defs.lua` has them on 15 Oct 2026. The
-behaviour is in `src/game.lua` and the drawing in `main.lua` (`drawBoard`,
-`drawLink`, `tooltip`, `infoLines`).
+behaviour is in `src/game.lua` and the drawing in `src/ui/` (`board.lua`'s
+`draw` and `drawLink`, `hud.lua`'s `tooltip`, `panel.lua`'s `infoLines`).
 
 Slows multiply together: an ant in ink, in stench and on a mat gets all three.
 Frost then multiplies everything, even the Slug, which ignores every other slow.

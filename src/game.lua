@@ -130,7 +130,7 @@ function Game:say(text, x, y, z, k)
     self.texts[#self.texts + 1] = { text = text, x = x, y = y, z = z, k = k or "l", life = 1.1 }
 end
 
--- A sound, and where it happened, for main.lua to play (src/sfx.lua). One of
+-- A sound, and where it happened, for src/ui/audio.lua to play (src/sfx.lua). One of
 -- a name at a time: a frame of a dozen ants chewing is one chew. A run no one
 -- listens to (the bot) stops keeping them once there are a few.
 function Game:cue(name, x, z, vol)

@@ -9,7 +9,7 @@
 -- do not sound like one puff a hundred times.
 --
 -- The game asks for sounds by name (Game:cue in src/game.lua for what happens
--- on the board, main.lua for the buttons), with a pan and a volume for where on
+-- on the board, src/ui/ for the buttons), with a pan and a volume for where on
 -- the screen it happened. Each name has a shortest gap between two plays and a
 -- most-at-once, so a spore barrage stays a patter and not a wall.
 --

@@ -4,7 +4,6 @@
 -- whatever is selected in a run, and for the card tapped in the loadout.
 
 local D = require "src.defs"
-local T = require "src.tracer"
 local M = require "src.models"
 local Font = require "src.font"
 local Profile = require "src.profile"

@@ -414,7 +414,7 @@ vibrato or FM, under an envelope, mixed and sometimes echoed. Chimes are tuned
 to notes; thumps and crunches are pitched noise falling away.
 
 - **The rules cue, the screen plays.** `Game:cue(name, x, z)` notes what
-  happened and where (a build, a cut, a shot, a kill, a boss); `main.lua` plays it
+  happened and where (a build, a cut, a shot, a kill, a boss); `src/ui/audio.lua` plays it
   panned to where it is on the screen and quieter off it. One of a name a frame,
   so a dozen ants chewing is one chew.
 - **Each sound has a shortest gap and a most-at-once**, and a little pitch wobble
@@ -504,7 +504,20 @@ What is new for Underfoot:
 
 | file | what it is |
 | --- | --- |
-| `main.lua` | canvas fit, camera, compositing, the network's threads, the HUD and toolbar, mouse and keys |
+| `main.lua` | starts the game, runs each frame, lays the board's and the HUD's pictures on the window |
+| `src/ui/state.lua` | the screen's shared state: canvases, camera, the run, which screen is up, the pointer, what is in hand |
+| `src/ui/view.lua` | the canvases' fit and zoom, the camera: panning, zooming about a point, going round, easing to a selection |
+| `src/ui/board.lua` | the board each frame: the sky's picture, then threads, rings, fruiting bodies, enemies, shots, smoke and weather over it |
+| `src/ui/pixels.lua` | the overlay laid a pixel at a time over the board, depth tested; pictures flat on the HUD |
+| `src/ui/draw.lua` | lettering, boxes and wrapping on the HUD |
+| `src/ui/hud.lua` | a run's screen: the top strip, the toolbar, tips, boss bar, mutations, won and lost, and what pressing them does |
+| `src/ui/toolbar.lua` | the toolbar's buttons and where they sit |
+| `src/ui/panel.lua` | the info panel for a species, a fruiting body or a seed |
+| `src/ui/input.lua` | mouse, fingers and keys: taps, drags, pans, pinches, the wheel, handed to the screen that is up |
+| `src/ui/title.lua`, `menu.lua`, `loadout.lua`, `bank.lua`, `codex.lua` | the title, the level picker, the loadout, the Spore Bank, the encyclopedia |
+| `src/ui/run.lua` | starting a run and each frame of it: the rules stepped, and what the profile keeps |
+| `src/ui/flair.lua`, `audio.lua` | the HUD's flourishes and the weather's coming and going; the sound's glue to the screen |
+| `src/profile.lua` | what is kept between runs (`save.txt`): wins, records, loadouts, the Spore Bank and its rules, enemies met |
 | `src/game.lua` | the rules: the graph, flow, cuts, pruning, regrowth, rings, the pulse, upgrades, towers firing, enemies and bosses moving, corpses, waves, mutations |
 | `src/defs.lua` | every tuning number: link costs, towers, enemies, weather, the levels and their waves |
 | `src/world.lua` | the maps (ASCII), their solids, the one-time paint and its weather versions, the trail's flow field, picking |
@@ -545,7 +558,7 @@ to see every size.
   loadout picker by being in the list, and a toolbar button when brought. Name it
   in `D.COUNTERS` for the enemies it answers. Check every tier with `love . --sheet`.
 - **An enemy**: a row in `D.ENEMIES` and `D.ENEMY_ORDER`, a model, a line in
-  `enemyPicture` in `main.lua` and in `codex.POSE` (the encyclopedia's), its page
+  `enemyPicture` in `src/ui/board.lua` and in `codex.POSE` (`src/ui/codex.lua`), its page
   text as an `about`, and a branch in `Game:move` if it does something to
   the network nothing else does. Put it in a wave in `D.WAVES`, and give it its
   answers in `D.COUNTERS`.
