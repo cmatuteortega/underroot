@@ -7,7 +7,7 @@ copy updates in place.)
 A tower defense where you are the mycelium under a sprout, built from the design
 doc (`DESIGN.md`, 13 oct 2026). Six levels, each its own map and waves (The
 Crack, The Flowerpot, The Shed Floor, The Rotting Log, The Pond Edge, The Lawn),
-weather that changes wave by wave, twelve fruiting bodies that each fork into two
+weather that changes wave by wave, eighteen fruiting bodies that each fork into two
 upgrade branches of two tiers, twelve enemies, eight bosses (big bugs: a Queen Ant, a
 Stag Beetle, a Dung Beetle with its ball, a Click Beetle, a Mole Cricket, a Giant
 Water Bug, a Giant Centipede and, in challenge mode, a Bombardier Beetle; three
@@ -74,13 +74,16 @@ Spores are spent on the **network** (NETWORK on the home screen, or `N` there): 
 sprout, each bought a rank at a time, and each only once the node it grows
 from has a rank. A first run has the Spore Puffer, the bean and three
 mutations, and everything held back; a fully grown network is the game as
-`src/defs.lua` writes it, every number exactly as today.
+`src/defs.lua` writes it, every number exactly as today. The last six
+species (the Fly Agaric, Earthstar, Oyster Mushroom, Bleeding Tooth, Truffle and
+Turkey Tail) wait on no level yet, only on the branch they grow from: levels
+still to come will open them.
 
 | branch | grows from the sprout | then |
 | --- | --- | --- |
-| damage | Spore Puffer (free) | Enoki Needle, Puffball Mortar (win the Shed Floor), Humongous Fungus (win the Lawn) |
-| control | Slime Mat | Stinkhorn (win the Crack), Cordyceps Bloom (win the Pond Edge) |
-| support | Relay | Lion's Mane, Inky Cap |
+| damage | Spore Puffer (free) | Enoki Needle, Puffball Mortar (win the Shed Floor), Humongous Fungus (win the Lawn); off the needle, Fly Agaric and Oyster Mushroom |
+| control | Slime Mat | Stinkhorn (win the Crack), Cordyceps Bloom (win the Pond Edge); off the mat, Earthstar |
+| support | Relay | Lion's Mane, Inky Cap; Turkey Tail off the relay, Bleeding Tooth off the mane, Truffle off the Inky Cap |
 | defence | Shelf Fungus (win the Flowerpot) | Ghost Lamp (win the Rotting Log) |
 | hyphae | link HP, flow, cost, growing speed | Fairy Rings, the Spore Pulse and its power, more shared mutations |
 | sprout | the sprout's HP, sugar, starting nutrients, wave bonus | the seeds and each seed's own mutations, more shared mutations |
@@ -191,7 +194,7 @@ counts everything on the levels already won as met. The words and what they
 say are `D.GLOSSARY` in `src/defs.lua`, and each enemy's page text is its
 `about` there.
 
-Before a level starts you pick the species to bring: six of the twelve. The rest
+Before a level starts you pick the species to bring: six of the eighteen. The rest
 stay home and stay off the toolbar. The picker shows every enemy the level sends,
 with bosses in red. Point at one (tap it on a phone) and the species that answer
 it blink. The first time you play a level it suggests six; after that it starts
@@ -213,7 +216,7 @@ chew through any thread they cross.
 | --- | --- |
 | drag from a fed node to a pocket | grow a link (a click on a node only selects what is on it); cost grows with length, the far end glows if it is in reach |
 | `1`, or the bottom-left button | regrow every cut link, nearest the sprout first, until the nutrients run out (each at the same 40% a hand regrow costs). The button shows how many are cut and what it all costs |
-| `2`–`9`, `0`, `T`, `G`, `H` then click a linked pocket (the species you brought) | Spore Puffer, Enoki Needle, Lion's Mane, Relay, Inky Cap, Puffball Mortar, Cordyceps Bloom, Stinkhorn, Ghost Lamp, Humongous Fungus; Slime Mat (`4`) and Shelf Fungus (`8`) go on a trail tile. A fruiting body planted puts the species down and selects the new tower |
+| `2`–`9`, `0`, `T`, `G`, `H`, `A`, `S`, `O`, `B`, `U`, `Y` then click a linked pocket (the species you brought) | Spore Puffer, Enoki Needle, Lion's Mane, Relay, Inky Cap, Puffball Mortar, Cordyceps Bloom, Stinkhorn, Ghost Lamp, Humongous Fungus, Fly Agaric, Earthstar, Oyster Mushroom, Bleeding Tooth, Truffle, Turkey Tail; Slime Mat (`4`) and Shelf Fungus (`8`) go on a trail tile. A fruiting body planted puts the species down and selects the new tower |
 | a species in hand | every pocket it could grow on now is lined in one pixel, as a selected tower is |
 | click the species in hand on the toolbar again | open its panel (again to shut it); it stays in hand |
 | click a tower, mat or shelf (pressed and let go on it: pulling a link from it does not select it) | select it: a panel tells about it as it has grown (live numbers, what is wrong with it, both branches), and the upgrades it can grow now are buttons in it. On a wide screen the camera eases it to a third of the way across and half way down, with the panel on the right; upright, the panel goes across the top. Click elsewhere to close it |
@@ -311,7 +314,10 @@ drops the body.
 the rules pull against each other: a hub (Puffer), a dead end (Needle), the fork
 at the root of a branch (Mane), the far end of a long chain (Cordyceps, Lamp), the
 centre of a star (Relay), an outpost (Inky), links fanned over the trail (Mat,
-Stinkhorn), a dense knot or a ring (Humongous Fungus). Each has two upgrade branches of
+Stinkhorn), a dense knot or a ring (Humongous Fungus), a bridge in a chain (Fly
+Agaric), long threads (Earthstar), the inner guard by the sprout (Oyster), a
+loop (Bleeding Tooth), the back of the web kept whole (Truffle), a mixed
+cluster (Turkey Tail). Each has two upgrade branches of
 two tiers each. Every tier is a new model, not a recolour: a toxin puffer goes
 green and grows satellites, a lance-tipped enoki clump stands a head taller than
 the rest, a bramble shelf bristles. Each one breathes or sways on its own beat,
@@ -332,6 +338,12 @@ On every level the last seven species unlock as the waves are cleared.
 | Stinkhorn (wave 3) | 40 | a stench round it: everything in it wades (×0.75) and now and then trips and is stunned | the stench runs down each of its living links, a lane 8 wide along the thread: fan its links over the trail. Flies (gnats, moths) that smell it from 70 off come and hang about it for 6 s instead of flying on: bait for the puffers and needles | Wider Stench, Carrion Reek (wider, slower, rots them) | Panic (now and then they turn and flee), Terror; it becomes a red basket stinkhorn |
 | Ghost Lamp (wave 6) | 35 | a glowing decoy: walkers and fliers that come into its glow leave the trail for it and chew it until it goes out or they give up (5 s); bosses, brine and mites ignore it | its glow is 30 + 5 for every hop out from the Heart past the first (up to 8), so it belongs out front; night adds 40% | Longer Glow, Will-o'-Wisp (tougher, holds them longer, heals) | Flare, Starburst (bursts when it is destroyed, and stuns) |
 | Humongous Fungus (wave 9) | 150 | one per run, and slow to grow (8 s before it does anything): a quake round it every 3.2 s that hits every walker in reach | stronger for every fed node within two links of it, and every node of a Fairy Ring it stands in: +5 damage and +3 reach a node | Spreading, Armillaria (more per node, three links out) | Honey Root, Ancient (quakes stick them, mend links in reach, then stun) |
+| Fly Agaric | 40 | fast light shots at fliers only; a flier it hits drifts at half speed for 1.2 s | x1.5 on a bridge (exactly two links), x0.75 with one or three and more | Fly Bane, Muscaria (harder; the poison spreads to fliers near) | Muscimol, Ibotenic (walkers under its cloud turn and wander back; with no flier about it shoots walkers for half) |
+| Earthstar | 50 | every 2.4 s a thump: every walker in reach is hit and staggers; a burrowed nymph or mole, the water bug under water and anything down a tunnel take x2. Fliers are out of its reach | its reach is 24 + 0.12 for every unit of its living links' length (up to 52): long threads hear further | Deep Listener, Seismic (further; what it finds under the ground is marked, and everything can hit it) | Puff Quake, Cave-in (harder, drives a nymph up stunned; caves a Mole Cricket's tunnels in on what is down them) |
+| Oyster Mushroom | 45 | a sticky drop on the toughest shell in reach: -2 armor a hit, stacking to 12 and growing back at 0.5 a second, and it is held a moment | x1.3 one hop from the Heart, 0.15 less each hop out (down to x0.55): the inner guard | Nematode Trap, Lasso (holds longer; lifts bugs of 60 HP or less off the trail) | Corrode, Dissolve (strips more and it lasts; spreads down a centipede's train) |
+| Bleeding Tooth | 40 | no attack. Whatever chews, crushes or snaps one of its links is hurt (10, once a link), bleeds and is stuck at half speed; a mite dies on it. It drinks only while at work | the sap runs round every Fairy Ring it stands in, so a loop back to the Heart is sapped end to end | Clotting, Scab (its cut links regrow by themselves) | Hemotoxin, Thorn Sap (hurts more; they bleed on for 4 s after) |
+| Truffle | 60 | no attack. At each wave's end it pays 8% of the bank, up to 25, and 3% more for every wave its links went uncut before (up to +15%); a cut starts it over | its links run underground: ants, mites, beetles, brine, a charge or a leap pass over them, and only a burrowing nymph can cut one | Aged, Black Diamond (more interest, higher cap) | Root Run (the links of what it is linked to run buried too), Taproot (buried links carry x1.5, and a nymph that cuts one is stunned) |
+| Turkey Tail | 40 | no attack. Towers within two links fire 10% faster, 6% more for every species among them (up to 5), and shake off stuns and webs twice as fast | rewards a mixed cluster | Mycelial Pump, Capillary (pumps its links x1.4, x1.75 like a weak relay: a mortar beside it fires at full pace) | Versicolor, Rainbow (three links out, +8% a species; the Spore Pulse lasts 50% longer on what it hastens) |
 
 **Enemies.** Night Moth (comes out on night waves; flies to the brightest light,
 a lit Ghost Lamp first, else the nearest fed fruiting body, and eats it), Worker Ant (fast, chews, steals corpses), Pillbug (armored 3; rolls

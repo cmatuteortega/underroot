@@ -217,6 +217,19 @@ local function tooltip()
         if t.kind == "cordyceps" then s = s .. "  HOLD X" .. string.format("%.1f", S.game:deepHold(t)) end
         if t.kind == "stink" then s = s .. "  REEKS DOWN " .. S.game:degree(S.hover.node) .. " LINKS" end
         if t.kind == "mortar" and S.hover.node.pocket.high then s = s .. "  HIGH: NO MIN RANGE" end
+        if t.kind == "agaric" then
+            local k = S.game:degree(S.hover.node)
+            s = s .. (k == 2 and "  BRIDGE X1.5" or "  X0.75: NEEDS TWO LINKS")
+        end
+        if t.kind == "earthstar" then s = s .. "  HEARS " .. floor(S.game:towerRange(t)) end
+        if t.kind == "oyster" then
+            local d = D.TOWER.oyster
+            s = s .. "  X" .. string.format("%.2f", max(d.outer, d.inner - d.perHop * (S.game:depth(S.hover.node) - 1)))
+        end
+        if t.kind == "tooth" then s = s .. "  SAPS " .. members(S.game:touches(t)) .. " NODES" end
+        if t.kind == "truffle" then s = s .. "  " .. (t.streak or 0) .. " WAVES UNCUT" end
+        if t.kind == "turkey" then s = s .. "  HASTENS " .. members(t.care) end
+        if (t.haste or 1) > 1 then s = s .. "  +" .. floor((t.haste - 1) * 100 + 0.5) .. "% PACE" end
         if t.kind == "giant" then
             local k = S.game:rooted(t)
             if t.grown < 1 then s = s .. "  GROWING " .. floor(t.grown * 100) .. "%"

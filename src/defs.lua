@@ -189,6 +189,98 @@ D.TOWERS = {
               { name = "ANCIENT", cost = 110, stick = 0.35, stickFor = 2, mend = 16, quake = 0.6,
                 blurb = "STICKIER, MENDS MORE, AND STUNS" } },
         } },
+
+    -- The six grown off the others, deep in the network.
+    --
+    -- Anti-air: light shots at fliers alone, which drift dazed. Strongest on a
+    -- bridge (a node with exactly two links), weaker at a dead end or a hub.
+    { id = "agaric", name = "FLY AGARIC", cost = 40, key = "A", hp = 25, air = true, airOnly = true,
+        range = 70, every = 0.45, damage = 7, shot = 0.25, reserve = 8, daze = 0.5, dazeFor = 1.2,
+        bridge = 1.5, edge = 0.75,
+        blurb = "FAST SHOTS AT FLIERS ONLY, WHICH DRIFT DAZED. BEST ON A BRIDGE",
+        role = "ANTI-AIR",
+        about = "SHOOTS FLIERS ONLY, AND SLOWS THEM. X1.5 WITH TWO LINKS, X0.75 WITH ONE OR THREE.",
+        up = {
+            { { name = "FLY BANE", cost = 35, damage = 11, blurb = "HITS FLIERS HARDER" },
+              { name = "MUSCARIA", cost = 65, damage = 14, spread = 14, spreadDamage = 0.5,
+                blurb = "THE POISON SPREADS TO FLIERS NEAR" } },
+            { { name = "MUSCIMOL", cost = 35, confuse = 1.2, confuseR = 10, blurb = "WALKERS IN ITS CLOUD WANDER BACK" },
+              { name = "IBOTENIC", cost = 65, confuse = 2, confuseR = 14, every = 0.38,
+                blurb = "LONGER, WIDER, AND FASTER" } },
+        } },
+    -- Thumps the ground: every walker in reach is hit and staggers, a burrower
+    -- or a swimmer twice. Hears further down longer threads.
+    { id = "earthstar", name = "EARTHSTAR", cost = 50, key = "S", hp = 40,
+        range = 24, perLen = 0.12, maxRange = 52, every = 2.4, damage = 12, deep = 2, stagger = 0.3, shot = 1, reserve = 8,
+        blurb = "THUMPS ALL WALKERS IN REACH, DIGGERS X2. HEARS DOWN LONG LINKS",
+        role = "GROUND THUMPER",
+        about = "HITS EVERY WALKER IN REACH, BURROWED OR UNDER WATER X2. REACH GROWS WITH ITS LINKS' LENGTH.",
+        up = {
+            { { name = "DEEP LISTENER", cost = 40, range = 28, perLen = 0.16, maxRange = 62, blurb = "HEARS FURTHER" },
+              { name = "SEISMIC", cost = 70, perLen = 0.2, maxRange = 72, expose = 3,
+                blurb = "FURTHER, AND ALL CAN HIT WHAT IT FINDS" } },
+            { { name = "PUFF QUAKE", cost = 40, damage = 20, unearth = 1.5, blurb = "HARDER, AND FORCES DIGGERS UP" },
+              { name = "CAVE-IN", cost = 70, damage = 28, unearth = 2, caveIn = true,
+                blurb = "CAVES TUNNELS IN ON WHAT IS DOWN THEM" } },
+        } },
+    -- Armor breaker: each drop strips armor, stacking, and holds its target a
+    -- moment. Strongest one hop from the sprout, weaker each hop out.
+    { id = "oyster", name = "OYSTER MUSHROOM", cost = 45, key = "O", hp = 30,
+        range = 50, every = 1.1, damage = 5, strip = 2, stripMax = 12, regrowArmor = 0.5, hold = 0.35, shot = 0.6, reserve = 8,
+        inner = 1.3, perHop = 0.15, outer = 0.55,
+        blurb = "STRIPS ARMOR FROM THE TOUGHEST, STACKING. BEST BY THE SPROUT",
+        role = "ARMOR BREAKER",
+        about = "EACH DROP TAKES 2 ARMOR OFF THE TOUGHEST IN REACH. X1.3 ONE HOP FROM THE SPROUT, LESS EACH HOP OUT.",
+        up = {
+            { { name = "NEMATODE TRAP", cost = 35, hold = 0.7, blurb = "HOLDS THEM TWICE AS LONG" },
+              { name = "LASSO", cost = 60, hold = 1, lift = 1.6, liftHp = 60, blurb = "LIFTS SMALL BUGS OFF THE TRAIL" } },
+            { { name = "CORRODE", cost = 35, strip = 3, regrowArmor = 0.2, blurb = "STRIPS MORE, AND IT LASTS" },
+              { name = "DISSOLVE", cost = 60, strip = 3, regrowArmor = 0.1, train = true,
+                blurb = "SPREADS DOWN A CENTIPEDE'S TRAIN" } },
+        } },
+    -- Link defence: no attack. What chews, crushes or snaps one of its links is
+    -- hurt, slowed and stuck, and a mite dies on it. The sap runs round any
+    -- loop it is part of.
+    { id = "tooth", name = "BLEEDING TOOTH", cost = 40, key = "B", hp = 35,
+        sapHit = 10, bleed = 6, bleedFor = 1, sapSlow = 0.5, sapFor = 1.2, drain = 0.3, reserve = 7,
+        blurb = "NO ATTACK. WHAT CUTS ITS LINKS BLEEDS. ROUND A LOOP, ALL OF IT",
+        role = "LINK DEFENSE",
+        about = "NO ATTACK. WHAT CHEWS OR CRUSHES ITS LINKS IS HURT AND STUCK; MITES DIE. A LOOP IT IS IN IS SAPPED ALL ROUND.",
+        up = {
+            { { name = "CLOTTING", cost = 35, clot = 0.25, blurb = "ITS CUT LINKS REGROW BY THEMSELVES" },
+              { name = "SCAB", cost = 60, clot = 0.5, sapHit = 14, blurb = "REGROW TWICE AS FAST" } },
+            { { name = "HEMOTOXIN", cost = 35, sapHit = 18, bleed = 10, blurb = "HURTS MORE" },
+              { name = "THORN SAP", cost = 60, sapHit = 26, bleed = 14, bleedFor = 4, blurb = "AND THEY KEEP BLEEDING" } },
+        } },
+    -- Economy: no attack. Pays interest on the bank at each wave's end, more
+    -- every wave its links go uncut. They run underground, where only a
+    -- burrower can cut them.
+    { id = "truffle", name = "TRUFFLE", cost = 60, key = "U", hp = 30,
+        interest = 0.08, cap = 25, perWave = 0.03, maxBonus = 0.15,
+        blurb = "NO ATTACK. PAYS INTEREST EACH WAVE. ITS LINKS RUN UNDERGROUND",
+        role = "ECONOMY",
+        about = "NO ATTACK. 8% OF THE BANK EACH WAVE, UP TO 25; +3% A WAVE UNCUT. ONLY DIGGERS CUT ITS LINKS.",
+        up = {
+            { { name = "AGED", cost = 40, interest = 0.1, cap = 35, blurb = "MORE INTEREST, HIGHER CAP" },
+              { name = "BLACK DIAMOND", cost = 70, interest = 0.12, cap = 50, maxBonus = 0.2, blurb = "MORE STILL" } },
+            { { name = "ROOT RUN", cost = 40, rootRun = true, blurb = "THE LINKS OF WHAT IT FEEDS RUN BURIED TOO" },
+              { name = "TAPROOT", cost = 70, rootRun = true, tapCap = 1.5, tapStun = 2,
+                blurb = "BURIED LINKS X1.5 FLOW. A DIGGER THAT CUTS ONE IS STUNNED" } },
+        } },
+    -- Support: no attack. What grows within two links of it fires faster and
+    -- shakes off stuns and webs, faster still for every species round it.
+    { id = "turkey", name = "TURKEY TAIL", cost = 40, key = "Y", hp = 30,
+        haste = 1.1, perSpecies = 0.06, maxSpecies = 5, hops = 2, shake = 2,
+        blurb = "NO ATTACK. TOWERS 2 LINKS OFF FIRE FASTER, MORE PER SPECIES",
+        role = "SUPPORT",
+        about = "NO ATTACK. TOWERS WITHIN 2 LINKS FIRE +10%, +6% PER SPECIES THERE (UP TO 5), AND SHAKE OFF STUNS.",
+        up = {
+            { { name = "MYCELIAL PUMP", cost = 35, capMul = 1.4, blurb = "PUMPS X1.4 FLOW, LIKE A WEAK RELAY" },
+              { name = "CAPILLARY", cost = 60, capMul = 1.75, blurb = "X1.75: A MORTAR BESIDE IT FIRES FULL PACE" } },
+            { { name = "VERSICOLOR", cost = 35, hops = 3, perSpecies = 0.08, blurb = "3 LINKS OUT, +8% PER SPECIES" },
+              { name = "RAINBOW", cost = 60, hops = 3, perSpecies = 0.08, pulseLong = 1.5,
+                blurb = "AND THE PULSE LASTS LONGER ON THEM" } },
+        } },
 }
 D.TOWER = {}
 for _, t in ipairs(D.TOWERS) do D.TOWER[t.id] = t end
@@ -229,22 +321,22 @@ D.SELL = 0.6
 -- its health bar floats.
 D.ENEMIES = {
     ant = { name = "WORKER ANT", hp = 16, speed = 20, armor = 0, chew = 5, chewFor = 1.0, bite = 5, carries = true,
-        heart = 1, corpse = 4, blurb = "CHEWS LINKS ACROSS THE TRAIL. CARRIES OFF CORPSES" },
+        heart = 1, corpse = 4, blurb = "CHEWS LINKS ACROSS THE TRAIL. CARRIES OFF CORPSES", "tooth" },
     pillbug = { name = "PILLBUG", hp = 70, speed = 12, armor = 3, rolledArmor = 10, chew = 4, chewFor = 1.5, bite = 4,
         rollSpeed = 36, walkFor = 3.5, rollFor = 2.6, heart = 3, corpse = 10,
-        blurb = "ROLLS AND CRUSHES ANY LINK IT CROSSES. A MAT STOPS IT" },
+        blurb = "ROLLS AND CRUSHES ANY LINK IT CROSSES. A MAT STOPS IT", "oyster" },
     mite = { name = "MITE SWARM", hp = 4, speed = 18, armor = 0, chew = 1.6, swarm = 10, sniff = 34, bite = 1.6,
-        heart = 0.34, corpse = 0.6, blurb = "MANY TINY BITES. GNAWS THE NEAREST LINK" },
+        heart = 0.34, corpse = 0.6, blurb = "MANY TINY BITES. GNAWS THE NEAREST LINK", "tooth" },
     brine = { name = "BRINE DROP", hp = 30, speed = 13, armor = 0, slide = 22, heart = 4, corpse = 0, bite = 10,
         blurb = "SLIDES DOWN YOUR HYPHAE, STERILISING. PRUNE AHEAD OF IT" },
     gnat = { name = "FUNGUS GNAT", hp = 12, speed = 17, armor = 0, fly = true, heart = 1, corpse = 1,
-        blurb = "FLIES STRAIGHT AT THE SPROUT. ONLY PUFFERS AND NEEDLES REACH IT" },
+        blurb = "FLIES STRAIGHT AT THE SPROUT. ONLY PUFFERS AND NEEDLES REACH IT", "agaric" },
     slug = { name = "SLUG", hp = 240, speed = 6, armor = 0, noSlow = true, eat = 8, eatR = 15, bite = 8,
         heart = 4, corpse = 22, blurb = "SLOW, HUGE, CANNOT BE SLOWED. EATS FRUITING BODIES IT PASSES" },
     spider = { name = "WOLF SPIDER", hp = 55, speed = 30, armor = 1, web = 5, webR = 56, webCd = 9, bite = 6,
-        heart = 2, corpse = 8, blurb = "HUNTS YOUR DEADLIEST TOWER AND WEBS IT SHUT" },
+        heart = 2, corpse = 8, blurb = "HUNTS YOUR DEADLIEST TOWER AND WEBS IT SHUT", "turkey" },
     knight = { name = "BEETLE KNIGHT", hp = 150, speed = 9, armor = 9, chew = 6, chewFor = 2, bite = 6,
-        heart = 3, corpse = 14, blurb = "HEAVY ARMOR SHRUGS OFF CHEAP HITS. NEEDLES PIERCE IT" },
+        heart = 3, corpse = 14, blurb = "HEAVY ARMOR SHRUGS OFF CHEAP HITS. NEEDLES PIERCE IT", "oyster" },
 
     -- Walks the trail and every few seconds springs off its tail: over a
     -- shelf, off a mat, past whatever was slowing it. The first time it comes
@@ -260,18 +352,18 @@ D.ENEMIES = {
     -- coming up in water.
     cricket = { name = "CRICKET NYMPH", short = "CRICKET", hp = 45, speed = 12, armor = 1, bite = 5,
         sinkEvery = 3, sinkFor = 0.8, reach = 110, burrow = 24, surfaceFor = 2.2, cuts = 2,
-        heart = 2, corpse = 6, blurb = "BURROWS OFF THE TRAIL AND COMES UP BESIDE A LINK TO CUT IT" },
+        heart = 2, corpse = 6, blurb = "BURROWS OFF THE TRAIL AND COMES UP BESIDE A LINK TO CUT IT", "earthstar" },
     -- A small centipede: a head and a train of segments, each its own enemy,
     -- like the Giant's. It does not cut what it crosses but wears it, `wear`
     -- a second a body for every link within `wearR`.
     centi = { name = "CENTIPEDE", hp = 34, speed = 14, armor = 1, segments = 4, gap = 5.5, seg = "centiseg",
         bite = 4, wear = 7, wearR = 4, heart = 1, corpse = 4, size = 0.9,
-        blurb = "A TRAIN OF SEGMENTS. EVERY ONE GNAWS THE LINKS IT RUNS ALONG" },
+        blurb = "A TRAIN OF SEGMENTS. EVERY ONE GNAWS THE LINKS IT RUNS ALONG", "tooth" },
     centiseg = { name = "CENTIPEDE", short = "CENTIPEDE", segment = true, hp = 26, speed = 14, armor = 1, bite = 3,
         wear = 7, wearR = 4, heart = 0.5, corpse = 2, size = 0.8 },
 
     moth = { name = "NIGHT MOTH", hp = 22, speed = 15, armor = 0, fly = true, moth = true, nibble = 4, bite = 4,
-        heart = 1, corpse = 3, blurb = "COMES OUT AT NIGHT. FLIES TO THE BRIGHTEST LIGHT AND EATS IT" },
+        heart = 1, corpse = 3, blurb = "COMES OUT AT NIGHT. FLIES TO THE BRIGHTEST LIGHT AND EATS IT", "agaric" },
 
     -- Bosses: the big bugs. They do not get tougher wave by wave; they are
     -- tuned for the wave they come on.
@@ -281,7 +373,7 @@ D.ENEMIES = {
     stag = { name = "STAG BEETLE", boss = true, hp = 1250, speed = 8, armor = 6, bite = 60,
         chargeEvery = 9, chargeFor = 1.5, chargeSpeed = 26, shear = 11, stun = 3, stunR = 18,
         heart = 12, corpse = 70, size = 3,
-        blurb = "CHARGES. ITS JAWS SHEAR LINKS AND STUN THE TOWERS IT PASSES" },
+        blurb = "CHARGES. ITS JAWS SHEAR LINKS AND STUN THE TOWERS IT PASSES", "turkey" },
     dung = { name = "DUNG BEETLE", boss = true, hp = 1500, speed = 6.5, armor = 3, bite = 999,
         ball = 900, ballR = 9, ballAhead = 13, ballHeart = 20, ballCorpse = 60, rage = 1.5,
         heart = 12, corpse = 50, size = 3,
@@ -291,13 +383,13 @@ D.ENEMIES = {
     -- on high ground and drags it under; a fed Lion's Mane in reach halves its grip.
     waterbug = { name = "GIANT WATER BUG", boss = true, hp = 1500, speed = 8, armor = 4, bite = 40,
         grabEvery = 7, grabR = 44, lunge = 34, hold = 2.6, drag = 30, heart = 12, corpse = 60, size = 3,
-        blurb = "LURKS UNDER THE FLOODED LANE. SURFACES TO DRAG A TOWER UNDER" },
+        blurb = "LURKS UNDER THE FLOODED LANE. SURFACES TO DRAG A TOWER UNDER", "earthstar" },
     -- A head and a train of segments, each its own enemy with its own HP. Each
     -- crushes the links it crosses; break one and the one behind leads.
     centipede = { name = "GIANT CENTIPEDE", boss = true, hp = 260, speed = 11, armor = 5, segments = 11, gap = 8.5,
         seg = "centseg",
         bite = 30, crushR = 4.5, heart = 6, corpse = 14, size = 2,
-        blurb = "A TRAIN OF ARMORED SEGMENTS. EACH CUTS WHAT IT CROSSES. IT SPLITS WHERE BROKEN" },
+        blurb = "A TRAIN OF ARMORED SEGMENTS. EACH CUTS WHAT IT CROSSES. IT SPLITS WHERE BROKEN", "truffle" },
     centseg = { name = "GIANT CENTIPEDE", boss = true, segment = true, hp = 220, speed = 11, armor = 5, bite = 20,
         crushR = 4.5, heart = 1.5, corpse = 8, size = 1.6 },
     -- The Rotting Log's boss. Every few seconds it rolls onto its back and
@@ -307,14 +399,14 @@ D.ENEMIES = {
     click = { name = "CLICK BEETLE", boss = true, hp = 2600, speed = 8, armor = 6, bite = 50,
         clickEvery = 7, bellyFor = 2.4, belly = 1.5, leapFor = 0.9, leapSpeed = 60, leapH = 26,
         slamR = 20, stun = 2.5, stunR = 30, heart = 12, corpse = 60, size = 2.6,
-        blurb = "PLAYS DEAD ON ITS BACK, SOFT. THEN CLICKS AND LEAPS: ITS LANDING CUTS AND STUNS" },
+        blurb = "PLAYS DEAD ON ITS BACK, SOFT. THEN CLICKS AND LEAPS: ITS LANDING CUTS AND STUNS", "turkey" },
     -- Challenge mode's boss. Walking, it scalds the nearest tower behind it;
     -- `siege` tiles from the sprout it stops and sprays the sprout itself, and
     -- whatever stands in the way (a shelf, a tower) takes the spray instead.
     bombardier = { name = "BOMBARDIER BEETLE", boss = true, hp = 1600, speed = 9, armor = 4, bite = 50,
         sprayEvery = 6, sprayR = 44, scald = 30, siege = 3, siegeEvery = 2.5, heartSpray = 2, coverR = 7,
         heart = 12, corpse = 60, size = 2.6,
-        blurb = "AT THE END OF THE TRAIL IT TURNS AND SPRAYS THE SPROUT. COVER IT" },
+        blurb = "AT THE END OF THE TRAIL IT TURNS AND SPRAYS THE SPROUT. COVER IT", "oyster" },
     -- Every so often it stops and digs (still, and open to anything), then
     -- burrows straight across to whichever trail tile within `reach` is the
     -- most steps nearer the sprout, up to `most` and at least `save` -- through
@@ -326,7 +418,7 @@ D.ENEMIES = {
     mole = { name = "MOLE CRICKET", boss = true, hp = 1500, speed = 7, armor = 5, bite = 40,
         digEvery = 10, digFor = 2.5, digs = 2, reach = 96, save = 5, most = 14, keep = 3, burrow = 26, surfaceFor = 1.2,
         tunnelFor = 3, daze = 0.8, heart = 12, corpse = 60, size = 2.6,
-        blurb = "DIGS A TUNNEL AHEAD, AND THE REST FOLLOW. KILL IT AND THE TUNNEL CAVES IN" },
+        blurb = "DIGS A TUNNEL AHEAD, AND THE REST FOLLOW. KILL IT AND THE TUNNEL CAVES IN", "earthstar" },
 }
 D.ENEMY_ORDER = { "ant", "pillbug", "mite", "gnat", "moth", "brine", "slug", "spider", "knight", "springtail",
     "cricket", "centi",
@@ -905,7 +997,7 @@ local mane = species("mane", relay, 18, 1.6, {
     { id = "power", "QUICK HEALING", "HEALS AND REGROWS FASTER", { "heal", "regrow", "towerHeal" }, 0.7, P3 },
     { id = "body", "THICK MANE", "MORE HP, CHEAPER TO GROW", { "hp", "cost" }, 0.8, PS },
 })
-species("inky", mane, 26, 2, {
+local inky = species("inky", mane, 26, 2, {
     { id = "power", "DEEP DIGESTION", "DRINKS BODIES FOR MORE", { "feast" }, 0.7, P3 },
     { id = "ink", "BLACKER INK", "INK SLOWS HARDER, AND LASTS", { "inkSlow", "inkLife" }, 0.8, P2 },
     { id = "body", "SOFT GILLS", "MORE HP, CHEAPER TO GROW", { "hp", "cost" }, 0.8, PS },
@@ -920,6 +1012,38 @@ species("lamp", shelf, 50, 3, {
     { id = "power", "BRIGHT GLOW", "HOLDS THEM LONGER, BURSTS HARDER", { "hold", "blast" }, 0.75, P3 },
     { id = "body", "WAXY CAP", "MORE HP, CHEAPER TO GROW", { "hp", "cost" }, 0.8, PS },
 }, { won = "log" })
+
+-- Deeper in, one off each line: the Fly Agaric and Oyster Mushroom off the
+-- needle, the Earthstar off the mat, the Bleeding Tooth off the Lion's Mane,
+-- the Truffle off the Inky Cap and the Turkey Tail off the relay. No level
+-- opens them yet; the levels that will are still to come.
+species("agaric", needle, 40, 2.6, {
+    { id = "power", "TOXIC WARTS", "HITS FLIERS HARDER", { "damage", "spreadDamage" }, 0.75, P3 },
+    { id = "rate", "QUICK FLICK", "SHOOTS FASTER", { "every" }, 0.8, P2 },
+    { id = "body", "STOUT STALK", "MORE HP, CHEAPER TO GROW", { "hp", "cost" }, 0.8, PS },
+})
+species("oyster", needle, 45, 2.8, {
+    { id = "power", "STICKIER DROPS", "STRIPS MORE ARMOR, HITS HARDER", { "strip", "damage" }, 0.75, P3 },
+    { id = "rate", "WET GILLS", "DRIPS FASTER", { "every" }, 0.8, P2 },
+    { id = "body", "THICK FANS", "MORE HP, CHEAPER TO GROW", { "hp", "cost" }, 0.8, PS },
+})
+species("earthstar", mat, 45, 2.6, {
+    { id = "power", "HEAVY THUMP", "THUMPS HARDER", { "damage" }, 0.75, P3 },
+    { id = "rate", "QUICK BEAT", "THUMPS MORE OFTEN", { "every" }, 0.8, P2 },
+    { id = "body", "PAPER SKIN", "MORE HP, CHEAPER TO GROW", { "hp", "cost" }, 0.8, PS },
+})
+species("tooth", mane, 40, 2.4, {
+    { id = "power", "BITTER SAP", "WHAT CUTS ITS LINKS IS HURT MORE", { "sapHit", "bleed" }, 0.7, P3 },
+    { id = "body", "LUMPY CAP", "MORE HP, CHEAPER TO GROW", { "hp", "cost" }, 0.8, PS },
+})
+species("truffle", inky, 50, 2.8, {
+    { id = "power", "RIPE SPORES", "MORE INTEREST, HIGHER CAP", { "interest", "cap" }, 0.7, P3 },
+    { id = "body", "DEEP MOUND", "MORE HP, CHEAPER TO GROW", { "hp", "cost" }, 0.8, PS },
+})
+species("turkey", relay, 40, 2.4, {
+    { id = "power", "BANDED BEAT", "MORE HASTE PER SPECIES", { "perSpecies" }, 0.7, P3 },
+    { id = "body", "LEATHER BRACKETS", "MORE HP, CHEAPER TO GROW", { "hp", "cost" }, 0.8, PS },
+})
 
 -- The threads themselves, and the pulse down them.
 add({ id = "hyphae", at = "sprout", name = "HYPHAE", blurb = "THE THREADS: THICKER, WIDER, LONGER", world = "linkHp", from = 0.7,

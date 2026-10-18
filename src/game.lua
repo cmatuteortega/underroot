@@ -222,12 +222,96 @@ function Game:degree(node)
     return n
 end
 
+-- Every node within `hops` living links of `node`, itself left out.
+function Game:within(node, hops)
+    local seen, set, frontier = { [node] = true }, {}, { node }
+    for _ = 1, hops do
+        local nxt = {}
+        for _, f in ipairs(frontier) do
+            for _, o in ipairs(self:neighbours(f)) do
+                if not seen[o] then seen[o], set[o] = true, true; nxt[#nxt + 1] = o end
+            end
+        end
+        frontier = nxt
+    end
+    return set
+end
+
+-- A fed Turkey Tail: what grows round it fires faster, the more species there
+-- the faster, and shakes off stuns and webs; on the pump branch it pumps its
+-- links like a weak relay, and on the rainbow a pulse lasts longer there.
+function Game:hasten(n, t)
+    local kinds, count = {}, 0
+    for o in pairs(t.care) do
+        local k = o.tower and o.tower.kind
+        if k and not kinds[k] then kinds[k], count = true, count + 1 end
+    end
+    local haste = self:stat(t, "haste") + self:stat(t, "perSpecies") * min(self:stat(t, "maxSpecies"), count)
+    local shake, long = self:stat(t, "shake"), self:stat(t, "pulseLong") or 1
+    for o in pairs(t.care) do
+        local ot = o.tower
+        if ot then ot.haste, ot.shake, ot.pulseLong = max(ot.haste, haste), max(ot.shake, shake), max(ot.pulseLong, long) end
+    end
+    local pump = self:stat(t, "capMul")
+    if pump then
+        for _, l in ipairs(n.links) do if alive(l) then l.capMul = max(l.capMul, pump) end end
+    end
+end
+
+-- A Bleeding Tooth saps its own links, and every link of a Fairy Ring it
+-- stands in.
+function Game:spreadSap()
+    for _, n in ipairs(self.nodes) do
+        local t = n.tower
+        if t and t.kind == "tooth" and t.hunger ~= "dormant" then
+            for _, l in ipairs(n.links) do l.sap = t end
+            for _, r in ipairs(self.rings) do
+                if r.set[n] then
+                    for i = 1, #r.nodes do
+                        local l = self:linkBetween(r.nodes[i], r.nodes[i % #r.nodes + 1])
+                        if l and alive(l) then l.sap = t end
+                    end
+                end
+            end
+        end
+    end
+end
+
+-- Whatever chews, crushes or snaps a sapped link: hurt once a link, bleeding
+-- and stuck while it is at it. A mite dies on it.
+function Game:sapStrike(e, l)
+    local t = l.sap
+    if not (e and t) or e.dead or t.hunger == "dormant" or not t.node or t.node.tower ~= t then return end
+    t.workT = 1
+    local power = t.power or 1
+    if e.kind == "mite" then
+        self:hurt(e, e.hp + 1, true, true)
+        self:sparks(e.x, e.y + 1, e.z, 2, { "r", "w" }, 10)
+        return
+    end
+    if e.sapLink ~= l then
+        e.sapLink = l
+        self:hurt(e, self:stat(t, "sapHit") * power, true)
+        self:burst(e.x, e.y + 3, e.z, 4, { "r", "w" }, 12)
+    end
+    e.bleed, e.bleedT = self:stat(t, "bleed") * power, max(e.bleedT or 0, self:stat(t, "bleedFor"))
+    if not D.ENEMIES[e.kind].noSlow then e.stick, e.stickT = self:stat(t, "sapSlow"), self:stat(t, "sapFor") end
+end
+
 function Game:recompute()
     for _, n in ipairs(self.nodes) do
         n.conn, n.hop, n.cap, n.parent, n.via = false, huge, 0, nil, nil
-        if n.tower then n.tower.battery, n.tower.amp, n.tower.warded = 1, 1, false end
+        if n.tower then
+            local t = n.tower
+            t.battery, t.amp, t.warded = 1, 1, false
+            t.haste, t.shake, t.pulseLong = 1, 1, 1
+        end
     end
-    for _, l in ipairs(self.links) do l.capMul = 1 end
+    for _, l in ipairs(self.links) do
+        l.capMul, l.buried, l.tapStun = 1, false, nil
+        -- A cut link keeps the sap it had: a Bleeding Tooth's clotting regrows it.
+        if l.state ~= "cut" then l.sap = nil end
+    end
     local h = self.heart
     h.conn, h.hop, h.cap = true, 0, huge
     -- Hops, breadth first, over living links.
@@ -267,6 +351,23 @@ function Game:recompute()
             if n.conn and self:stat(t, "webProof") then
                 for o in pairs(t.care) do if o.tower then o.tower.warded = true end end
             end
+        elseif t and t.kind == "turkey" then
+            t.care = self:within(n, self:stat(t, "hops"))
+            if n.conn then self:hasten(n, t) end
+        elseif t and t.kind == "truffle" then
+            -- Its links run underground, and on the root run so do those of
+            -- what it feeds; on the taproot they carry more.
+            local ends = { n }
+            if self:stat(t, "rootRun") then
+                for _, o in ipairs(self:neighbours(n)) do ends[#ends + 1] = o end
+            end
+            local tap, stun = self:stat(t, "tapCap"), self:stat(t, "tapStun")
+            for _, e in ipairs(ends) do
+                for _, l in ipairs(e.links) do
+                    l.buried = true
+                    if tap then l.capMul, l.tapStun = max(l.capMul, tap), stun end
+                end
+            end
         end
     end
     local flow = self:sky().flow or 1
@@ -278,13 +379,14 @@ function Game:recompute()
     -- however thin the way to it is.
     for _, n in ipairs(self.nodes) do
         local t = n.tower
-        if t and n.conn and t.kind == "relay" then
+        if t and n.conn and (t.kind == "relay" or t.kind == "turkey") and self:stat(t, "capMul") then
             n.cap = max(n.cap, self:linkCap() * self:stat(t, "capMul") * flow)
         end
     end
     self.fed = 0
     for _, n in ipairs(self.nodes) do if n.conn and not n.heart then self.fed = self.fed + 1 end end
     self:findRings()
+    self:spreadSap()
     -- The widest path: the most a node can be fed, limited by the thinnest link
     -- on the best way there. Relaxed until nothing changes; it is a small graph.
     local changed = true
@@ -361,6 +463,10 @@ end
 
 function Game:cut(l)
     if l.state ~= "alive" and l.state ~= "grow" then return end
+    -- A Truffle's links cut: its run of whole waves is over.
+    for _, n in ipairs({ l.a, l.b }) do
+        if n.tower and n.tower.kind == "truffle" then n.tower.cutWave = true end
+    end
     l.state, l.hp, l.regrow, l.hand = "cut", 0, 0, false
     self.stats.cuts = self.stats.cuts + 1
     self.events.cut = true
@@ -384,12 +490,15 @@ function Game:shield(l)
     return best
 end
 
-function Game:biteLink(l, amount)
+-- `by`, what bites it, if anything: a Bleeding Tooth's sap gets it back.
+function Game:biteLink(l, amount, by)
     l.hp = l.hp - amount * self:shield(l)
+    if l.sap then self:sapStrike(by, l) end
 end
 
 -- Rolled over, sheared, flattened: cut outright, unless a shelf shields it.
-function Game:crush(l)
+function Game:crush(l, by)
+    if l.sap then self:sapStrike(by, l) end
     if self:shield(l) < 1 then
         if not l.crushed or self.clock - l.crushed > 0.5 then
             l.crushed = self.clock
@@ -563,7 +672,7 @@ function Game:pulse(node)
     self.pulseCd = self:pulseCooldown()
     local n = node
     while n do
-        if n.tower then n.tower.boost = self:pulseDuration() end
+        if n.tower then n.tower.boost = self:pulseDuration() * (n.tower.pulseLong or 1) end
         if n.via then n.via.surge = self:pulseDuration() end
         n = n.parent
     end
@@ -1005,17 +1114,21 @@ function Game:splat(x, z, r, k, life)
     self.fx[#self.fx + 1] = { splat = true, x = x, z = z, r = r, k = k, life = life, max = life, seed = floor(fr() * 997) }
 end
 
+-- What an Oyster Mushroom has stripped (`strip`) comes off it, and grows back.
 function Game:armor(e)
     local d = D.ENEMIES[e.kind]
-    if e.rolling then return d.rolledArmor end
     if e.state == "belly" then return 0 end
-    return d.armor
+    return max(0, (e.rolling and d.rolledArmor or d.armor) - (e.strip or 0))
 end
 
 -- `quiet` is damage over time: no flash, so a poisoned ant does not strobe.
-function Game:hurt(e, amount, pierce, quiet)
-    -- Under water, or not yet out of the gate: nothing reaches it.
-    if e.dead or e.under or e.hidden then return 0 end
+-- `deep` is an Earthstar's thump, felt underground and down a tunnel.
+function Game:hurt(e, amount, pierce, quiet, deep)
+    -- Under water, or not yet out of the gate: nothing reaches it, unless an
+    -- Earthstar hears it or has shown it to everything.
+    if e.dead then return 0 end
+    if e.hidden and not (deep and e.tunnel) then return 0 end
+    if e.under and not deep and (e.exposed or 0) <= 0 then return 0 end
     if e.mark > 0 then amount = amount * (e.markMul or 1) end
     amount = amount * self:vs(e.kind)
     -- On its back, a click beetle is soft.
@@ -1235,6 +1348,7 @@ function Game:update(dt)
         self:shock(self.heart.x, self.heart.z, 30, 1, "r", "d")
     elseif self.phase == "wave" and not self.queue[1] and not self.enemies[1] then
         self.cleared = self.wave
+        self:payInterest()
         self.spores = self.spores + D.SPORES.wave
         self.inks, self.clouds, self.tunnels = {}, {}, {}
         self:seedCleared()
@@ -1266,6 +1380,30 @@ function Game:update(dt)
             if self.level.mutateAfter[self.wave] or (self:endlessDepth() > 0 and self:endlessDepth() % 4 == 0) then
                 self:offerMutations()
             end
+        end
+    end
+end
+
+-- A wave cleared: every fed Truffle pays interest on the bank, more for
+-- every wave its links went uncut before this one, up to its cap.
+function Game:payInterest()
+    for _, n in ipairs(self.nodes) do
+        local t = n.tower
+        if t and t.kind == "truffle" then
+            t.streak = t.streak or 0
+            if n.conn then
+                local rate = self:stat(t, "interest") + min(self:stat(t, "maxBonus"), t.streak * self:stat(t, "perWave"))
+                local pay = min(floor(self:stat(t, "cap")), floor(self.nutrients * rate))
+                if pay > 0 then
+                    self.nutrients = self.nutrients + pay
+                    t.squash, t.fired = 1, 0
+                    self:say("+" .. pay, n.x, n.y + 12, n.z, "t")
+                    self:motes(n.x, n.y + 3, n.z, 8, { "w", "t" }, 3, 14, 0.8)
+                    self:cue("drink", n.x, n.z)
+                end
+            end
+            t.streak = t.cutWave and 0 or t.streak + 1
+            t.cutWave = false
         end
     end
 end
@@ -1529,8 +1667,9 @@ function Game:updateTowers(dt)
             t.squash = max(0, t.squash - dt * 4)
             -- The Humongous Fungus takes its time coming up; an upgrade is quicker.
             t.grown = min(1, t.grown + dt * ((d.growTime and t.tier == 0) and 1 / d.growTime or 1.6))
-            t.webbed = max(0, t.webbed - dt)
-            t.stun = max(0, t.stun - dt)
+            -- A Turkey Tail beside it shakes webs and stuns off faster.
+            t.webbed = max(0, t.webbed - dt * (t.shake or 1))
+            t.stun = max(0, t.stun - dt * (t.shake or 1))
             t.fired = t.fired + dt
             -- Rain puddles on a low pocket wash the spores off what grows there.
             if wash and n.pocket and n.pocket.low then t.reserve = max(0, t.reserve - wash * dt) end
@@ -1576,7 +1715,7 @@ function Game:targets(n, range, air, minRange)
     local list = {}
     local r2, m2 = range * range, (minRange or 0) ^ 2
     for _, e in ipairs(self.enemies) do
-        if not e.dead and not e.under and not e.hidden and not (e.infected and e.infected > 0)
+        if not e.dead and not (e.under and (e.exposed or 0) <= 0) and not e.hidden and not (e.infected and e.infected > 0)
             and (air or not D.ENEMIES[e.kind].fly) then
             local d2 = (e.x - n.x) ^ 2 + (e.z - n.z) ^ 2
             if d2 <= r2 and d2 >= m2 then list[#list + 1] = e end
@@ -1588,24 +1727,29 @@ end
 
 -- The towers that work all round them rather than fire: a Game method of
 -- the kind's name, taking (n, t, S, power, boost, dt).
-local AURAS = { mane = true, inky = true, stink = true, lamp = true }
+local AURAS = { mane = true, inky = true, stink = true, lamp = true, tooth = true, earthstar = true }
+
+-- The ones that do nothing of their own each frame: what they do is worked
+-- out with the network (`recompute`), or at a wave's end.
+local IDLE = { relay = true, turkey = true, truffle = true }
 
 -- The ones that fire, the Game method that fires each: what it looks and
 -- sounds like leaving, and what it sends. Each takes (n, t, d, S, power,
 -- range, list), the list its targets, nearest first.
-local SHOOTS = { puffer = "puff", needle = "skewer", mortar = "lob", giant = "quake", cordyceps = "spit" }
+local SHOOTS = { puffer = "puff", needle = "skewer", mortar = "lob", giant = "quake", cordyceps = "spit",
+    agaric = "fling", oyster = "drip" }
 
 function Game:fire(n, t, d, dt)
     local hunger = self:hunger(t)
     t.hunger = hunger
-    if t.kind == "relay" then return end
+    if IDLE[t.kind] then return end
     if hunger == "dormant" then return end
     if t.webbed > 0 or t.stun > 0 then return end
     local S = function(k) return self:stat(t, k) end
     local power = t.power or 1
     local boost = t.boost and self:pulseRate() or 1
     if t.boost then power = power * self:pulseDamage() end
-    boost = boost * self:pace()
+    boost = boost * self:pace() * (t.haste or 1)
     if AURAS[t.kind] then return self[t.kind](self, n, t, S, power, boost, dt) end
     if t.kind == "giant" and t.grown < 1 then return end
 
@@ -1621,6 +1765,17 @@ function Game:fire(n, t, d, dt)
         -- A host: the biggest it can take, not the nearest.
         local e = self:infectable(n.x, n.z, range, S("maxHp"))
         list = { e }
+    elseif d.airOnly then
+        -- Fliers only; on the confusing branch, walkers when there are none.
+        list = {}
+        for _, e in ipairs(self:targets(n, range, true)) do
+            if D.ENEMIES[e.kind].fly then list[#list + 1] = e end
+        end
+        if not list[1] and S("confuse") then
+            for _, e in ipairs(self:targets(n, range, false)) do
+                if not e.boss then list[#list + 1] = e end
+            end
+        end
     else
         list = self:targets(n, range, d.air, not (n.pocket and n.pocket.high) and d.minRange or nil)
     end
@@ -1709,6 +1864,82 @@ function Game:spit(n, t, d, S, power, range, list)
         maxHp = S("maxHp") }
 end
 
+-- A Fly Agaric: a wart flicked at a flier, harder from a bridge. The flier
+-- drifts dazed; on the poison branch it spreads to fliers near, and on the
+-- confusing one walkers under the cloud turn and wander back.
+function Game:fling(n, t, d, S, power, range, list)
+    local e = list[1]
+    local links = self:degree(n)
+    local dmg = S("damage") * power * (links == 2 and S("bridge") or S("edge"))
+    local fly = D.ENEMIES[e.kind].fly
+    self:cue("zip", n.x, n.z)
+    self.shots[#self.shots + 1] = { kind = "wart", x0 = n.x, y0 = n.y + 12, z0 = n.z,
+        x1 = e.x, y1 = e.y + 2, z1 = e.z, t = 0, flight = 0.1, k = links == 2 and "l" or "w" }
+    if fly then
+        self:hurt(e, dmg)
+        e.daze, e.dazeT = S("daze"), S("dazeFor")
+        local spread = S("spread")
+        if spread then
+            for _, o in ipairs(self.enemies) do
+                if o ~= e and not o.dead and D.ENEMIES[o.kind].fly and dist(o, e) <= spread then
+                    self:hurt(o, dmg * S("spreadDamage"), false, true)
+                    o.daze, o.dazeT = S("daze"), S("dazeFor")
+                end
+            end
+        end
+    else
+        self:hurt(e, dmg * 0.5)
+    end
+    local confuse = S("confuse")
+    if confuse then
+        local r = S("confuseR")
+        for _, o in ipairs(self.enemies) do
+            local od = D.ENEMIES[o.kind]
+            if not o.dead and not od.fly and not od.boss and not o.train and not o.slide and not o.under and not o.hidden
+                and (o.confCd or 0) <= 0 and (o.x - e.x) ^ 2 + (o.z - e.z) ^ 2 <= r * r then
+                o.panic, o.confCd = confuse, 4
+                o.state, o.chewing = "walk", nil
+            end
+        end
+        self.fx[#self.fx + 1] = { cloud = true, x = e.x, y = self.world:groundAt(e.x, e.z), z = e.z, r = r, life = 0.4, max = 0.4 }
+    end
+end
+
+-- An Oyster Mushroom drips on the toughest shell in reach: its armor comes
+-- off, stacking, and it is held a moment. Harder the nearer the Heart.
+function Game:drip(n, t, d, S, power, range, list)
+    local e = list[1]
+    for _, o in ipairs(list) do
+        if self:armor(o) > self:armor(e) then e = o end
+    end
+    local near = max(S("outer"), S("inner") - S("perHop") * (self:depth(n) - 1))
+    self:cue("spit", n.x, n.z)
+    self.shots[#self.shots + 1] = { kind = "drop", x0 = n.x, y0 = n.y + 8, z0 = n.z, target = e,
+        tx = e.x, tz = e.z, t = 0, flight = 0.4, damage = S("damage") * power * near, strip = S("strip") * near,
+        stripMax = S("stripMax"), regrow = S("regrowArmor"), hold = S("hold"), lift = S("lift"), liftHp = S("liftHp"),
+        train = S("train") }
+end
+
+-- A drop lands: armor off, and held; lassoed off the trail if it is small.
+function Game:dripOn(e, s)
+    local hit = { e }
+    if s.train and e.train then
+        hit = {}
+        for _, o in ipairs(self.enemies) do if o.train == e.train and not o.dead then hit[#hit + 1] = o end end
+    end
+    for _, o in ipairs(hit) do
+        o.strip = min(s.stripMax, (o.strip or 0) + s.strip)
+        o.stripRegrow = min(o.stripRegrow or s.regrow, s.regrow)
+    end
+    self:hurt(e, s.damage)
+    if e.dead or e.boss then return end
+    e.stun = max(e.stun, s.hold)
+    if s.lift and e.maxHp <= s.liftHp then
+        e.stun = max(e.stun, s.lift)
+        self:burst(e.x, 6, e.z, 3, { "w", "t" }, 8)
+    end
+end
+
 -- A cordyceps holds its host longer the further out along the network it
 -- grows: one hop from the Heart is the plain hold.
 function Game:deepHold(t)
@@ -1782,6 +2013,11 @@ function Game:towerRange(t)
     if t.kind == "lamp" then return self:lure(t) end
     if t.kind == "giant" then
         r = min(self:stat(t, "maxRange"), r + self:stat(t, "rangePerNode") * (self:rooted(t)))
+    end
+    if t.kind == "earthstar" and t.node then
+        local len = 0
+        for _, l in ipairs(t.node.links) do if alive(l) then len = len + l.len end end
+        r = min(self:stat(t, "maxRange"), r + self:stat(t, "perLen") * len)
     end
     local n = t.node
     if t.kind == "mortar" and n and n.pocket and n.pocket.high then r = r * D.TOWER.mortar.highRange end
@@ -1888,6 +2124,73 @@ function Game:lamp(n, t, S, _, _, dt)
     if busy then t.reserve = max(0, t.reserve - D.TOWER.lamp.drain * dt) end
 end
 
+-- Bleeding Tooth: its sap does its work in `sapStrike`; on the clotting
+-- branch its cut links regrow by themselves. It drinks only while at work.
+function Game:tooth(n, t, S, power, boost, dt)
+    local busy = (t.workT or 0) > 0
+    t.workT = max(0, (t.workT or 0) - dt)
+    local clot = S("clot")
+    if clot then
+        for _, l in ipairs(self.links) do
+            if l.sap == t and l.state == "cut" and not l.salted then
+                l.regrow = l.regrow + clot * power * boost * dt
+                busy = true
+            end
+        end
+    end
+    t.busy = busy
+    if busy then t.reserve = max(0, t.reserve - D.TOWER.tooth.drain * dt) end
+end
+
+-- Earthstar: every few beats it thumps, and everything walking in reach is
+-- hit and staggers; what is burrowed, swimming or down a tunnel is hit
+-- twice over. Seismic shows those to everything else; Puff Quake drives a
+-- nymph up stunned, and Cave-in brings a tunnel in on what is down it.
+function Game:earthstar(n, t, S, power, boost, dt)
+    if self.phase ~= "wave" then return end
+    t.cool = t.cool - dt * boost * (t.hunger == "starved" and 0.5 or 1)
+    if t.cool > 0 then return end
+    local range = self:towerRange(t)
+    local r2 = range * range
+    local list = {}
+    for _, e in ipairs(self.enemies) do
+        if not e.dead and not D.ENEMIES[e.kind].fly and (not e.hidden or e.tunnel)
+            and (e.x - n.x) ^ 2 + (e.z - n.z) ^ 2 <= r2 then list[#list + 1] = e end
+    end
+    local caveIn = S("caveIn")
+    local tunnels = {}
+    if caveIn then
+        for _, tn in ipairs(self.tunnels) do
+            if tn.open and ((tn.a.x - n.x) ^ 2 + (tn.a.z - n.z) ^ 2 <= r2 or (tn.b.x - n.x) ^ 2 + (tn.b.z - n.z) ^ 2 <= r2) then
+                tunnels[#tunnels + 1] = tn
+            end
+        end
+    end
+    if not list[1] and not tunnels[1] then return end
+    t.cool = S("every")
+    t.reserve = t.reserve - D.TOWER.earthstar.shot
+    t.squash, t.fired = 1, 0
+    local dmg = S("damage") * power
+    local expose, unearth = S("expose"), S("unearth")
+    for _, e in ipairs(list) do
+        local deep = e.under or e.tunnel
+        self:hurt(e, deep and dmg * S("deep") or dmg, false, false, true)
+        if expose and deep then e.exposed = expose end
+        if e.under and unearth and e.kind == "cricket" and not e.dead then
+            -- Driven up out of the soil, dazed.
+            e.under, e.state, e.surfaceT, e.prey = false, "up", unearth, nil
+            e.y = self.world:groundAt(e.x, e.z)
+            self:burst(e.x, 2, e.z, 10, { "t", "n", "u" }, 18)
+        elseif not deep and not e.boss and not e.dead then
+            e.stun = max(e.stun, S("stagger"))
+        end
+    end
+    for _, tn in ipairs(tunnels) do self:collapse(tn) end
+    self.fx[#self.fx + 1] = { wave = true, x = n.x, z = n.z, r = range, life = 0.5, max = 0.5 }
+    self:motes(n.x, n.y + 6, n.z, 6, { "n", "t" }, 3, 10, 0.5)
+    self:cue("thump", n.x, n.z)
+end
+
 -- A lamp chewed out. On the flare branch it bursts as it goes.
 function Game:snuff(n)
     local t = n.tower
@@ -1952,9 +2255,17 @@ function Game:touches(t)
     local n = t.node
     if t.kind == "mane" then return t.care end
     if t.kind == "giant" then return select(2, self:rooted(t)) end
-    if t.kind == "relay" or t.kind == "inky" then
+    if t.kind == "turkey" then return t.care end
+    if t.kind == "relay" or t.kind == "inky" or t.kind == "truffle" then
         local set = {}
         for _, o in ipairs(self:neighbours(n)) do set[o] = true end
+        return set
+    end
+    if t.kind == "tooth" then
+        local set = {}
+        for _, l in ipairs(self.links) do
+            if l.sap == t then set[l.a], set[l.b] = true, true end
+        end
         return set
     end
 end
@@ -1973,7 +2284,7 @@ function Game:quake(n, t, d, S, power, range, list)
     end
     local mend = S("mend")
     if mend then
-        for _, l in ipairs(self:linksNear(n.x, n.z, range)) do l.hp = min(self:linkFull(l), l.hp + mend) end
+        for _, l in ipairs(self:linksNear(n.x, n.z, range, true)) do l.hp = min(self:linkFull(l), l.hp + mend) end
     end
     self.fx[#self.fx + 1] = { wave = true, x = n.x, z = n.z, r = range, life = 0.7, max = 0.7, honey = stick ~= nil }
     self.events.shake = max(self.events.shake or 0, 0.12)
@@ -2087,6 +2398,10 @@ function Game:updateShots(dt)
             elseif s.kind == "cordy" then
                 local e = s.target
                 if e and not e.dead and not (e.infected and e.infected > 0) then self:infect(e, s) end
+            elseif s.kind == "drop" then
+                local e = s.target
+                if e and not e.dead then self:dripOn(e, s) end
+                self:splat(s.tx, s.tz, 2, "s", 0.8)
             end
             table.remove(self.shots, k)
         end
@@ -2218,11 +2533,12 @@ end
 
 --- how enemies move ----------------------------------------------------------------------
 
--- The living link nearest an enemy within `r`.
+-- The living link nearest an enemy within `r`. A Truffle's are underground,
+-- out of reach of everything on the surface.
 function Game:linkNear(e, r)
     local best, bd
     for _, l in ipairs(self.links) do
-        if alive(l) then
+        if alive(l) and not l.buried then
             local d = segDist(e.x, e.z, l.a.x, l.a.z, l.b.x, l.b.z)
             if d <= r and (not bd or d < bd) then best, bd = l, d end
         end
@@ -2230,11 +2546,11 @@ function Game:linkNear(e, r)
     return best, bd
 end
 
--- Every living link within `r` of (x, z).
-function Game:linksNear(x, z, r)
+-- Every living link within `r` of (x, z): on the surface, or, `deep`, buried too.
+function Game:linksNear(x, z, r, deep)
     local out = {}
     for _, l in ipairs(self.links) do
-        if alive(l) and segDist(x, z, l.a.x, l.a.z, l.b.x, l.b.z) <= r then out[#out + 1] = l end
+        if alive(l) and (deep or not l.buried) and segDist(x, z, l.a.x, l.a.z, l.b.x, l.b.z) <= r then out[#out + 1] = l end
     end
     return out
 end
@@ -2336,6 +2652,15 @@ function Game:move(e, dt)
     e.ballFlash = max(0, (e.ballFlash or 0) - dt)
     e.anim = e.anim + dt
     e.mark = max(0, e.mark - dt)
+    if e.exposed then e.exposed = e.exposed > dt and e.exposed - dt or nil end
+    if e.confCd then e.confCd = e.confCd > dt and e.confCd - dt or nil end
+    if (e.strip or 0) > 0 then e.strip = max(0, e.strip - (e.stripRegrow or 0.5) * dt) end
+    -- A Bleeding Tooth's sap: it bleeds on a while after it has let go.
+    if (e.bleedT or 0) > 0 then
+        e.bleedT = e.bleedT - dt
+        self:hurt(e, e.bleed * dt, true, true)
+        if e.dead then return end
+    end
     -- A centipede segment waiting its turn at the gate, or one down a tunnel.
     if e.hidden then
         e.hidden = e.hidden - dt
@@ -2409,7 +2734,7 @@ function Game:move(e, dt)
         if l.state ~= "alive" or e.blind then
             e.state = "walk"
         else
-            self:biteLink(l, d.chew * dt)
+            self:biteLink(l, d.chew * dt, e)
             self:chewing(e)
             e.chewT = e.chewT - dt
             if e.chewT <= 0 then e.state = "walk" end
@@ -2488,7 +2813,7 @@ function Game:pillbug(e, d, slow, dt)
         if e.walked >= d.rollFor then e.rolling, e.walked = false, 0 end
         -- Rolling crushes any link it crosses, outright.
         local l = self:linkNear(e, 4)
-        if l then self:crush(l) end
+        if l then self:crush(l, e) end
         if self:walk(e, d.rollSpeed * slow, dt) then self:reachHeart(e) end
         return true
     elseif e.walked >= d.walkFor and not mat then
@@ -2567,6 +2892,11 @@ end
 -- stinkhorn's stench or (a moth) any light turns it first.
 function Game:fly(e, d, pace, dt)
     local speed = d.speed * pace
+    -- Dazed by a Fly Agaric: it drifts.
+    if (e.dazeT or 0) > 0 then
+        e.dazeT = e.dazeT - dt
+        speed = speed * e.daze
+    end
     e.y = (d.moth and 10 or 12) + sin(e.anim * (d.moth and 3 or 5)) * 2
     if e.state == "lured" then
         local n = e.lamp
@@ -2636,10 +2966,10 @@ end
 -- over, the small one gnaws them.
 function Game:trample(e, d, dt)
     if d.crushR then
-        for _, l in ipairs(self:linksNear(e.x, e.z, d.crushR)) do self:crush(l) end
+        for _, l in ipairs(self:linksNear(e.x, e.z, d.crushR)) do self:crush(l, e) end
     elseif d.wear then
         for _, l in ipairs(self:linksNear(e.x, e.z, d.wearR)) do
-            self:biteLink(l, d.wear * dt)
+            self:biteLink(l, d.wear * dt, e)
             if fr() < dt * 3 then self:sparks(e.x, e.y + 1, e.z, 1, { "c", "l" }, 8) end
         end
     end
@@ -2953,7 +3283,7 @@ function Game:mite(e, d, slow, dt)
         local l = e.gnaw
         local tx, tz = l.a.x + (l.b.x - l.a.x) * e.gt, l.a.z + (l.b.z - l.a.z) * e.gt
         if toward(e, tx, tz, d.speed * slow, dt) then
-            self:biteLink(l, d.chew * dt)
+            self:biteLink(l, d.chew * dt, e)
             self:chewing(e)
             e.gnawed = (e.gnawed or 0) + dt
             if e.gnawed > 6 then e.full, e.gnaw = true, nil end -- had enough; back to the march
@@ -3032,7 +3362,7 @@ function Game:queen(e, d, _, dt)
         self:burst(e.x, 4, e.z, 8, { "w", "t" }, 12)
         self:cue("brood", e.x, e.z)
     end
-    for _, l in ipairs(self:linksNear(e.x, e.z, d.gnawR)) do self:biteLink(l, d.gnaw * dt) end
+    for _, l in ipairs(self:linksNear(e.x, e.z, d.gnawR)) do self:biteLink(l, d.gnaw * dt, e) end
 end
 
 -- The Stag Beetle charges every few seconds: whatever its jaws pass is
@@ -3044,7 +3374,7 @@ function Game:stag(e, d, slow, dt)
         e.charging = e.charging - dt
         if e.charging <= 0 then e.charging, e.charge = nil, d.chargeEvery end
         local jx, jz = e.x + cos(e.h) * 10, e.z + sin(e.h) * 10
-        for _, l in ipairs(self:linksNear(jx, jz, d.shear)) do self:crush(l) end
+        for _, l in ipairs(self:linksNear(jx, jz, d.shear)) do self:crush(l, e) end
         for _, n in ipairs(self.nodes) do
             if n.tower and not n.tower.warded and (n.x - e.x) ^ 2 + (n.z - e.z) ^ 2 <= d.stunR * d.stunR then
                 if n.tower.stun <= 0 then
@@ -3137,7 +3467,9 @@ function Game:cricket(e, d, slow, dt)
             self:cue("surface", e.x, e.z, 0.5)
             if e.prey then
                 e.h = atan2(e.prey.a.z + e.prey.b.z - 2 * e.z, e.prey.a.x + e.prey.b.x - 2 * e.x)
-                self:crush(e.prey)
+                -- Up beside a Truffle's taproot, it is stunned for its trouble.
+                if e.prey.tapStun then e.surfaceT = e.surfaceT + e.prey.tapStun end
+                self:crush(e.prey, e)
                 e.cut = e.cut + 1
             end
             e.prey = nil
@@ -3190,7 +3522,7 @@ function Game:springtail(e, d, slow, dt)
                 if l then
                     e.snapped = true
                     self:say("SNAP", e.x, e.y + 10, e.z, "r")
-                    self:crush(l)
+                    self:crush(l, e)
                 end
             end
         end
@@ -3226,7 +3558,7 @@ function Game:click(e, d, _, dt)
         if self:walk(e, d.leapSpeed * self:pace(), dt) then self:reachHeart(e) return true end
         if e.leapT <= 0 then
             e.state, e.lift, e.spin, e.clickCd = "walk", 0, nil, d.clickEvery
-            for _, l in ipairs(self:linksNear(e.x, e.z, d.slamR)) do self:crush(l) end
+            for _, l in ipairs(self:linksNear(e.x, e.z, d.slamR)) do self:crush(l, e) end
             for _, n in ipairs(self.nodes) do
                 if n.tower and not n.tower.warded and (n.x - e.x) ^ 2 + (n.z - e.z) ^ 2 <= d.stunR * d.stunR then
                     if n.tower.stun <= 0 then
@@ -3261,7 +3593,7 @@ function Game:dung(e, d, _, dt)
         return
     end
     local bx, bz = self:ballAt(e)
-    for _, l in ipairs(self:linksNear(bx, bz, d.ballR)) do self:crush(l) end
+    for _, l in ipairs(self:linksNear(bx, bz, d.ballR)) do self:crush(l, e) end
     for k = #self.mats, 1, -1 do
         local m = self.mats[k]
         if (m.x - bx) ^ 2 + (m.z - bz) ^ 2 <= (d.ballR + 6) ^ 2 then self:breakMat(m) end

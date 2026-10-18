@@ -42,6 +42,9 @@ local function drawLink(l, highlight)
     if highlight then core = highlight end
     local surge = l.surge and l.state == "alive"
     if surge then core, under = IDX.l, IDX.c end
+    -- A Truffle's, underground: a ridge of soil with the glow showing through.
+    local buried = l.buried and l.state == "alive" and not highlight and not surge
+    if buried then core, under = IDX.t, IDX.n end
     local hurt = l.state == "alive" and l.hp < S.game:linkHp() * 0.5
     local gap0, gap1 = 2, -1 -- the part of a cut link that is not there
     -- A salted link never regrows, so it has no gap: it lies there whole, crusted.
@@ -82,8 +85,13 @@ local function drawLink(l, highlight)
                     if surge then
                         if (along - t * 60) % 8 < 2 then k = IDX.w end
                     elseif (along - t * 18) % 12 < 1.3 then
-                        k = IDX.l
+                        k = buried and IDX.c or IDX.l
                     end
+                end
+                -- A Bleeding Tooth's sap: dark red beads along it, swelling in turn.
+                if l.sap and l.state == "alive" and not highlight and s % 6 == 3 then
+                    put(IDX.r, i, j - 1)
+                    if floor(t * 2 + s * 0.2) % 3 == 0 then put(IDX.r, i + 1, j - 1) end
                 end
                 if hurt and s % 5 == 0 and floor(t * 6) % 2 == 0 then k = IDX.r end
                 -- Just cut, it flashes white then rust; just grown or regrown,
@@ -515,8 +523,14 @@ local function draw()
     end
     for _, e in ipairs(S.game.enemies) do
         if e.under and (e.kind == "mole" or e.kind == "cricket") then heave(e.x, e.z, S.game.clock, e.kind == "cricket" and 0.5)
-        elseif e.under then ripples(e.x, e.z, S.game.clock)
-        elseif SHADOW[e.kind] and not e.hidden then shadow(e.x, e.z, SHADOW[e.kind]) end
+        elseif e.under then ripples(e.x, e.z, S.game.clock) end
+        if e.under and (e.exposed or 0) > 0 then
+            -- Found by an Earthstar: a rust mark over it, for everything to aim at.
+            local i, j = S.world:toImage(e.x, S.world:groundAt(e.x, e.z) + 6, e.z)
+            i, j = floor(i), floor(j)
+            put(IDX.r, i, j); put(IDX.r, i - 1, j - 1); put(IDX.r, i + 1, j - 1); put(IDX.r, i, j - 2)
+        end
+        if not e.under and SHADOW[e.kind] and not e.hidden then shadow(e.x, e.z, SHADOW[e.kind]) end
         if e.ballHp and e.ballHp > 0 then
             local bx, bz = S.game:ballAt(e)
             shadow(bx, bz, 8)
@@ -773,9 +787,12 @@ local function draw()
         elseif s.kind == "ink" then
             local x, y, z = arc(s, 8)
             add(x, y, z, function() dot(x, y, z, IDX.o, IDX.u) end)
+        elseif s.kind == "drop" then
+            local x, y, z = arc(s, 6)
+            add(x, y, z, function() dot(x, y, z, IDX.w, IDX.s) end)
         else
             add(s.x1, s.y1, s.z1, function()
-                line3(s.x0, s.y0, s.z0, s.x1, s.y1, s.z1, (s.big or s.mark) and IDX.l or IDX.w)
+                line3(s.x0, s.y0, s.z0, s.x1, s.y1, s.z1, s.k and IDX[s.k] or (s.big or s.mark) and IDX.l or IDX.w)
             end)
         end
     end

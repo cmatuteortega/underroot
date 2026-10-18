@@ -645,8 +645,8 @@ local function tooth(b, tier, idle, fire)
     local swell = 1 + 0.15 * breath(idle)
     local teeth = (b == 2) and (tier == 1 and 2.2 or 3) or 1.4
     local parts = { { id = 1, ramp = R.crumb, at = ell(0, 1, 0, 3, 1.4, 3) },
-        seg(0, 1, 0, 0, 4, 0, 1.6, R.flesh, 2) }
-    parts[#parts + 1] = { id = 3, ramp = R.flesh, at = ell(0, 5.2, 0, 5.6, 2.4, 5.2),
+        seg(0, 1, 0, 0, 7, 0, 1.7, R.flesh, 2) }
+    parts[#parts + 1] = { id = 3, ramp = R.flesh, at = ell(0, 8.4, 0, 5.8, 3, 5.4),
         print = function(ux, uy, uz)
             if b == 1 and tier == 2 and ux > 0.05 and uy > -0.2 then
                 return abs(sin(ux * 13) * sin(uz * 11)) > 0.5 and IDX.u or IDX.n -- the scab
@@ -656,14 +656,14 @@ local function tooth(b, tier, idle, fire)
     for k = 0, 15 do
         local a = k / 16 * TAU
         local x, z = cos(a) * 4.4, sin(a) * 4
-        parts[#parts + 1] = seg(x, 4.4, z, x * (1 + 0.04 * teeth), 4.4 - teeth, z * (1 + 0.04 * teeth), 0.45, R.flesh, 4)
+        parts[#parts + 1] = seg(x, 7, z, x * (1 + 0.04 * teeth), 7 - teeth, z * (1 + 0.04 * teeth), 0.45, R.flesh, 4)
     end
     for k, d in ipairs(DROPS) do
         if not (fire > 0 and k == 1) and not (b == 1 and tier == 2 and cos(d[1]) > 0) then
             local a, r = d[1], d[2]
             local x, z = cos(a) * r * 5, sin(a) * r * 4.6
-            local y = 5.2 + 2.4 * sqrt(math.max(0, 1 - r * r)) + 0.3
-            local s = (b == 1 and 1.1 or 0.9 + (k % 2) * 0.3) * (b == 1 and 1 or swell)
+            local y = 8.4 + 3 * sqrt(math.max(0, 1 - r * r)) + 0.3
+            local s = (b == 1 and 1.2 or 1.1 + (k % 2) * 0.3) * (b == 1 and 1 or swell)
             parts[#parts + 1] = { id = 10 + k, ramp = drop, at = ell(x, y, z, s, s * 0.8, s) }
         end
     end
@@ -671,7 +671,7 @@ local function tooth(b, tier, idle, fire)
         -- A drop run down the side.
         local a = fire > 0 and 0.3 or 2.1 + idle
         local x, z = cos(a) * 5.3, sin(a) * 4.9
-        parts[#parts + 1] = seg(x * 0.8, 7, z * 0.8, x, 4.2 - fire * 0.5, z, 0.35, drop, 20)
+        parts[#parts + 1] = seg(x * 0.8, 10.5, z * 0.8, x, 6.6 - fire * 0.5, z, 0.4, drop, 20)
     end
     return parts
 end
@@ -710,14 +710,8 @@ local function truffle(b, tier, idle, fire)
             if uy > 0.3 and d < 0.12 + open * 0.15 then return IDX.o end -- the crack
             if abs(sin(ux * 11 + uz * 7)) > 0.94 then return IDX.n end -- grit
         end }
-    parts[#parts + 1] = { id = 5, ramp = knob, at = ell(0.4, 2.4 * big + open * 0.8, 0.3, 3.2 * big, 1.9 * big, 2.8 * big),
-        print = function(ux, uy, uz)
-            for _, d in ipairs({ { 0.5, 0.8, 0.2 }, { -0.4, 0.8, 0.4 }, { 0, 0.9, -0.5 }, { 0.7, 0.4, -0.5 }, { -0.7, 0.5, -0.3 } }) do
-                if ux * d[1] + uy * d[2] + uz * d[3] > 0.82 then
-                    return (b == 1 and tier == 2) and IDX.w or IDX.n -- a knob, sheened
-                end
-            end
-        end }
+    parts[#parts + 1] = { id = 5, ramp = knob, at = ell(0.4, 3 * big + open * 0.8, 0.3, 3.2 * big, 2.2 * big, 2.8 * big),
+        print = spotted(0.95, (b == 1 and tier == 2) and IDX.w or IDX.n) } -- knobs, sheened at Black Diamond
     if fire > 0 then
         parts[#parts + 1] = { id = 6, ramp = ramp("w", "w", "t", "t"), at = ell(0.4, 5.5 * big, 0.3, 1, 1.2, 1) }
     end

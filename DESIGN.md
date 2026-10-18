@@ -58,7 +58,7 @@ All numbers are placeholders to tune in playtesting.
 
 ## Towers
 
-Eleven towers, each with a network rule that changes where you want to put it.
+Eleven towers, and six more below, each with a network rule that changes where you want to put it.
 Every tower has two upgrade branches.
 
 | Tower | Role | What it does | Network twist | Upgrade fork |
@@ -79,9 +79,10 @@ Every tower has two upgrade branches.
 network has, a nod to the real organism that covers square miles. It is slow to
 grow and cripplingly expensive, so it is a bet on surviving long enough.
 
-### Proposed: six more
+### Six more
 
-Not built yet. Each answers a threat the roster above handles thinly (fliers,
+Built, and grown deep in the network (off the needle, the mat, the mane, the
+Inky Cap and the relay); no level opens them yet. Each answers a threat the roster above handles thinly (fliers,
 burrowers, armor, link-cutters) or widens a thin role (economy, support), and
 each claims a place in the graph no other tower wants.
 
