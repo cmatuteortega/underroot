@@ -1,9 +1,9 @@
 # Mycelio TD: the roadmap to a polished release
 
-What stands between the game as it is (see `PLAN.md` for what is in) and a
+What stands between the game as it is (see `README.md` for what is in) and a
 release that looks and plays like a premium one, on **mobile (Android, then
-iOS)** and **desktop (Windows, macOS, Linux / Steam Deck)**. `PLAN.md` stays
-the list of content against `DESIGN.md`; this file is everything around it.
+iOS)** and **desktop (Windows, macOS, Linux / Steam Deck)**: the content still
+to come from `DESIGN.md` (Phase 7), and everything around it.
 
 Each item says which platforms it is for: **[M]** mobile, **[D]** desktop,
 **[M/D]** both. Phases go in order; inside a phase, the order is the priority.
@@ -154,14 +154,17 @@ The board is painted by the CPU, pixel by pixel.
   tablets above, iPhone with and without a notch, a low-end and a high-end PC, a
   Mac, Linux, the Deck.
 
-## Phase 7: content and balance (from `PLAN.md`)
+## Phase 7: content and balance (the rest of `DESIGN.md`)
 
 - [ ] The Compost Heap (level 7) with Green Mold.
 - [ ] Elite modifiers (Fungicidal, Scent-masked, Armored shell, Hive-minded).
 - [ ] Colony traits.
 - [ ] Props and new pocket kinds, if the tileset gets tiles for them.
-- [ ] **Balance by hand**, again: PLAN's figures are from before the loadout,
-  three bosses a level and the newer enemies. Then the bot's campaign
+- [ ] **Balance by hand**, again: the last figures (over 20 runs the bot won
+  the Crack 18, the Flowerpot 17, the Rotting Log 16, the Shed Floor and the
+  Pond Edge 15, the Lawn 12; the Stag Beetle usually got through, and challenge
+  mode was rarely won) are from before the loadout, three bosses a level and
+  the newer enemies. Then the bot's campaign
   (`B.campaign`) set to the new numbers.
 - [ ] **Playtests with people.** Five to ten who have never seen it, on a phone
   and on a computer, watched and not helped: where they get stuck in the first
