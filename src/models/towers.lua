@@ -486,8 +486,283 @@ local function giant(b, tier, idle, fire)
     return parts
 end
 
+--- the six proposed in DESIGN.md, modelled ahead of their rules ----------------------
+
+-- Fly Agaric: the classic toadstool, a red dome of white warts on a ringed
+-- white stalk with a bulb at its foot. The cap sways; firing, it tips up at the
+-- flier and flicks a wart off. Fly Bane flattens it wider and darker, Muscaria
+-- raises a little one beside it in a haze; Muscimol turns it gold with glowing
+-- warts, Ibotenic curls the rim up into a cup.
+local function toadstool(parts, x, z, s, tip, capRamp, wart, cup, id)
+    parts[#parts + 1] = { id = id, ramp = R.flesh, at = ell(x, 1.5 * s, z, 2.4 * s, 1.8 * s, 2.4 * s) }
+    parts[#parts + 1] = seg(x, 1.5 * s, z, x, 9 * s, z, 1.3 * s, R.flesh, id)
+    parts[#parts + 1] = { id = id + 1, ramp = R.flesh, at = ell(x, 7 * s, z, 2.3 * s, 0.5 * s, 2.3 * s) }
+    local flat = cup and 0.45 or 1
+    local lean = A.mul(A.move(x, 0, z), A.rotZ(tip), A.move(-x, 0, -z))
+    parts[#parts + 1] = { id = id + 2, ramp = capRamp, at = A.mul(lean, ell(x, 10 * s, z, 5.2 * s, 3 * s * flat, 5.2 * s)),
+        print = function(ux, uy, uz, lev)
+            if uy < -0.35 then return abs(sin(atan2(uz, ux) * 14)) < 0.4 and IDX.t or IDX.w end -- the gills
+            if uy > -0.1 and spotted(0.975, wart)(ux, uy, uz, lev) then return wart end
+        end }
+    if cup then
+        -- The rim turned up: a ring of lobes standing round the cap's edge.
+        for k = 0, 9 do
+            local a = k / 10 * TAU
+            parts[#parts + 1] = { id = id + 3, ramp = capRamp,
+                at = A.mul(lean, ell(x + cos(a) * 4.6 * s, 11.4 * s, z + sin(a) * 4.6 * s, 1.4 * s, 1.5 * s, 1.4 * s)) }
+        end
+    end
+end
+
+local function agaric(b, tier, idle, fire)
+    local sway = 0.05 * breath(idle) - 0.12 * fire
+    local capRamp, wart, big = ramp("w", "r", "r", "u"), IDX.w, 1
+    if b == 1 then capRamp, big = ramp("r", "r", "n", "u"), tier == 1 and 1.12 or 1.05 end
+    if b == 2 then capRamp, wart = ramp("w", "t", "t", "r"), (fire > 0 or idle % 2 == 0) and IDX.l or IDX.c end
+    local parts = { { id = 1, ramp = R.crumb, at = ell(0, 0.8, 0, 3.6, 1.2, 3.6) } }
+    toadstool(parts, 0, 0, big, sway, capRamp, wart, b == 2 and tier == 2, 2)
+    if b == 1 then
+        -- Fly Bane: the cap pressed out flat and wide.
+        parts[5].at = A.mul(parts[5].at, A.scale(1.2, 0.7, 1.2))
+    end
+    if b == 1 and tier == 2 then
+        toadstool(parts, 4.6, 2.4, 0.55, -sway, capRamp, wart, false, 10)
+        for k = 0, 3 do
+            local a = k * 1.7 + idle * 0.4
+            parts[#parts + 1] = { id = 20 + k, ramp = ramp("w", "s", "s", "k"),
+                at = ell(cos(a) * 5, 13 + (k % 2) * 2, sin(a) * 5, 1.4, 0.9, 1.4) }
+        end
+    end
+    if fire > 0 then
+        parts[#parts + 1] = { id = 30, ramp = R.flesh, at = ell(3 + fire * 2, 14 + fire * 2, -1, 0.9, 0.7, 0.9) }
+    end
+    return parts
+end
+
+-- Earthstar: a brown papery ball with a mouth on top, sat on a star of split
+-- arms. The arms feel the ground; firing, they press flat, the ball drops and
+-- puffs, and a ring of dust runs out. Deep Listener grows more, longer arms
+-- curled into the soil and, at Seismic, cracks out from their tips; Puff Quake
+-- is heavier, and Cave-in stands up on its arm tips, the arched earthstar.
+local function earthstar(b, tier, idle, fire)
+    local arms, reach, ball, thick = 7, 6.5, 3, 1
+    if b == 1 then arms, reach = tier == 1 and 9 or 10, tier == 1 and 8 or 8.6 end
+    if b == 2 then ball, thick = 3.7, 1.3 end
+    local arched = b == 2 and tier == 2
+    local press = fire / 2
+    local flex = 0.5 * breath(idle) * (1 - press)
+    local by = (arched and 7.5 or 3.2) - press * 1.2
+    local parts = {}
+    for k = 0, arms - 1 do
+        local a = k / arms * TAU + 0.2
+        local c, s = cos(a), sin(a)
+        local p
+        if arched then
+            p = seg(c * 2, by - 2, s * 2, c * (reach - 1), 1 + flex, s * (reach - 1), 0.5 * thick, R.shelf, 2, 1.3 * thick)
+            parts[#parts + 1] = seg(c * (reach - 1), 1 + flex, s * (reach - 1), c * reach, 0.1, s * reach, 0.5, R.shelf, 2, 0.9)
+        else
+            local tip = (b == 1 and -0.3 or 0.9) + flex
+            p = seg(c * 1.6, 1.2, s * 1.6, c * reach, tip, s * reach, 0.5 * thick, R.shelf, 2, 1.4 * thick)
+        end
+        p.print = function(ux, uy) if uy > 0.2 then return ux > 0.7 and IDX.n or IDX.w end end
+        parts[#parts + 1] = p
+        if b == 1 and tier == 2 then
+            parts[#parts + 1] = seg(c * reach, 0.05, s * reach, c * (reach + 3.5), 0.05, s * (reach + 3.5) + (k % 2), 0.2, R.ink, 3, 0.3)
+        end
+    end
+    parts[#parts + 1] = { id = 4, ramp = R.earth, at = ell(0, by + ball * 0.6, 0, ball, ball * 0.85 * (1 - 0.15 * press), ball),
+        print = function(ux, uy)
+            if uy > 0.88 then return IDX.o end -- the mouth
+            if uy > 0.74 then return IDX.u end
+            if abs(sin(ux * 9) * sin(uy * 7)) > 0.85 then return IDX.n end -- papery creases
+        end }
+    if fire > 0 then
+        for k = 0, fire do
+            parts[#parts + 1] = { id = 5, ramp = R.smoke, at = ell(0, by + ball * 1.7 + k * 1.8, 0, 1.3 + k * 0.4, 1, 1.3 + k * 0.4) }
+        end
+        for k = 0, 7 do
+            local a = k / 8 * TAU
+            parts[#parts + 1] = { id = 6, ramp = R.crumb, at = ell(cos(a) * (reach + fire * 2), 0.5, sin(a) * (reach + fire * 2), 1, 0.6, 1) }
+        end
+    end
+    return parts
+end
+
+-- Oyster Mushroom: grey-blue fans growing sideways off a stump, gills under.
+-- Their edges ripple; firing, a fan flicks and a sticky drop leaves the gills.
+-- Nematode Trap hangs beaded threads off them, Lasso long loops to the ground;
+-- Corrode turns them gold and dripping, Dissolve stains the ground under it.
+local OYSTER = { { 0.3, 9, 1 }, { 2.5, 6.5, 0.9 }, { 4.6, 10.5, 0.8 }, { -1.6, 5, 0.75 } }
+local function oyster(b, tier, idle, fire)
+    local fan = b == 2 and R.amber or ramp("w", "s", "k", "u")
+    local parts = { { id = 1, ramp = R.bark, at = ell(0, 4, 0, 2.6, 4.6, 2.4),
+        print = function(ux, uy, uz) if abs(sin(atan2(uz, ux) * 6 + uy * 2)) < 0.12 then return IDX.o end end } }
+    for k, f in ipairs(OYSTER) do
+        local a, y, s = f[1], f[2], f[3] * (1 + 0.04 * sin(idle / 4 * TAU + k))
+        local flick = (fire > 0 and k == 1) and 0.35 or 0
+        local x, z = cos(a) * 3.4, sin(a) * 3.4
+        parts[#parts + 1] = { id = 2 + k, ramp = fan,
+            at = A.mul(A.move(x, y, z), A.rotY(-a), A.rotZ(-0.25 + flick), A.scale(4.6 * s, 1.2 * s, 3.8 * s)),
+            print = function(ux, uy, uz)
+                if uy < -0.15 then return abs(sin(atan2(uz, ux + 1) * 22)) < 0.35 and IDX.k or IDX.s end -- the gills
+                if ux * ux + uz * uz > 0.82 and uy > 0 then return IDX.w end
+            end }
+        local ex, ez = x + cos(a) * 3.4 * s, z + sin(a) * 3.4 * s
+        if b == 1 then
+            -- Nematode Trap: beaded threads under the fan; Lasso drops them to the ground in loops.
+            for t = -1, 1 do
+                local tx, tz = ex - sin(a) * t * 1.6, ez + cos(a) * t * 1.6
+                local low = tier == 1 and y - 3.5 or 0.4
+                parts[#parts + 1] = seg(tx, y - 0.6, tz, tx, low, tz, 0.18, R.glue, 10, 0.18)
+                parts[#parts + 1] = { id = 11, ramp = R.glue, at = ell(tx, low, tz, 0.5, 0.5, 0.5) }
+                if tier == 2 then
+                    parts[#parts + 1] = seg(tx, low, tz, (tx + x) / 2, low + 0.2, (tz + z) / 2, 0.18, R.glue, 10, 0.18)
+                end
+            end
+        elseif b == 2 then
+            local fall = ((idle + k) % 4) / 4
+            parts[#parts + 1] = { id = 12, ramp = R.amber, at = ell(ex, y - 1 - fall * (y - 1.5), ez, 0.45, 0.75, 0.45) }
+        end
+    end
+    if b == 2 and tier == 2 then
+        parts[#parts + 1] = { id = 13, ramp = ramp("t", "t", "t", "n"), at = ell(2.5, 0.05, 1.5, 5.5, 0.2, 4.5) }
+    end
+    if fire > 0 then
+        parts[#parts + 1] = { id = 14, ramp = R.glue, at = ell(7.5, 7, 0.5, 0.8, 0.8, 0.8) }
+    end
+    return parts
+end
+
+-- Bleeding Tooth: a lumpy white cap beaded with blood-red drops, a fringe of
+-- short teeth under it. The drops swell and shrink; firing, one bursts and runs.
+-- Clotting darkens them into knobs and, at Scab, crusts half the cap over;
+-- Hemotoxin pushes the teeth out past the rim, Thorn Sap keeps the drops running.
+local DROPS = { { 0.3, 0.55 }, { 2.1, 0.7 }, { 3.6, 0.45 }, { 4.6, 0.75 }, { 5.6, 0.5 }, { 1.2, 0.25 } }
+local function tooth(b, tier, idle, fire)
+    local drop = ramp("w", "r", "r", "u")
+    if b == 1 then drop = R.dung end
+    if b == 2 and tier == 2 then drop = ramp("w", "w", "r", "r") end
+    local swell = 1 + 0.15 * breath(idle)
+    local teeth = (b == 2) and (tier == 1 and 2.2 or 3) or 1.4
+    local parts = { { id = 1, ramp = R.crumb, at = ell(0, 1, 0, 3, 1.4, 3) },
+        seg(0, 1, 0, 0, 4, 0, 1.6, R.flesh, 2) }
+    parts[#parts + 1] = { id = 3, ramp = R.flesh, at = ell(0, 5.2, 0, 5.6, 2.4, 5.2),
+        print = function(ux, uy, uz)
+            if b == 1 and tier == 2 and ux > 0.05 and uy > -0.2 then
+                return abs(sin(ux * 13) * sin(uz * 11)) > 0.5 and IDX.u or IDX.n -- the scab
+            end
+            if uy > 0.1 and abs(sin(ux * 7 + uz * 5) * sin(uz * 6 - ux * 3)) > 0.8 then return IDX.t end -- lumps
+        end }
+    for k = 0, 15 do
+        local a = k / 16 * TAU
+        local x, z = cos(a) * 4.4, sin(a) * 4
+        parts[#parts + 1] = seg(x, 4.4, z, x * (1 + 0.04 * teeth), 4.4 - teeth, z * (1 + 0.04 * teeth), 0.45, R.flesh, 4)
+    end
+    for k, d in ipairs(DROPS) do
+        if not (fire > 0 and k == 1) and not (b == 1 and tier == 2 and cos(d[1]) > 0) then
+            local a, r = d[1], d[2]
+            local x, z = cos(a) * r * 5, sin(a) * r * 4.6
+            local y = 5.2 + 2.4 * sqrt(math.max(0, 1 - r * r)) + 0.3
+            local s = (b == 1 and 1.1 or 0.9 + (k % 2) * 0.3) * (b == 1 and 1 or swell)
+            parts[#parts + 1] = { id = 10 + k, ramp = drop, at = ell(x, y, z, s, s * 0.8, s) }
+        end
+    end
+    if fire > 0 or (b == 2 and tier == 2) then
+        -- A drop run down the side.
+        local a = fire > 0 and 0.3 or 2.1 + idle
+        local x, z = cos(a) * 5.3, sin(a) * 4.9
+        parts[#parts + 1] = seg(x * 0.8, 7, z * 0.8, x, 4.2 - fire * 0.5, z, 0.35, drop, 20)
+    end
+    return parts
+end
+
+-- Truffle: mostly hidden, a low mound of soil cracked across, the top of a dark
+-- knobbly truffle showing through, and the ridges of its buried links running
+-- off. At a wave's end the crack opens on a gold glint. Aged heaps the mound up
+-- and Black Diamond puts a sheen on the knobs; Root Run breaks pale rootlets
+-- out along the ridges and Taproot swells them, flow pulsing through.
+local function truffle(b, tier, idle, fire)
+    local big = (b == 1) and (tier == 1 and 1.2 or 1.3) or 1
+    local rise = 1 + 0.04 * breath(idle)
+    local knob = ramp("n", "u", "u", "o")
+    local parts = {}
+    local ridge = (b == 2 and tier == 2) and 1.5 or 1
+    for k = 0, 2 do
+        local a = k * 2.3 + 0.6
+        local c, s = cos(a), sin(a)
+        local p = seg(c * 4, 0, s * 4, c * 11, 0, s * 11, 0.7 * ridge, RAMP.soil, 2, 1.8 * ridge)
+        if b == 2 and tier == 2 then
+            p.print = function(ux, uy) if uy > 0.3 and abs((ux * 2 + idle * 0.5) % 1 - 0.5) < 0.15 then return IDX.c end end
+        end
+        parts[#parts + 1] = p
+        if b == 2 then
+            for r = 0, 2 do
+                local t = 6 + r * 2
+                local x, z = c * t, s * t
+                parts[#parts + 1] = seg(x, 0.6, z, x - s * 1.4, 1.5, z + c * 1.4, 0.25, R.flesh, 3)
+            end
+        end
+    end
+    local open = fire / 1
+    parts[#parts + 1] = { id = 4, ramp = RAMP.soil, at = ell(0, 0.4, 0, 6.2 * big, 2.6 * big * rise, 5.6 * big),
+        print = function(ux, uy, uz)
+            local d = abs(ux * 0.4 - uz * 0.9)
+            if uy > 0.3 and d < 0.12 + open * 0.15 then return IDX.o end -- the crack
+            if abs(sin(ux * 11 + uz * 7)) > 0.94 then return IDX.n end -- grit
+        end }
+    parts[#parts + 1] = { id = 5, ramp = knob, at = ell(0.4, 2.4 * big + open * 0.8, 0.3, 3.2 * big, 1.9 * big, 2.8 * big),
+        print = function(ux, uy, uz)
+            for _, d in ipairs({ { 0.5, 0.8, 0.2 }, { -0.4, 0.8, 0.4 }, { 0, 0.9, -0.5 }, { 0.7, 0.4, -0.5 }, { -0.7, 0.5, -0.3 } }) do
+                if ux * d[1] + uy * d[2] + uz * d[3] > 0.82 then
+                    return (b == 1 and tier == 2) and IDX.w or IDX.n -- a knob, sheened
+                end
+            end
+        end }
+    if fire > 0 then
+        parts[#parts + 1] = { id = 6, ramp = ramp("w", "w", "t", "t"), at = ell(0.4, 5.5 * big, 0.3, 1, 1.2, 1) }
+    end
+    return parts
+end
+
+-- Turkey Tail: thin flat brackets stacked up a stub, banded brown, cream and
+-- rust like a fanned tail. The bands roll out from the base in a slow beat.
+-- Mycelial Pump thickens them and rings them teal like the Relay, Capillary
+-- runs teal threads down into the soil; Versicolor stacks more and wider, and
+-- Rainbow colours the bands right through.
+local BANDS = { IDX.n, IDX.w, IDX.r }
+local RAINBOW = { IDX.r, IDX.t, IDX.g, IDX.c, IDX.m }
+local function turkey(b, tier, idle)
+    local n, big, th = 5, 1, 0.7
+    if b == 1 then th = 1.1 end
+    if b == 2 then n, big = tier == 1 and 6 or 7, tier == 1 and 1.12 or 1.2 end
+    local bands = (b == 2 and tier == 2) and RAINBOW or BANDS
+    local teal = b == 1
+    local parts = { { id = 1, ramp = R.bark, at = ell(0, 4, 0, 1.8, 5, 1.8) } }
+    for k = 1, n do
+        local a = k * 2.4
+        local y = 1.6 + k * 1.7
+        local s = (1.1 - k * 0.06) * big
+        local x, z = cos(a) * 1.8, sin(a) * 1.8
+        parts[#parts + 1] = { id = 2 + k, ramp = R.shelf,
+            at = A.mul(A.move(x, y, z), A.rotY(-a), A.rotZ(-0.12), A.move(2.4 * s, 0, 0), A.scale(5 * s, th * s, 4.4 * s)),
+            print = function(ux, uy, uz)
+                if uy < 0.1 then return end
+                local r = sqrt((ux + 0.5) ^ 2 + uz * uz)
+                if r > 1.35 then return IDX.w end
+                local band = floor(r * 6 - idle * 0.5) % #bands + 1
+                if teal and band == 1 then return IDX.c end
+                return bands[band]
+            end }
+        if b == 1 and tier == 2 and k % 2 == 1 then
+            parts[#parts + 1] = seg(x + cos(a) * 4 * s, y, z + sin(a) * 4 * s, x + cos(a) * 5 * s, 0.1, z + sin(a) * 5 * s, 0.25, RAMP.teal, 20)
+        end
+    end
+    return parts
+end
+
 local TOWER = { puffer = puffer, needle = needle, mane = mane, relay = relay, mat = mat, inky = inky,
-    shelf = shelf, mortar = mortar, cordyceps = cordyceps, stink = stinkhorn, lamp = lamp, giant = giant }
+    shelf = shelf, mortar = mortar, cordyceps = cordyceps, stink = stinkhorn, lamp = lamp, giant = giant,
+    agaric = agaric, earthstar = earthstar, oyster = oyster, tooth = tooth, truffle = truffle, turkey = turkey }
 
 -- How many steps each animation number has, per species: some keep still.
 local STEPS = {
@@ -495,6 +770,8 @@ local STEPS = {
     relay = { idle = 4, fire = 1 }, mat = { idle = 3, fire = 1 }, inky = { idle = 4, fire = 2 },
     shelf = { idle = 1, fire = 1 }, mortar = { idle = 4, fire = 3 }, cordyceps = { idle = 4, fire = 3 },
     stink = { idle = 4, fire = 3 }, lamp = { idle = 4, fire = 2 }, giant = { idle = 4, fire = 3 },
+    agaric = { idle = 4, fire = 3 }, earthstar = { idle = 4, fire = 3 }, oyster = { idle = 4, fire = 2 },
+    tooth = { idle = 4, fire = 2 }, truffle = { idle = 4, fire = 2 }, turkey = { idle = 4, fire = 1 },
 }
 
 -- A fruiting body by look. `idle`, `fire` and `grow` are 0..1; each is cut to
@@ -522,7 +799,7 @@ end
 function M.sheetRows()
     local rows = {}
     for _, kind in ipairs({ "puffer", "needle", "mat", "mane", "relay", "inky", "shelf", "mortar", "cordyceps",
-        "stink", "lamp", "giant" }) do
+        "stink", "lamp", "giant", "agaric", "earthstar", "oyster", "tooth", "truffle", "turkey" }) do
         local row = { kind }
         row[#row + 1] = M.tower(kind)
         for b = 1, 2 do
