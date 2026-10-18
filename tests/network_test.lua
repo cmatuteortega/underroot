@@ -161,4 +161,18 @@ return {
         local places = N.layout()
         for _, row in ipairs(D.NETWORK) do C.yes(places[row.id], row.id) end
     end },
+
+    { "the network digs down: each node under what it grows from, none in a row on top of another", function()
+        local places = N.layout()
+        local rows = {}
+        for _, row in ipairs(D.NETWORK) do
+            local p = places[row.id]
+            if row.at then C.yes(p.y > places[row.at].y, row.id .. " is under " .. row.at) end
+            rows[p.depth] = rows[p.depth] or {}
+            for _, q in ipairs(rows[p.depth]) do
+                C.yes(math.abs(q.x - p.x) >= N.GAP - 1e-9, row.id .. " has room in its row")
+            end
+            table.insert(rows[p.depth], p)
+        end
+    end },
 }

@@ -65,7 +65,7 @@ the game; the numbers behind every ticked item are rows in `src/defs.lua`.
 
 ### Progression
 - [x] Spore Bank: spores for waves cleared and wins, spent on the network
-- [x] The network (`N`): 100-odd nodes spreading out from the sprout, bought a rank at a time; one species to start, the rest, their numbers, upgrades, the sprout, the hyphae, seeds, mutations and field notes grown on it; fully grown it is the game as defs writes it. Balanced against the bot playing a whole campaign from nothing (`B.campaign`). `--spores N`, F8 or seven taps on the spores to test it
+- [x] The network (`N`): 100-odd nodes dug down into the soil under the sprout, bought a rank at a time; one species to start, the rest, their numbers, upgrades, the sprout, the hyphae, seeds, mutations and field notes grown on it; fully grown it is the game as defs writes it. Balanced against the bot playing a whole campaign from nothing (`B.campaign`). `--spores N`, F8 or seven taps on the spores to test it
 - [x] Sprout seeds: six, picked with the loadout (bean free; the rest grown on the network, the dandelion, sunflower and flytrap once the Flowerpot, the Rotting Log and the Lawn are won), each with its own numbers, a trait and three or four mutations of its own, one of them on offer every time the network mutates
 - [ ] Colony traits
 

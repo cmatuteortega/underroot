@@ -173,16 +173,22 @@ end
 --- where the nodes sit ------------------------------------------------------------------------
 
 -- Each node's place on the network's screen, in steps from the sprout:
--- { x, y, depth, angle }. The sprout is in the middle and what grows from
--- it spreads out, each node a step further than the one it grows from, the
--- way round shared out by the tips each branch ends in. A tip near the
--- middle needs a wider wedge than one far out to stand as far from its
--- neighbours, so each counts for less the further out it is. The first ring
--- stands four steps out, so the nodes near the middle have room for their
--- pictures too.
+-- { x, y, depth }. The sprout stands on the ground at the top (y = 0) and
+-- what grows from it digs down, a row a step deeper than the one it grows
+-- from, the first row further down so the threads have room to fan out
+-- under the sprout. Each node sits over the middle of what grows from it,
+-- and a branch is packed against the one before as close as their nodes
+-- allow, row by row (a tidy tree): a short branch tucks in under a long one's
+-- shoulder instead of taking a column of its own all the way down. Each
+-- node a little above or below its row (`N.JIG`, by its id), so the rows
+-- read as soil dug into, not a grid.
+N.GAP, N.FIRST, N.ROW, N.JIG = 1.15, 2.6, 1.6, 0.18 -- steps between neighbours, to the first row, between rows, off it
+
+function N.depthY(depth) return depth == 0 and 0 or N.FIRST + (depth - 1) * N.ROW end
+
 function N.layout()
     if N.places then return N.places end
-    local kids, tips = {}, {}
+    local kids = {}
     for _, row in ipairs(D.NETWORK) do
         kids[row.id] = kids[row.id] or {}
         if row.at then
@@ -190,28 +196,53 @@ function N.layout()
             table.insert(kids[row.at], row.id)
         end
     end
-    local function count(id, depth)
-        local n = 0
-        for _, k in ipairs(kids[id]) do n = n + count(k, depth + 1) end
-        tips[id] = math.max(1 / (depth + 3), n)
-        return tips[id]
+    -- A branch laid out about its own node (at 0): where each of its nodes
+    -- is across (`x`, relative), and its outline, the leftmost and rightmost
+    -- of it a row (`l`, `r`, from its own row down).
+    local rel = {}
+    local function shape(id)
+        local l, r = { 0 }, { 0 }
+        local ks = kids[id]
+        if #ks == 0 then return l, r end
+        local shifts, ol, orr = {}, nil, nil
+        for n, k in ipairs(ks) do
+            local cl, cr = shape(k)
+            local shift = 0
+            if ol then
+                -- As close to the branches before it as each shared row allows.
+                for d = 1, math.min(#orr, #cl) do shift = math.max(shift, orr[d] - cl[d] + N.GAP) end
+                for d = 1, #cl do
+                    if d > #orr then ol[d], orr[d] = cl[d] + shift, cr[d] + shift
+                    else orr[d] = cr[d] + shift end
+                end
+            else
+                ol, orr = {}, {}
+                for d = 1, #cl do ol[d], orr[d] = cl[d], cr[d] end
+            end
+            shifts[n] = shift
+        end
+        -- Over the middle of the first and last of what grows from it.
+        local mid = (shifts[1] + shifts[#ks]) / 2
+        for n, k in ipairs(ks) do rel[k] = shifts[n] - mid end
+        for d = 1, #ol do l[d + 1], r[d + 1] = ol[d] - mid, orr[d] - mid end
+        return l, r
     end
     local root = D.NETWORK[1].id
-    count(root, 0)
+    shape(root)
     local places = {}
-    local function place(id, depth, a0, a1)
-        local a = (a0 + a1) / 2
-        local out = depth > 0 and depth + 3 or 0
-        places[id] = { x = math.cos(a) * out, y = math.sin(a) * out, depth = depth, angle = a }
-        local at = a0
-        for _, k in ipairs(kids[id]) do
-            local span = (a1 - a0) * tips[k] / tips[id]
-            place(k, depth + 1, at, at + span)
-            at = at + span
-        end
+    local function jig(id)
+        local h = 0
+        for k = 1, #id do h = (h * 31 + id:byte(k)) % 9973 end
+        return (h % 101 / 50 - 1) * N.JIG
     end
-    place(root, 0, -math.pi / 2, math.pi * 1.5)
-    N.places, N.kids = places, kids
+    local function place(id, depth, x)
+        places[id] = { x = x, y = N.depthY(depth) + (depth > 0 and jig(id) or 0), depth = depth }
+        for _, k in ipairs(kids[id]) do place(k, depth + 1, x + rel[k]) end
+    end
+    place(root, 0, 0)
+    local b = { l = 0, r = 0, bottom = 0 }
+    for _, p in pairs(places) do b.l, b.r, b.bottom = math.min(b.l, p.x), math.max(b.r, p.x), math.max(b.bottom, p.y) end
+    N.places, N.kids, N.bounds = places, kids, b
     return places
 end
 

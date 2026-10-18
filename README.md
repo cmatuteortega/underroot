@@ -67,8 +67,8 @@ left of its card in the level picker.
 **The Spore Bank and its network.** A run pays 6 spores for every wave it
 clears, endless included, 12 more for a win and 20 more again for a level's
 first win; they go into the bank as they come, so a lost run keeps them.
-Spores are spent on the **network** (NETWORK on the home screen, or `N` there): a web of 100-odd nodes spreading out from the sprout in the
-middle, each bought a rank at a time, and each only once the node it grows
+Spores are spent on the **network** (NETWORK on the home screen, or `N` there): a web of 100-odd nodes dug down into the soil under the
+sprout, each bought a rank at a time, and each only once the node it grows
 from has a rank. A first run has the Spore Puffer, the bean and three
 mutations, and everything held back; a fully grown network is the game as
 `src/defs.lua` writes it, every number exactly as today.
@@ -94,13 +94,17 @@ every number through `Game:stat` and the few helpers a mutation can change too
 (see `src/network.lua`); upgrade branches not grown are not offered on the
 board, and mutations not grown are not offered at all.
 
-The network's screen: every node shows what it grows in a round socket --
+The network's screen is the title's ground seen close up: the sprout
+standing on it under the night, and the network dug down under it a row a
+step deeper, each node over what grows from it and its threads curving down
+to them like roots. Every node shows what it grows in a round socket --
 the species (an upgrade node at the tier its next rank brings), the seed, the
 enemy a field note is on (its body for what bodies are worth), or a glyph for the hyphae, the ring, the pulse,
 sugar and mutations -- dimmed while what it grows from is not grown yet, a
 silhouette with a padlock while a win is needed, a blinking green rim when
-there are the spores for it. It opens looking from the sprout towards the
-nearest node there are spores for. Drag (or the arrows) to look round, the
+there are the spores for it. It opens on the sprout at the top, looking
+across towards the shallowest node there are spores for, and the sky above
+the ground goes no lower than a strip under the top. Drag (or the arrows) to look round, the
 wheel or `+`/`-` to zoom a step; on a phone a pinch zooms as the fingers
 spread or close, about the point between them, and both fingers moving drag
 it (all the way out the nodes are dots, to see the whole network at once); a
