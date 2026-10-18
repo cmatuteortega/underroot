@@ -21,6 +21,9 @@
 -- tapped is shown in the panel; tapped again, or its button, or G, grows a
 -- rank. TAB picks the next node there are spores for.
 --
+-- The first time it is up, once the dive is down, the guide says what spores
+-- are and points at a good first node (src/ui/guide.lua).
+--
 -- For testing: `love . --spores 100000` puts that many in the bank, as do F8
 -- on this screen and seven quick taps on its spore count. REGROW (twice)
 -- sells the whole network back for every spore it cost. ALL (or A) switches
@@ -38,6 +41,7 @@ local Draw = require "src.ui.draw"
 local Pixels = require "src.ui.pixels"
 local flair = require "src.ui.flair"
 local Title = require "src.ui.title"
+local Guide = require "src.ui.guide"
 
 local floor, max, min = math.floor, math.max, math.min
 local color, box, text, wrapLines, say, inside, wide =
@@ -744,6 +748,8 @@ local GROW_TIME = 0.7
 
 function net.draw()
     net.diving()
+    if not net.dive then Guide.network(net) end
+    Guide.networkUpdate()
     color("o")
     love.graphics.rectangle("fill", 0, 0, S.vw, S.vh)
     local L = net.layout()
@@ -946,6 +952,7 @@ function net.draw()
         local mid = floor(L.area.x + L.area.w / 2)
         Draw.centred(tip, y, k, "o", mid)
     end
+    Guide.draw("network")
 end
 
 function net.drawPanel(L)
@@ -967,6 +974,7 @@ end
 
 function net.hover(mx, my)
     if net.dive then return end
+    if Guide.hover(mx, my, "network") then return end
     local L = net.layout()
     if inside(mx, my, L.back.x, L.back.y, L.back.w, L.back.h) then S.hover.netBack = true return end
     if inside(mx, my, L.regrow.x, L.regrow.y, L.regrow.w, L.regrow.h) then S.hover.netRegrow = true return end
@@ -994,6 +1002,7 @@ function net.hover(mx, my)
 end
 
 function net.under()
+    if S.hover.guide then return Guide.under("network") end
     local L = net.layout()
     local function rect(b) return function() return b.x, b.y, b.w, b.h end end
     if S.hover.netBack then return rect(L.back) end
@@ -1004,6 +1013,7 @@ end
 
 function net.click(b)
     if net.dive then return end
+    if Guide.click("network") then return end
     if b == 2 then
         if net.sel then net.sel = nil; sound("back") else net.close() end
         return
@@ -1041,6 +1051,7 @@ end
 local PAN = 24
 function net.key(key)
     if net.dive then return end
+    if Guide.key(key, "network") then return end
     if key == "escape" or key == "backspace" then
         if net.sel then net.sel = nil; sound("back") else net.close() end
     elseif key == "left" then net.drag(net.getCam(), PAN, 0)

@@ -11,6 +11,7 @@ local Draw = require "src.ui.draw"
 local Pixels = require "src.ui.pixels"
 local flair = require "src.ui.flair"
 local Palette = require "src.palette"
+local Profile = require "src.profile"
 
 local floor, max, min = math.floor, math.max, math.min
 local color, text, centred, say = Draw.color, Draw.text, Draw.centred, Draw.say
@@ -26,9 +27,11 @@ function title.open()
 end
 
 -- Tapped: the sprout and the ground under it go down, and the home screen's
--- choices come up in the sky they leave.
+-- choices come up in the sky they leave. The very first time, straight into
+-- the Crack instead, for the tutorial (src/ui/guide.lua).
 function title.leave()
     sound("select")
+    if not Profile.taught.tutorial and not S.script then require("src.ui.guide").tutorial() return end
     title.down = flair.now()
     S.openHome()
 end

@@ -1,6 +1,7 @@
 -- Just enough of LÖVE for the rules to run under plain LuaJIT: its random
 -- generator, the very same numbers (xorshift64* seeded through a Wang hash,
--- as LÖVE 11 does it), a save directory in memory, and a clock.
+-- as LÖVE 11 does it), a save directory in memory, a clock, and an OS (for
+-- the screen's state, src/ui/state.lua, which the toolbar reads).
 
 local ffi = require "ffi"
 local bit = require "bit"
@@ -47,6 +48,7 @@ love = {
         write = function(name, data) files[name] = data; return true end,
     },
     timer = { getTime = os.clock },
+    system = { getOS = function() return "Linux" end },
 }
 
 -- For the tests: the save directory itself, and emptying it.

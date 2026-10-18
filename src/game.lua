@@ -954,7 +954,9 @@ function Game:endlessWave(n)
     local bossWave = k % apart == 0 and bossy[1]
     local from = bossWave and bossy[self.dice:random(#bossy)] or plain[self.dice:random(#plain)] or waves[#waves]
     local more, closer = 1 + 0.12 * k, 1 / (1 + 0.06 * k)
-    local weathers = { false, "rain", "night", "drought", "frost" }
+    -- Only the weathers the level brings itself: clear skies or one of them.
+    local weathers = { false }
+    for _, id in ipairs(D.weathersOf(self.level)) do weathers[#weathers + 1] = id end
     local w = { weather = from.weather }
     if self.dice:random() < 0.5 then w.weather = weathers[self.dice:random(#weathers)] or nil end
     for _, g in ipairs(from) do

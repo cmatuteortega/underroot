@@ -15,6 +15,8 @@
 --   all 1
 --   seen ant pillbug
 --   sound 0.5
+--   taught tutorial network ant rain ring
+--   tips 0
 --
 -- A version 1 save bought species and seeds outright (`owned`, `seeds`):
 -- what it spent comes back as spores, at the network's rate, to grow them
@@ -22,6 +24,12 @@
 -- (progress.txt, endless.txt, loadout.txt, bank.txt, seen.txt, sound.txt):
 -- read once, and written out as save.txt the next time anything is saved.
 -- They are left where they are, read no more.
+--
+-- `taught` is what the guide (src/ui/guide.lua) has shown once and will not
+-- show again: the tutorial, each lesson, each enemy's and weather's first
+-- meeting. A save from before version 3 played before there was a guide: it
+-- starts with the tutorial and the network's lesson behind it, and every
+-- enemy met and weather passed on a level won already taught.
 
 local D = require "src.defs"
 local N = require "src.network"
@@ -29,7 +37,7 @@ local N = require "src.network"
 local P = {}
 
 local FILE = "save.txt"
-local VERSION = 2
+local VERSION = 3
 
 -- What a version 1 save paid for what it bought, and how many of today's
 -- spores each of its spores is worth: given back to grow the network with.
@@ -50,6 +58,8 @@ local function clear()
     P.bought = 0 -- what an old save spent in its Spore Bank
     P.seen = {} -- enemies met: { ant = true }
     P.sound = nil -- 1, 0.5 or 0; nil leaves the sound as it starts
+    P.taught = {} -- what the guide has shown: { tutorial = true, ant = true, rain = true }
+    P.tips = true -- the guide's lessons and first-meeting cards, on or off
     P.cache = nil
 end
 
@@ -95,6 +105,8 @@ local LINE = {
     seeds = function(w) for k = 2, #w do P.bought = P.bought + (OLD_PRICE[w[k]] or 0) end end,
     seen = function(w) for k = 2, #w do if D.ENEMIES[w[k]] then P.seen[w[k]] = true end end end,
     sound = function(w) P.sound = tonumber(w[2]) end,
+    taught = function(w) for k = 2, #w do P.taught[w[k]] = true end end,
+    tips = function(w) P.tips = w[2] ~= "0" end,
 }
 
 -- The six files a save from before save.txt kept.
@@ -121,6 +133,7 @@ end
 function P.load()
     clear()
     local data = read(FILE)
+    local played = data ~= nil or read("progress.txt") ~= nil
     if data then
         for line in data:gmatch("[^\n]+") do
             local w = words(line)
@@ -131,7 +144,7 @@ function P.load()
     end
     -- From before the network: the old bank's spores, and what it spent, at
     -- today's rate. Saved at once, so it is paid only the once.
-    if (P.version or 1) < VERSION then
+    if (P.version or 1) < 2 then
         local old = P.spores + P.bought
         P.spores, P.bought = old * OLD_RATE, 0
         if old > 0 then P.save() end
@@ -139,6 +152,16 @@ function P.load()
     -- A save from before the encyclopedia: whatever comes on a level won was met there.
     for _, l in ipairs(D.LEVELS) do
         if P.won[l.id] then for _, w in ipairs(l.waves) do for _, g in ipairs(w) do P.seen[g[1]] = true end end end
+    end
+    -- A save from before the guide has been played without it: nothing it
+    -- already knows is taught again.
+    if played and (P.version or 1) < 3 then
+        P.taught.tutorial, P.taught.network = true, true
+        for k in pairs(P.seen) do P.taught[k] = true end
+        for _, l in ipairs(D.LEVELS) do
+            if P.won[l.id] then for _, w in ipairs(l.waves) do if w.weather then P.taught[w.weather] = true end end end
+        end
+        P.save()
     end
 end
 
@@ -172,6 +195,11 @@ function P.save()
     if P.all then lines[#lines + 1] = "all 1" end
     lines[#lines + 1] = "seen " .. ids(D.ENEMY_ORDER, P.seen)
     if P.sound then lines[#lines + 1] = "sound " .. P.sound end
+    local taught = {}
+    for id in pairs(P.taught) do taught[#taught + 1] = id end
+    table.sort(taught)
+    if #taught > 0 then lines[#lines + 1] = "taught " .. table.concat(taught, " ") end
+    if not P.tips then lines[#lines + 1] = "tips 0" end
     love.filesystem.write(FILE, table.concat(lines, "\n") .. "\n")
 end
 
@@ -262,6 +290,13 @@ function P.challenges()
     local list = {}
     for _, c in ipairs(D.CHALLENGES) do if P.won[c.won] then list[#list + 1] = c end end
     return list
+end
+
+-- The guide: has it shown this, and shown now (kept at once).
+function P.teach(id)
+    if P.taught[id] then return end
+    P.taught[id] = true
+    P.save()
 end
 
 clear()

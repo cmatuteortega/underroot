@@ -187,4 +187,39 @@ return {
         end
         C.eq(g.phase, "lost", "with nothing grown, the sprout wilts")
     end },
+
+    { "the first levels bring the weathers one at a time", function()
+        local first = {}
+        for _, lv in ipairs(D.LEVELS) do
+            for _, w in ipairs(D.weathersOf(lv)) do first[w] = first[w] or lv.id end
+        end
+        C.eq(first.rain, "crack", "rain on the Crack")
+        C.eq(first.night, "flowerpot", "night on the Flowerpot")
+        C.eq(first.drought, "shed", "drought on the Shed Floor")
+        C.eq(first.frost, "log", "frost on the Rotting Log")
+        C.list(D.weathersOf(D.LEVEL.crack), { "rain" }, "the Crack has only rain")
+    end },
+
+    { "endless brings only the weathers its level does", function()
+        local g = new("crack")
+        g.phase = "won"
+        g:goEndless()
+        for k = 1, 60 do
+            local w = g:endlessWave(g.endlessFrom + k)
+            C.yes(not w.weather or w.weather == "rain", "wave " .. k .. ": " .. tostring(w.weather))
+        end
+    end },
+
+    { "the pulse is on the toolbar only once it is grown", function()
+        local N = require "src.network"
+        local Toolbar = require "src.ui.toolbar"
+        local function has(g)
+            Toolbar.layTools(g)
+            for _, b in ipairs(Toolbar.BUTTONS) do if b.mode == "pulse" then return true end end
+            return false
+        end
+        C.no(has(new("crack", { net = N.grown({}) })), "a new network")
+        C.yes(has(new("crack", { net = N.grown({ hyphae = 1, pulse = 1 }) })), "grown")
+        C.yes(has(new("crack")), "the whole network")
+    end },
 }

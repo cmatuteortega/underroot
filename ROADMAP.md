@@ -37,24 +37,29 @@ Each item says which platforms it is for: **[M]** mobile, **[D]** desktop,
 
 The game has a lot to learn (links, cutting, pruning, regrowing, pocket
 richness, Fairy Rings, the Spore Pulse, Brine, mutations, weather, the loadout,
-a network of about 100 nodes, seeds). Today the only teacher is the one-line
-hint at the bottom (`hint()` in `src/ui/hud.lua`).
+a network of about 100 nodes, seeds). The guide (`src/ui/guide.lua`) now
+teaches it, a thing at a time; what is left is to watch new players with it.
 
-- [ ] **[M/D] A guided first level.** The Crack's first waves as a tutorial:
-  the game pauses, points (a hand on mobile, a cursor on desktop) and waits for
-  the player to do the one thing: grow a link, plant a puffer, start the wave,
-  see a link cut, regrow it, prune one. Skippable, and replayable from settings.
-- [ ] **[M/D] One idea per level.** Each new mechanic gets its moment the first
-  time it matters (rings on the Rotting Log, flooding on the Pond Edge, night,
-  the pulse), not all at once.
-- [ ] **[M/D] First-meeting cards.** The first time an enemy, a boss or a weather
-  shows, a short card with its picture and the encyclopedia's text, and what
-  answers it. Once each, kept in the save, with an off switch.
-- [ ] **[M/D] The network's first visit** points at the cheapest useful node and
-  says what spores are and where they come from.
-- [ ] **[M] Touch-first wording and gestures.** Every hint written for the
-  finger on mobile (most already are through `say`); check that every action has
-  a touch path with no keyboard-only shortcut behind it.
+- [x] **[M/D] A guided first level.** A first run goes from the title straight
+  into the Crack with only the Spore Puffer: the game pauses on a card, points
+  (a hand on mobile, a cursor on desktop) and waits for the player to do the
+  one thing: grow a link, plant a puffer, start the wave, regrow a cut link,
+  prune one. Skippable, and replayable from settings.
+- [x] **[M/D] One idea per level.** Each new mechanic gets its moment the first
+  time it matters (a cut, the first mutation, rich and poor pockets, rings on
+  the Rotting Log, low ground before rain, high ground on the Pond Edge, the Puddle's ford, the
+  pulse once grown), not all at once. The weathers come one a level too: the
+  Crack only rain, then night, drought and frost (`D.weathersOf`).
+- [x] **[M/D] First-meeting cards.** The first time an enemy, a boss or a weather
+  is forecast (or hatches), a short card with its picture, its text and what
+  answers it. Once each, kept in the save (`taught`), with an off switch
+  (SETTINGS: TIPS).
+- [x] **[M/D] The network's first visit** points at the cheapest useful node and
+  says what spores are and where they come from; a run over, a card first says
+  what the bank holds and what is open on the network now.
+- [x] **[M] Touch-first wording and gestures.** The guide's lines are written for
+  the finger through `say`; prune and the pulse put down by their key as by
+  their button. The Spore Pulse's button is only on the toolbar once grown.
 
 ## Phase 2: menus and settings players expect
 
@@ -224,6 +229,6 @@ bundle (`.github/workflows/`).
 
 1. Phase 0 (saves and resuming a run): small, and the worst thing that can
    happen to a player is losing their progress.
-2. The guided first level and the pause menu: what every new player sees.
+2. The pause menu: what every new player sees (the guided first level is in).
 3. Music and the settings: what reviews mention first.
 4. Performance on a low-end phone, then iOS and the stores.

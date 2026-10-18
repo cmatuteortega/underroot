@@ -65,7 +65,7 @@ function input.mousepressed(x, y, b, istouch)
     point(x, y)
     findHover()
     if b == 3 then S.mouse.pan = { wx = x, wy = y, px = S.panx, py = S.pany } return end
-    if b == 1 and not (S.hover.button or S.hover.wave or S.hover.turn or S.hover.node or S.hover.mutation or S.hover.info) and not (S.mode == "grow" and S.drag) then
+    if b == 1 and not (S.hover.guide or S.hover.button or S.hover.wave or S.hover.turn or S.hover.node or S.hover.mutation or S.hover.info) and not (S.mode == "grow" and S.drag) then
         S.press = { x = S.mouse.x, y = S.mouse.y, wx = x, wy = y, px = S.panx, py = S.pany }
         -- In the encyclopedia a drag scrolls it.
         if S.menu == "codex" then S.press.scroll = codex.getScroll() end

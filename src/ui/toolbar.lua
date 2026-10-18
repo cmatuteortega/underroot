@@ -7,7 +7,8 @@ local S = require "src.ui.state"
 local floor, ceil, min = math.floor, math.ceil, math.min
 
 -- The toolbar: regrow-all, the species the run brought (in their usual order,
--- each on its usual key), prune and the pulse. Laid out again for each run.
+-- each on its usual key), prune and the pulse (once the network has grown it).
+-- Laid out again for each run.
 local BUTTONS = {}
 local function layTools(g)
     for k = #BUTTONS, 1, -1 do BUTTONS[k] = nil end
@@ -21,8 +22,11 @@ local function layTools(g)
         end
     end
     BUTTONS[#BUTTONS + 1] = { mode = "prune", key = "X", name = "PRUNE", blurb = "CUT YOUR OWN LINK (HALF BACK) OR CLEAR A TOWER" }
-    BUTTONS[#BUTTONS + 1] = { mode = "pulse", key = "Q", name = "SPORE PULSE",
-        blurb = "PICK A FED NODE: EVERY TOWER ON THE WAY THERE OVERCHARGES" }
+    -- The pulse only once the network has grown it.
+    if not g or g:hasPulse() then
+        BUTTONS[#BUTTONS + 1] = { mode = "pulse", key = "Q", name = "SPORE PULSE",
+            blurb = "PICK A FED NODE: EVERY TOWER ON THE WAY THERE OVERCHARGES" }
+    end
 end
 layTools()
 

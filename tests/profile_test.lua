@@ -27,7 +27,7 @@ return {
         P.loadouts.crack, P.sown.crack = { "puffer", "needle" }, "oak"
         P.net.needle, P.net["puffer.power"], P.seen.ant, P.sound = 1, 2, true, 0.5
         P.save()
-        C.yes(Love.files["save.txt"]:find("^version 2\n"), "the file starts with its version")
+        C.yes(Love.files["save.txt"]:find("^version 3\n"), "the file starts with its version")
         P.load()
         C.yes(P.won.crack, "won")
         C.eq(P.records.crack, 21, "endless record")
@@ -88,7 +88,7 @@ return {
         Love.files["save.txt"] = "version 1\nwon crack\nspores 40\nowned stink giant\nseeds oak dandelion\n"
         P.load()
         C.eq(P.spores, (40 + 20 + 50 + 15 + 25) * 3, "the bank and the purchases, at today's rate")
-        C.yes(Love.files["save.txt"]:find("^version 2\n"), "saved at once as version 2")
+        C.yes(Love.files["save.txt"]:find("^version 3\n"), "saved at once as version 3")
         P.load()
         C.eq(P.spores, (40 + 20 + 50 + 15 + 25) * 3, "and not paid twice")
         C.yes(P.won.crack, "the rest is kept")
@@ -178,5 +178,33 @@ return {
         P.won[D.LEVELS[#D.LEVELS].id] = true
         C.yes(P.levelOpen(3), "a later win keeps the ones before it open")
         C.yes(P.challengeOpen(), "the last won opens challenge mode")
+    end },
+
+    { "what the guide has taught, and its tips, are kept", function()
+        fresh()
+        C.no(P.taught.tutorial, "a first run has the tutorial to come")
+        C.yes(P.tips, "tips start on")
+        P.teach("tutorial")
+        P.teach("ant")
+        P.tips = false
+        P.save()
+        P.load()
+        C.yes(P.taught.tutorial, "the tutorial")
+        C.yes(P.taught.ant, "a first meeting")
+        C.no(P.taught.rain, "nothing else")
+        C.no(P.tips, "tips off")
+    end },
+
+    { "a save from before the guide has nothing taught again", function()
+        Love.clearFiles()
+        Love.files["save.txt"] = "version 2\nwon crack\nspores 5\nseen ant pillbug\n"
+        P.load()
+        C.yes(P.taught.tutorial, "no tutorial for one who has played")
+        C.yes(P.taught.network, "nor the network's first visit")
+        C.yes(P.taught.ant and P.taught.pillbug, "what was met")
+        C.yes(P.taught.rain, "the weather of a level won")
+        C.no(P.taught.night, "not one still to come")
+        C.yes(Love.files["save.txt"]:find("^version 3\n"), "saved at once as version 3")
+        C.eq(P.spores, 5, "a version 2 save's spores are not paid back again")
     end },
 }

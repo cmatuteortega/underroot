@@ -13,6 +13,7 @@ local Toolbar = require "src.ui.toolbar"
 local flair = require "src.ui.flair"
 local audio = require "src.ui.audio"
 local codex = require "src.ui.codex"
+local Guide = require "src.ui.guide"
 
 local max = math.max
 local layTools = Toolbar.layTools
@@ -20,7 +21,8 @@ local layTools = Toolbar.layTools
 -- A new run of the level on its board, everything put down and the camera home.
 local function start()
     -- The shots play the whole network; a player, what theirs has grown.
-    S.game = Game.new(S.world, S.level, { challenge = S.challenge, loadout = S.chosen, seed = not S.script and Profile.sown[S.level.id] or nil,
+    -- The tutorial plants the bean, whatever was planted here before.
+    S.game = Game.new(S.world, S.level, { challenge = S.challenge, loadout = S.chosen, seed = not S.script and not S.tutorial and Profile.sown[S.level.id] or nil,
         best = Profile.records[S.level.id], dice = S.script and 1, net = not S.script and Profile.grown() or nil,
         firstWin = not S.script and not Profile.won[S.level.id] })
     layTools(S.game)
@@ -50,7 +52,9 @@ end
 
 -- A frame of the run, dt on.
 local function update(dt)
-    if not S.paused then
+    -- The guide first: a card up holds the run.
+    Guide.update(S.game)
+    if not S.paused and not Guide.holding() then
         for _ = 1, S.speed do
             S.game:update(dt)
             if S.game.events.heart then S.heartFlash, flair.hurt = 0.15, 0.45 end

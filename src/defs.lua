@@ -585,6 +585,9 @@ D.COUNTERS = {
 -- out; `wither` how much faster an unfed mat dries up; `lamp` and `range`
 -- scale a Ghost Lamp's pull and every tower's reach; `pace` scales how fast
 -- everything fires and moves, `grow` how fast links grow and regrow.
+-- The first levels bring them one at a time, so each is met on its own: the
+-- Crack only rain, the Flowerpot night, the Shed Floor drought and the
+-- Rotting Log frost; from there on any of them comes.
 D.WEATHER = {
     rain = { name = "RAIN", flow = 1.5, wash = 0.3, clouds = 2,
         blurb = "FLOW +50%, BUT PUDDLES WASH LOW POCKETS AND CLOUDS AWAY" },
@@ -595,6 +598,10 @@ D.WEATHER = {
     frost = { name = "FROST", pace = 0.8, grow = 0.6,
         blurb = "EVERYTHING SLOWS: GROWTH, FIRE AND ENEMIES ALIKE" },
 }
+
+-- Spores for the Spore Bank: a few a wave cleared, more for a win, more
+-- again for a level's first win.
+D.SPORES = { wave = 6, win = 12, first = 20 }
 
 -- The encyclopedia's glossary: every status and word of the game's that wants
 -- explaining. Wherever one of its `forms` is written in the encyclopedia it
@@ -699,8 +706,9 @@ D.GLOSSARY = {
         about = "WHAT A RUN IS SPENT IN. THE SPROUT MAKES THEM WHILE A WAVE IS ON, EVERY CLEARED WAVE PAYS MORE, "
             .. "AND BODIES DRUNK ADD TO THEM." },
     { name = "SPORES", forms = { "SPORES" },
-        about = "KEPT IN THE SPORE BANK BETWEEN RUNS: ONE FOR EVERY WAVE CLEARED, 10 MORE FOR A WIN. THEY BUY "
-            .. "SPECIES AND SEEDS." },
+        about = "KEPT IN THE SPORE BANK BETWEEN RUNS, EVEN WHEN THE SPROUT FALLS: " .. D.SPORES.wave
+            .. " FOR EVERY WAVE CLEARED, " .. D.SPORES.win .. " MORE FOR A WIN AND " .. D.SPORES.first
+            .. " MORE AGAIN FOR A LEVEL'S FIRST. THEY GROW THE NETWORK: NEW SPECIES, SEEDS, THE SPORE PULSE." },
     { name = "MUTATION", forms = { "MUTATION", "MUTATIONS" },
         about = "AFTER SOME WAVES THE NETWORK MUTATES: PICK ONE OF THREE CHANGES FOR THE REST OF THE RUN. A SEED "
             .. "BRINGS SOME OF ITS OWN." },
@@ -720,13 +728,13 @@ local CRACK = {
     { weather = "rain", { "gnat", 4, 1.5, 1, 0 }, { "ant", 8, 1.1, 2, 2 }, { "mite", 1, 1, 1, 8 } },
     { { "ant", 8, 1.2, 2, 0 }, { "queen", 1, 1, 1, 4 } },
     { { "ant", 8, 1.2, 1, 0 }, { "pillbug", 2, 5, 2, 2 }, { "brine", 1, 1, 2, 6 }, { "ant", 6, 1.2, 2, 10 } },
-    { weather = "night", { "slug", 2, 10, 1, 0 }, { "mite", 2, 7, 2, 3 }, { "moth", 4, 2, 1, 4 }, { "ant", 10, 1, 1, 6 } },
+    { { "slug", 2, 10, 1, 0 }, { "mite", 2, 7, 2, 3 }, { "moth", 4, 2, 1, 4 }, { "ant", 10, 1, 1, 6 } },
     { { "spider", 3, 5, 2, 0 }, { "ant", 10, 1, 1, 2 }, { "pillbug", 2, 5, 1, 8 }, { "gnat", 5, 1.2, 2, 10 } },
     { weather = "rain", { "knight", 3, 4, 1, 0 }, { "brine", 2, 8, 2, 3 }, { "gnat", 6, 1, 1, 6 }, { "ant", 10, 0.9, 2, 8 } },
     { { "knight", 2, 6, 1, 0 }, { "stag", 1, 1, 2, 3 }, { "ant", 12, 1, 1, 6 } },
-    { weather = "drought", { "slug", 3, 7, 2, 0 }, { "spider", 4, 4, 1, 2 }, { "mite", 3, 6, 2, 6 }, { "ant", 12, 0.9, 1, 10 } },
-    { weather = "frost", { "knight", 5, 3, 1, 0 }, { "pillbug", 4, 4, 2, 0 }, { "gnat", 8, 0.8, 2, 4 }, { "brine", 2, 9, 1, 6 } },
-    { weather = "night", { "spider", 5, 3, 2, 0 }, { "slug", 3, 6, 1, 2 }, { "mite", 4, 5, 1, 6 }, { "brine", 3, 7, 2, 8 },
+    { { "slug", 3, 7, 2, 0 }, { "spider", 4, 4, 1, 2 }, { "mite", 3, 6, 2, 6 }, { "ant", 12, 0.9, 1, 10 } },
+    { weather = "rain", { "knight", 5, 3, 1, 0 }, { "pillbug", 4, 4, 2, 0 }, { "gnat", 8, 0.8, 2, 4 }, { "brine", 2, 9, 1, 6 } },
+    { { "spider", 5, 3, 2, 0 }, { "slug", 3, 6, 1, 2 }, { "mite", 4, 5, 1, 6 }, { "brine", 3, 7, 2, 8 },
         { "moth", 6, 1.5, 2, 3 }, { "ant", 16, 0.7, 2, 12 } },
     { { "knight", 6, 2.5, 2, 0 }, { "pillbug", 5, 3, 1, 0 }, { "gnat", 12, 0.6, 2, 4 }, { "spider", 5, 3, 1, 6 },
         { "ant", 20, 0.6, 1, 10 }, { "slug", 2, 8, 2, 12 } },
@@ -748,10 +756,10 @@ local FLOWERPOT = {
     { { "gnat", 4, 1.5, 1, 0 }, { "ant", 8, 1.1, 2, 2 }, { "pillbug", 2, 4, 1, 6 } },
     { weather = "night", { "moth", 4, 2, 1, 0 }, { "ant", 10, 1, 1, 2 }, { "brine", 1, 1, 1, 6 }, { "ant", 4, 1.2, 2, 10 } },
     { { "slug", 1, 1, 1, 0 }, { "pillbug", 3, 4, 1, 2 }, { "mite", 2, 6, 2, 4 }, { "ant", 10, 0.9, 1, 8 } },
-    { weather = "drought", { "mole", 1, 1, 1, 0, MID }, { "spider", 2, 5, 1, 2 }, { "gnat", 5, 1.2, 1, 6 }, { "ant", 12, 0.9, 1, 10 },
+    { { "mole", 1, 1, 1, 0, MID }, { "spider", 2, 5, 1, 2 }, { "gnat", 5, 1.2, 1, 6 }, { "ant", 12, 0.9, 1, 10 },
         { "ant", 6, 1, 2, 10 } },
     { weather = "rain", { "knight", 2, 5, 1, 0 }, { "brine", 2, 7, 1, 3 }, { "pillbug", 3, 4, 2, 4 }, { "ant", 10, 0.9, 1, 8 } },
-    { weather = "frost", { "pillbug", 4, 3, 1, 0 }, { "slug", 2, 7, 1, 2 }, { "mite", 3, 5, 2, 4 }, { "gnat", 6, 1, 1, 8 } },
+    { weather = "rain", { "pillbug", 4, 3, 1, 0 }, { "slug", 2, 7, 1, 2 }, { "mite", 3, 5, 2, 4 }, { "gnat", 6, 1, 1, 8 } },
     { weather = "night", { "moth", 6, 1.5, 1, 0 }, { "spider", 3, 4, 1, 2 }, { "knight", 3, 5, 1, 6 }, { "ant", 14, 0.7, 2, 8 } },
     { { "ant", 12, 0.8, 1, 0 }, { "queen", 1, 1, 1, 4 }, { "ant", 8, 1, 2, 10 }, { "pillbug", 3, 4, 1, 12 } },
 }
@@ -770,7 +778,7 @@ local SHED = {
     { { "slug", 2, 8, 1, 0 }, { "pillbug", 4, 4, 2, 2 }, { "springtail", 8, 0.6, 1, 6 }, { "gnat", 6, 1, 2, 8 } },
     { weather = "drought", { "knight", 2, 5, 2, 0 }, { "spider", 4, 4, 1, 2 }, { "queen", 1, 1, 1, 4, MID }, { "mite", 3, 5, 2, 6 },
         { "ant", 14, 0.8, 1, 8 } },
-    { weather = "frost", { "pillbug", 4, 3, 1, 0 }, { "knight", 2, 5, 2, 2 }, { "springtail", 10, 0.5, 1, 6 }, { "brine", 2, 8, 2, 6 } },
+    { { "pillbug", 4, 3, 1, 0 }, { "knight", 2, 5, 2, 2 }, { "springtail", 10, 0.5, 1, 6 }, { "brine", 2, 8, 2, 6 } },
     { weather = "night", { "moth", 8, 1.2, 1, 0 }, { "spider", 5, 3, 2, 2 }, { "slug", 3, 6, 1, 4 }, { "ant", 16, 0.7, 2, 8 } },
     { weather = "rain", { "springtail", 14, 0.4, 2, 0 }, { "knight", 3, 4, 1, 2 }, { "gnat", 10, 0.7, 2, 6 }, { "brine", 3, 6, 1, 8 } },
     { { "ant", 10, 0.9, 1, 0 }, { "stag", 1, 1, 2, 3 }, { "ant", 10, 0.9, 1, 8 }, { "springtail", 8, 0.6, 2, 10 } },
@@ -966,6 +974,17 @@ D.LEVELS = {
 D.LEVEL = {}
 for _, l in ipairs(D.LEVELS) do D.LEVEL[l.id] = l end
 
+-- The weathers a level's own waves bring, in the order D.WEATHER_ORDER has
+-- them: all endless shuffles among, so a level never brings one before its time.
+D.WEATHER_ORDER = { "rain", "night", "drought", "frost" }
+function D.weathersOf(level)
+    local has = {}
+    for _, w in ipairs(level.waves) do if w.weather then has[w.weather] = true end end
+    local list = {}
+    for _, id in ipairs(D.WEATHER_ORDER) do if has[id] then list[#list + 1] = id end end
+    return list
+end
+
 -- Challenge mode: any level with a last wave added, a boss of its own in it.
 -- Each opens once its `won` level is won: the Bombardier Beetle with the
 -- Lawn, the Hornet with the Compost Heap.
@@ -1071,8 +1090,7 @@ D.MUTATIONS = {
 --   seen = { kinds }      hidden until one of them has been met
 --
 -- `price` is a list, a price a rank. Spores come in a few a wave cleared and
--- more for a win, the first win of a level most (D.SPORES).
-D.SPORES = { wave = 6, win = 12, first = 20 }
+-- more for a win, the first win of a level most (D.SPORES, up with the glossary).
 
 -- A species' branch of the network: its unlock, then what makes it as strong
 -- as its row above. `m` scales every price on it, the later species dearer;

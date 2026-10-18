@@ -17,6 +17,7 @@ local View = require "src.ui.view"
 local flair = require "src.ui.flair"
 local Run = require "src.ui.run"
 local Loadout = require "src.ui.loadout"
+local Guide = require "src.ui.guide"
 
 local floor, ceil, max, min, abs, sqrt = math.floor, math.ceil, math.max, math.min, math.abs, math.sqrt
 local color, box, text, label, centred, wrapLines, say, inside =
@@ -533,7 +534,8 @@ local function draw()
 
     -- One line of help above the toolbar.
     local tip, k = tooltip()
-    if not tip then tip, k = hint() end
+    -- The guide says it already, at the top.
+    if not tip and not Guide.talking() then tip, k = hint() end
     if tip then
         -- Too long for the screen (a phone held upright): broken at a word onto
         -- a second line above, rather than cut off.
@@ -614,6 +616,7 @@ local function draw()
         for _, c in ipairs(D.CHALLENGES) do
             if c.won == S.level.id and not S.game.challenge then centred("CHALLENGE MODE IS OPEN: THE " .. c.name, y, "r"); y = y + 10 end
         end
+        if (S.game.opened or {})[1] then centred("GROW IT ON THE NETWORK, FROM THE HOME SCREEN", y, "s") end
     elseif S.game.phase == "lost" then
         centred("THE SPROUT HAS WILTED", floor(S.vh / 2) - 24, "r")
         if S.game.endless then
@@ -624,13 +627,16 @@ local function draw()
         end
         centred(say("R: TRY AGAIN   M: LEVELS", "TAP FOR THE LEVELS"), floor(S.vh / 2), "l")
         centred("+" .. S.game.spores .. " SPORES   " .. Profile.spores .. " IN THE BANK", floor(S.vh / 2) + 24, "t")
+        centred("SPORES GROW THE NETWORK, FROM THE HOME SCREEN", floor(S.vh / 2) + 34, "s")
     end
+    Guide.draw("run")
 end
 
 -- What is pointed at: a won level's button, a mutation card, the panel and its
 -- upgrades, a tool, the wave button, a turn button, the weather's word, the
 -- top strip; else on the board, the node, link and ground under it.
 local function hover(mx, my)
+    if Guide.hover(mx, my, "run") then return end
     if S.game.phase == "won" then
         for _, b in ipairs(wonButtons()) do
             if inside(mx, my, b.x, b.y, b.w, b.h) then S.hover.won = b.id return end
@@ -686,6 +692,7 @@ end
 
 -- The box of whatever is pointed at, to light up when it is pressed.
 local function under()
+    if S.hover.guide then return Guide.under("run") end
     if S.hover.mutation then
         local c = mutationCards()[S.hover.mutation]
         return function() return c.x, c.y, c.w, c.h end
@@ -721,6 +728,8 @@ local function afterWin(id)
 end
 
 local function click(b)
+    if b == 1 and Guide.click("run") then return end
+    if Guide.holding() then return end
     if S.weatherTip and not S.hover.weather then S.weatherTip = nil end
     if b == 2 then
         if S.mode ~= "grow" or S.drag or S.selected then sound("back") end
@@ -762,7 +771,9 @@ local function click(b)
         return
     end
     if S.hover.wave then
-        if S.game.phase == "build" then S.game:startWave() else S.speed = S.speed % 3 + 1; sound("speed", 0.8 + 0.2 * S.speed) end
+        if S.game.phase ~= "build" then S.speed = S.speed % 3 + 1; sound("speed", 0.8 + 0.2 * S.speed)
+        elseif Guide.allows("start") then S.game:startWave()
+        else deny() end
         return
     end
     if S.hover.turn then turnCamera(S.hover.turn) return end
@@ -843,6 +854,7 @@ local function click(b)
 end
 
 local function key(key)
+    if Guide.key(key, "run") then return end
     if key == "=" or key == "+" or key == "kp+" then zoomBy(1) end
     if key == "-" or key == "kp-" then zoomBy(-1) end
     if S.game.phase == "mutate" then
@@ -866,8 +878,10 @@ local function key(key)
             if b.action then
                 if S.game:repairAll() == 0 then deny() end
             elseif not (b.tower and not S.game:unlocked(b.mode)) then
-                S.mode, S.drag, S.selected, S.peek = b.mode, nil, nil, nil
-                sound("select")
+                -- Prune or the pulse, its key again, is put down, as its button does.
+                local down = not b.tower and S.mode == b.mode
+                S.mode, S.drag, S.selected, S.peek = down and "grow" or b.mode, nil, nil, nil
+                sound(down and "back" or "select")
             else
                 deny()
             end
@@ -881,7 +895,7 @@ local function key(key)
     if key == "space" then
         if S.game.phase == "build" then
             flair.pressed = { t = 0.18, rect = waveRect }
-            S.game:startWave()
+            if Guide.allows("start") then S.game:startWave() else deny() end
         end
     end
     if key == "f" then S.speed = S.speed % 3 + 1; sound("speed", 0.8 + 0.2 * S.speed) end

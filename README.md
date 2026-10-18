@@ -44,8 +44,10 @@ can be checked by comparing them.
 
 It opens on the title; a key, click or tap sends the sprout and the ground
 down and brings up the home screen's four ways on: LEVELS (`L`, the level
-picker), NETWORK (`N`), ENCYCLOPEDIA (`E`) and SETTINGS (`S`, the sound for
-now). The network, the encyclopedia and the settings go back to it, and so
+picker), NETWORK (`N`), ENCYCLOPEDIA (`E`) and SETTINGS (`S`: the sound, the
+tips on or off, and the tutorial played again).
+The very first time, the tap goes straight into the tutorial instead (see
+**The guide** below). The network, the encyclopedia and the settings go back to it, and so
 does BACK on the level picker, which keeps the sprout at the bottom under the
 same night (the name goes up off the top for it). Every screen slides into the
 next: the one that was up goes off one side as the new one comes in from the
@@ -70,6 +72,28 @@ every third past 40), and from wave 10 each brings an extra boss from the
 level's own, one more every 10 waves. The most waves held in endless on
 each level is kept in the save (`save.txt`, see `src/profile.lua`) and shown at the bottom
 left of its card in the level picker.
+
+**The guide.** A first run goes from the title straight into the Crack with
+only the Spore Puffer, and the tutorial walks it through: a card for what the
+game is, then a line at the top and a hand (a cursor with a mouse) pointing
+at the one thing to do -- drag a link out from the sprout, pick the puffer
+and plant it, start the wave (START waits until then), regrow a link the ants
+cut, prune -- with a card between for nutrients and for the first wave
+cleared. SKIP TUTORIAL leaves it at any step; SETTINGS plays it again. A card
+holds the run while it is up (`Enter`, `Space` or `Esc` takes its first
+button); the line and the hand never do. After it, each idea gets a card the
+first time it matters: a link cut (then a hand on it until it is regrown),
+the first mutation, rich and poor pockets, a Fairy Ring (straight away on the
+Rotting Log, where three nodes close one), high ground, low ground before rain, the Puddle's
+ford, the Spore Pulse once the network has grown it. The first time an
+enemy, a boss or a weather is in the forecast (or hatches on the board) a
+card shows its picture, what it does and what answers it. A run over with
+spores in the bank, a card says what they are and what is open on the
+network now, with a way straight there; the network's first visit picks a
+good first node (the cheapest open species, the Enoki Needle on a first run)
+and points at its GROW button. Each is shown once (`taught` in the save);
+the tips switch off in SETTINGS. The Spore Pulse's button is on the toolbar
+only once the network has grown it.
 
 **The Spore Bank and its network.** A run pays 6 spores for every wave it
 clears, endless included, 12 more for a win and 20 more again for a level's
@@ -478,7 +502,10 @@ tileset's tiles alone; only the pockets and the sprout's mound are modelled.
 **Weather.** A wave can come with weather; the forecast says so before it starts
 (and the top bar while it lasts). Point at its name there (tap it on a phone)
 and a tip says what it does. Each is a row in `D.WEATHER`, and each has its
-own picture of the board.
+own picture of the board. The first levels bring them one at a time: the Crack
+only rain, the Flowerpot night, the Shed Floor drought, the Rotting Log frost;
+from there on any of them can come. Endless shuffles only among the weathers
+its level brings (`D.weathersOf`).
 
 - **Rain**: flow +50%, but towers on low pockets lose 0.3 reserve a second, and
   lingering clouds and ink wash out twice as fast. Puddles on the trail, rain
@@ -652,8 +679,9 @@ What is new for Underfoot:
 | `src/ui/title.lua`, `home.lua`, `settings.lua`, `menu.lua`, `loadout.lua`, `network.lua`, `codex.lua` | the title (and the night the home screen, the settings and the level picker share), the home screen after it, the settings, the level picker, the loadout, the Spore Bank's network, the encyclopedia |
 | `src/ui/slide.lua` | the way from one screen to the next: the old one sliding out, the new one in |
 | `src/ui/run.lua` | starting a run and each frame of it: the rules stepped, and what the profile keeps |
+| `src/ui/guide.lua` | the tutorial, the lessons, the first-meeting cards and the network's first visit |
 | `src/ui/flair.lua`, `audio.lua` | the HUD's flourishes and the weather's coming and going; the sound's glue to the screen |
-| `src/profile.lua` | what is kept between runs (`save.txt`): wins, records, loadouts, the spores and the network's ranks, enemies met |
+| `src/profile.lua` | what is kept between runs (`save.txt`): wins, records, loadouts, the spores and the network's ranks, enemies met, what the guide has taught |
 | `src/network.lua` | the network (`D.NETWORK`) worked out: prices, what can be bought, what a profile's ranks grow for a run, where each node sits on its screen |
 | `src/game.lua` | the rules: the graph, flow, cuts, pruning, regrowth, rings, the pulse, upgrades, towers firing, enemies and bosses moving, corpses, waves, mutations |
 | `src/defs.lua` | every tuning number: link costs, towers, enemies, weather, the levels and their waves |
