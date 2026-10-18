@@ -22,6 +22,21 @@ return {
         end
     end },
 
+    { "a first run has only the bean; each other seed waits on a later win", function()
+        local at, last = {}, 0
+        for k, l in ipairs(D.LEVELS) do at[l.id] = k end
+        for _, sd in ipairs(D.SEEDS) do
+            local row = D.NET[sd.id]
+            if sd.id == "bean" then
+                C.yes(row.free and not row.won, "the bean is there from the start")
+            else
+                C.yes(row.won and at[row.won], sd.id .. " waits on a level")
+                C.yes(at[row.won] > last, sd.id .. " waits on a later level than the seed before it")
+                last = at[row.won]
+            end
+        end
+    end },
+
     { "everything is on it: each species, seed, upgrade and mutation", function()
         local g = N.grown(N.everything())
         for _, t in ipairs(D.TOWERS) do

@@ -1257,7 +1257,9 @@ add({ id = "lore.soil", at = "harvest", name = "SOIL MEMORY", blurb = "MORE MUTA
     mutations = { "feast", "sugar", "store", "roots" }, price = { 6, 8, 10, 12 } })
 local SEED_AT = { oak = "root", tomato = "sap", dandelion = "oak", sunflower = "tomato", flytrap = "sunflower" }
 local SEED_PRICE = { oak = 18, tomato = 18, dandelion = 30, sunflower = 40, flytrap = 55 }
-local SEED_WON = { dandelion = "flowerpot", sunflower = "log", flytrap = "lawn" }
+-- A first run has only the bean; each other seed waits on a win along the
+-- way, one every level or two, the last two after the Lawn.
+local SEED_WON = { oak = "crack", tomato = "shed", dandelion = "pond", sunflower = "puddle", flytrap = "stump" }
 add({ id = "bean", at = "root", name = D.SEED.bean.name, seed = "bean", free = true, blurb = "THE PLAIN SPROUT" })
 for _, sd in ipairs(D.SEEDS) do
     if sd.id ~= "bean" then
