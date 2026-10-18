@@ -219,10 +219,12 @@ function title.sounds()
     end
 end
 
--- Any key, click or tap goes on.
+-- Any key, click or tap goes on; back (Esc) asks to leave the game.
 function title.hover() end
 function title.under() end
 function title.click() title.leave() end
-function title.key() title.leave() end
+function title.key(key)
+    if key == "escape" then flair.askQuit() else title.leave() end
+end
 
 return title

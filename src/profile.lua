@@ -6,7 +6,7 @@
 -- It all lives in one file in the save directory, `save.txt`, a line a thing:
 -- a word saying what, then its words.
 --
---   version 2
+--   version 3
 --   won crack pond
 --   endless crack 21
 --   loadout crack puffer needle mat seed=oak
@@ -15,12 +15,27 @@
 --   all 1
 --   seen ant pillbug
 --   sound 0.5
+--   end
+--
+-- The `end` says the file was written to the last line: one cut short (a
+-- crash, a dead battery, the OS killing the app mid-write) has none, and is
+-- not read. Nothing is written over the only good copy: the last good save is
+-- kept as save.bak, the new one written to save.tmp, then to save.txt, then
+-- save.tmp let go. Whatever moment the writing stops at, one of the three
+-- reads whole, and P.load takes the first that does: save.txt, save.tmp (newer
+-- than save.bak, and whole only once it was all written), save.bak.
+--
+-- Each change to the file bumps VERSION, with a step in MIGRATE that brings a
+-- save of the version before up to it, so a save from any version reads.
+-- A save from a newer version than this one (a player gone back a version)
+-- is read for what this version knows of it, and a copy of it kept as it was,
+-- save.v<N>.txt, before anything is written over it.
 --
 -- A version 1 save bought species and seeds outright (`owned`, `seeds`):
 -- what it spent comes back as spores, at the network's rate, to grow them
 -- again. A save from before save.txt is the six files it replaced
 -- (progress.txt, endless.txt, loadout.txt, bank.txt, seen.txt, sound.txt):
--- read once, and written out as save.txt the next time anything is saved.
+-- read once, and written out as save.txt at once.
 -- They are left where they are, read no more.
 
 local D = require "src.defs"
@@ -28,8 +43,8 @@ local N = require "src.network"
 
 local P = {}
 
-local FILE = "save.txt"
-local VERSION = 2
+local FILE, TMP, BAK = "save.txt", "save.tmp", "save.bak"
+local VERSION = 3
 
 -- What a version 1 save paid for what it bought, and how many of today's
 -- spores each of its spores is worth: given back to grow the network with.
@@ -55,6 +70,25 @@ end
 
 local function read(name)
     return love.filesystem.getInfo(name) and love.filesystem.read(name)
+end
+
+-- Does the file read whole? From version 3 on it ends on `end`; one from
+-- before has no end to check, and is taken as it is.
+local function whole(data)
+    if not data then return false end
+    local v = tonumber(data:match("^version%s+(%d+)"))
+    if not v then return data:match("%S") ~= nil and not data:match("^%s*end") end
+    if v < 3 then return true end
+    return data:match("\nend%s*$") ~= nil
+end
+
+-- The save as last written: save.txt, or what was being written over it
+-- when it stopped, or the one before.
+local function readSave()
+    for _, name in ipairs({ FILE, TMP, BAK }) do
+        local data = read(name)
+        if whole(data) then return data, name end
+    end
 end
 
 local function words(line)
@@ -97,8 +131,11 @@ local LINE = {
     sound = function(w) P.sound = tonumber(w[2]) end,
 }
 
--- The six files a save from before save.txt kept.
+-- The six files a save from before save.txt kept; true if there were any.
+local OLD = { "progress.txt", "endless.txt", "loadout.txt", "bank.txt", "seen.txt", "sound.txt" }
 local function readOld()
+    local found = false
+    for _, name in ipairs(OLD) do found = found or love.filesystem.getInfo(name) ~= nil end
     local data = read("progress.txt")
     if data then for id in data:gmatch("%S+") do P.won[id] = true end end
     data = read("endless.txt")
@@ -116,25 +153,45 @@ local function readOld()
     if data then for id in data:gmatch("%S+") do if D.ENEMIES[id] then P.seen[id] = true end end end
     data = read("sound.txt")
     P.sound = data and tonumber(data:match("[%d%.]+"))
+    return found
 end
+
+-- The steps between versions: MIGRATE[n] brings a save read as version n
+-- up to version n + 1.
+local MIGRATE = {
+    -- From before the network: the old bank's spores, and what it spent, at
+    -- today's rate.
+    [1] = function()
+        P.spores, P.bought = (P.spores + P.bought) * OLD_RATE, 0
+    end,
+    -- Version 3 only added the `end` line.
+    [2] = function() end,
+}
 
 function P.load()
     clear()
-    local data = read(FILE)
+    local data, from = readSave()
     if data then
         for line in data:gmatch("[^\n]+") do
             local w = words(line)
             if LINE[w[1]] then LINE[w[1]](w) end
         end
     else
-        readOld()
+        data = readOld()
     end
-    -- From before the network: the old bank's spores, and what it spent, at
-    -- today's rate. Saved at once, so it is paid only the once.
-    if (P.version or 1) < VERSION then
-        local old = P.spores + P.bought
-        P.spores, P.bought = old * OLD_RATE, 0
-        if old > 0 then P.save() end
+    -- An older save brought up to this version, a step at a time, and saved
+    -- at once, so each step is taken only the once.
+    local v = P.version or 1
+    if v > VERSION then
+        local copy = "save.v" .. v .. ".txt"
+        if not read(copy) then love.filesystem.write(copy, data) end
+    end
+    if v < VERSION then
+        for n = v, VERSION - 1 do MIGRATE[n]() end
+        if data then P.save() end
+    elseif data and from ~= FILE then
+        -- Saved over something cut short: save.txt whole again.
+        P.save()
     end
     -- A save from before the encyclopedia: whatever comes on a level won was met there.
     for _, l in ipairs(D.LEVELS) do
@@ -172,7 +229,16 @@ function P.save()
     if P.all then lines[#lines + 1] = "all 1" end
     lines[#lines + 1] = "seen " .. ids(D.ENEMY_ORDER, P.seen)
     if P.sound then lines[#lines + 1] = "sound " .. P.sound end
-    love.filesystem.write(FILE, table.concat(lines, "\n") .. "\n")
+    lines[#lines + 1] = "end"
+    local data = table.concat(lines, "\n") .. "\n"
+    -- The last good save kept, then the new one written beside it and only
+    -- then over it (see the top of the file).
+    local last = read(FILE)
+    if last == data then return end
+    if whole(last) then love.filesystem.write(BAK, last) end
+    love.filesystem.write(TMP, data)
+    love.filesystem.write(FILE, data)
+    if read(FILE) == data and love.filesystem.remove then love.filesystem.remove(TMP) end
 end
 
 --- the Spore Bank's network -----------------------------------------------------------------

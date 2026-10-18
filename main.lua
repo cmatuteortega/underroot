@@ -37,6 +37,9 @@ local Hud = require "src.ui.hud"
 local Input = require "src.ui.input"
 local Slide = require "src.ui.slide"
 
+-- Something broken: a report in crash.txt and a screen saying so (src/crash.lua).
+love.errorhandler = require("src.crash").handler
+
 local floor, min, max = math.floor, math.min, math.max
 local IDX = T.IDX
 local BUTTONS, buttonRect = Toolbar.BUTTONS, Toolbar.buttonRect

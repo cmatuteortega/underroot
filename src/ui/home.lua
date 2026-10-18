@@ -101,7 +101,7 @@ function home.key(key)
     for k, c in ipairs(home.CHOICES) do
         if key == c.key or key == tostring(k) then home.choose(k) return end
     end
-    if key == "escape" then sound("back"); Title.open() end
+    if key == "escape" then flair.askQuit() end
 end
 
 return home

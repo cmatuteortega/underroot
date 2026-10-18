@@ -12,25 +12,27 @@ Each item says which platforms it is for: **[M]** mobile, **[D]** desktop,
 
 ## Phase 0: don't lose the player's progress (do first, small)
 
-- [ ] **[M/D] Atomic saves.** `src/profile.lua` writes `save.txt` in place with
-  `love.filesystem.write`; a crash, a dead battery or the OS killing the app
-  mid-write leaves it empty or cut short. Write `save.tmp`, then rename it over
-  `save.txt`, and keep the last good one as `save.bak` to fall back to when the
-  file does not read.
-- [ ] **[M/D] A save version.** A `version N` line at the top, and a migration
-  per bump, so later changes (new nodes, renamed ids) never quietly drop what a
-  player had.
+- [x] **[M/D] Atomic saves.** `save.txt` ends on an `end` line, so one cut
+  short is caught; the last good save is kept as `save.bak`, the new one
+  written to `save.tmp` and then over `save.txt`, and loading takes the first
+  of the three that reads whole. (No rename: `love.filesystem` has none, and
+  three writes leave a whole copy at every moment without it.)
+- [x] **[M/D] A save version.** `version 3`, and a step in `MIGRATE`
+  (`src/profile.lua`) per bump, saved at once. A save from a newer version is
+  read for what this one knows, and kept as `save.v<N>.txt` first.
 - [ ] **[M] Resume a run.** On a phone the OS kills a backgrounded app freely: a
   call or a message in the middle of wave 12 now loses the run. Save the run's
   state on `love.visible(false)` / `love.focus(false)` and between waves, and
   offer CONTINUE on the home screen. (On desktop it is a nicety: quitting mid-run
   then picks up where it was.)
-- [ ] **[M] The Android back button** goes back a screen everywhere, opens the
-  pause menu in a run, and asks before leaving the game from the home screen.
-- [ ] **[M/D] Crash reporting.** A `love.errorhandler` that writes the error and
-  stack to `crash.txt` in the save directory and shows a friendly screen with a
-  way to send it (mail link or copy to clipboard), instead of LÖVE's blue screen.
-- [ ] Fix the stale comment in `.github/workflows/android.yml`: it says conf.lua
+- [x] **[M] The Android back button** (Esc to LÖVE) goes back a screen
+  everywhere, pauses a run (the pause menu is Phase 2's), and from the home or
+  title screen asks first: back again within two seconds leaves the game.
+- [x] **[M/D] Crash reporting.** `src/crash.lua`: the error, the stack and the
+  device to `crash.txt` in the save directory, and a screen in the game's
+  colours with COPY REPORT and QUIT, instead of LÖVE's blue screen. Still to
+  add: a mail link, once there is an address to send reports to.
+- [x] Fix the stale comment in `.github/workflows/android.yml`: it says conf.lua
   turns the audio modules off, and it turns them on.
 
 ## Phase 1: the first ten minutes (onboarding)

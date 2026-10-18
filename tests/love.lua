@@ -45,6 +45,7 @@ love = {
         getInfo = function(name) return files[name] and { type = "file", size = #files[name] } or nil end,
         read = function(name) return files[name] end,
         write = function(name, data) files[name] = data; return true end,
+        remove = function(name) local had = files[name] ~= nil; files[name] = nil; return had end,
     },
     timer = { getTime = os.clock },
 }
