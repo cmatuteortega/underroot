@@ -37,6 +37,15 @@ local function levelCards()
     return cards, switch
 end
 
+-- The challenge switch goes OFF, then through each challenge open, and back.
+local function toggleChallenge()
+    local open = Profile.challenges()
+    local nxt = open[1]
+    for k, c in ipairs(open) do if c.id == S.challenge then nxt = open[k + 1] end end
+    S.challenge = nxt and nxt.id or false
+    sound(S.challenge and "on" or "off")
+end
+
 local function backButton() return { x = S.inset.l + 4, y = S.inset.t + 4, w = 34, h = 12 } end
 
 -- Back to the run if one is still being played, else to the home screen.
@@ -80,10 +89,12 @@ local function draw()
     if Profile.challengeOpen() then
         local c = switch
         box(c.x, c.y, c.w, c.h, S.hover.challenge and "n" or "u", S.challenge and "r" or "k")
-        local s = "CHALLENGE: " .. (S.challenge and "ON" or "OFF")
+        local s = "CHALLENGE: " .. (S.challenge and D.CHALLENGE[S.challenge].name or "OFF")
         text(s, c.x + floor((c.w - Font.width(s)) / 2), c.y + 5, S.challenge and "r" or "w")
-        if S.hover.challenge or S.challenge then
-            centred("A LAST WAVE ON ANY LEVEL: THE BOMBARDIER BEETLE", c.y + c.h + 6, "r", "o")
+        if S.challenge then
+            centred(D.CHALLENGE[S.challenge].blurb, c.y + c.h + 6, "r", "o")
+        elseif S.hover.challenge then
+            centred("A LAST WAVE ON ANY LEVEL, A BOSS IN IT", c.y + c.h + 6, "r", "o")
         end
     end
     local bb = backButton()
@@ -124,7 +135,7 @@ local function click(b)
     if b == 2 or S.hover.back then back() return end
     if S.hover.level and Profile.levelOpen(S.hover.level) then pick(S.hover.level)
     elseif S.hover.level then deny()
-    elseif S.hover.challenge then S.challenge = not S.challenge; sound(S.challenge and "on" or "off") end
+    elseif S.hover.challenge then toggleChallenge() end
 end
 
 local function key(key)
@@ -133,7 +144,7 @@ local function key(key)
     if n and D.LEVELS[n] then
         if Profile.levelOpen(n) then pick(n) else deny() end
     end
-    if key == "c" and Profile.challengeOpen() then S.challenge = not S.challenge; sound(S.challenge and "on" or "off") end
+    if key == "c" and Profile.challengeOpen() then toggleChallenge() end
     if key == "escape" or key == "backspace" then back() end
 end
 

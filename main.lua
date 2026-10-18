@@ -123,7 +123,10 @@ function love.load(args)
             for k, l in ipairs(D.LEVELS) do if a == l.id then n = k end end
         end
         S.script.level = D.LEVELS[n].id
-        for _, a in ipairs(args or {}) do if a == "challenge" then S.challenge = true end end
+        for _, a in ipairs(args or {}) do
+            if a == "challenge" then S.challenge = "bombardier" end
+            if D.CHALLENGE[a] then S.challenge = a end
+        end
         Run.play(n)
     else
         Title.open()

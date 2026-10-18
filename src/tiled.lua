@@ -65,6 +65,7 @@ local SET = {
     boards = { 25, 25, 25, 26 },
     mossy = { 19, 20 },
     bark = { 25 },
+    wood = { 25, 26, 25, 25 },
     rot = { 26, 25, 19, 20, 26 },
     sticks = { 48, 49, 50, 51, 52, 30, 31 },
     hole = { 105 },
@@ -105,6 +106,22 @@ local THEMES = {
         raised = { X = true }, raisedTop = SET.mossy, raisedSide = SET.bark, tall = true,
         field = SET.rot, raisedProp = { SET.sticks, 0.35 }, fieldProp = { ["."] = { SET.sprigs, 0.12 } },
     },
+    -- A puddle on a paved garden path: slabs round it, soil and grit at its
+    -- edge, and the ford across its middle that a drought dries to mud.
+    puddle = {
+        raised = { ["#"] = true }, raisedTop = SET.slab, raisedSide = SET.slab,
+        field = SET.soil, fieldProp = { ["."] = { SET.pebbles, 0.2 } },
+    },
+    -- The cut top of an old stump: bare wood inside a ring of mossy bark.
+    stump = {
+        raised = { X = true }, raisedTop = SET.mossy, raisedSide = SET.bark, tall = true,
+        field = SET.wood, raisedProp = { SET.sprigs, 0.3 }, fieldProp = { ["."] = { SET.pebbles, 0.04 } },
+    },
+    -- The heap: banked-up soil stuck with straw and twigs, and rot underfoot.
+    compost = {
+        raised = { X = true }, raisedTop = SET.dirt, raisedSide = SET.dirt, tall = true,
+        field = SET.rot, raisedProp = { SET.sticks, 0.5 }, fieldProp = { ["."] = { SET.shards, 0.08 } },
+    },
 }
 
 -- A cheap hash, the same as the world's grain.
@@ -116,8 +133,8 @@ local function pick(list, c, r, k) return list[floor(grain(c, r, k) * #list) + 1
 
 -- The map's characters as heights, in blocks: the top block of the column.
 local TRAIL = { ["="] = true, E = true }
-local WATER = { o = true, ["~"] = true, P = true }
-local DEEP = { o = true, P = true, ["~"] = true } -- water, half a block down in its block
+local WATER = { o = true, ["~"] = true, P = true, f = true }
+local DEEP = { o = true, P = true, ["~"] = true, f = true } -- water, half a block down in its block
 
 -- Raised ground stands a block up (two, now and then, along the back of a
 -- `tall` level) and comes down to the field's height along the two near
@@ -279,7 +296,7 @@ function Tiled.paint(world, view)
                 local t, drop, calm, ford = pick(SET.under, c, r, k + 90), 0, false, nil
                 if k == top then
                     if raised then t = pick(own and own.top or theme.raisedTop, c, r, 82)
-                    elseif ch == "E" and c > 0 then t = SET.hole[1] -- a hole in the floor
+                    elseif ch == "E" and world:holeAt(c, r) then t = SET.hole[1] -- a hole in the floor
                     elseif TRAIL[ch] then t = pick(SET.trail, c, r, 83)
                     elseif WATER[ch] then
                         t, drop, calm = pick(SET.water, c, r, 84), 4, true
@@ -353,6 +370,13 @@ function Tiled.variant(world, kind)
             if up[p] == 1 and grain(wx[p] * 1.7, wz[p] * 1.7, 15) > 0.85 then return 226, 236, 240 end
             return r * 0.85 + 30, g * 0.85 + 34, b * 0.85 + 40
         elseif kind == "drought" then
+            -- A ford dried to cracked mud.
+            if up[p] == 1 and world.cellAt(wx[p], wz[p]) == "f" then
+                local x, z = wx[p], wz[p]
+                if abs(math.sin(x * 0.5 + math.sin(z * 0.3) * 2)) < 0.08 then return 70, 52, 38 end
+                local k = grain(x * 2, z * 2, 17) > 0.8 and 14 or 0
+                return 132 + k, 101 + k, 68 + k
+            end
             if g > r and g > b then r, g = (r + g) * 0.6, g * 0.85 end
             return r, g, b * 0.8
         elseif kind == "rain" then

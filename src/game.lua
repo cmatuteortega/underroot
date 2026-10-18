@@ -70,7 +70,8 @@ end
 
 --- setting up -------------------------------------------------------------------------
 
--- A run of one level. `opts.challenge` adds the challenge wave at the end;
+-- A run of one level. `opts.challenge` (a D.CHALLENGES id, or true for the
+-- first) adds that challenge's wave at the end;
 -- `opts.best` is the most waves held in endless on this level so far;
 -- `opts.loadout`, a list of species ids, is all that can be grown (every
 -- species when it is not given: the bot and the shots bring them all);
@@ -87,8 +88,9 @@ function Game.new(world, level, opts)
     self.waves = {}
     for k, w in ipairs(level.waves) do self.waves[k] = w end
     if opts.challenge then
-        self.waves[#self.waves + 1] = D.CHALLENGE
-        self.challenge = true
+        local c = D.CHALLENGE[opts.challenge] or D.CHALLENGES[1]
+        self.waves[#self.waves + 1] = c.wave
+        self.challenge = c.id
     end
     self.net = opts.net
     self.best = opts.best or 0 -- the endless record, raised as it is beaten
@@ -124,6 +126,7 @@ function Game.new(world, level, opts)
     self.mods = {}
     self.picked = {}
 
+    world:setDry(false)
     local h = world.heart
     self.heart = { id = 1, x = h.x, y = h.y + 1, z = h.z, heart = true, quality = "normal", links = {} }
     self.nodes[1] = self.heart
@@ -736,6 +739,7 @@ function Game:canBuild(kind, node)
     if not self:unlocked(kind) then return false, "UNLOCKS AFTER WAVE " .. self:unlockAt(kind) end
     if d.unique and self.uniques[kind] then return false, "ONE PER RUN" end
     if (node.salted or 0) > 0 then return false, "SALTED" end
+    if (node.moldy or 0) > 0 then return false, "MOLDY" end
     if self.nutrients < self:towerCost(kind) then return false, "NOT ENOUGH NUTRIENTS" end
     return true
 end
@@ -983,6 +987,10 @@ function Game:startWave()
     self.waveClock = 0
     self.queue = {}
     self.weather = self.waves[self.wave].weather
+    -- A drought dries the fords: a shorter way for the wave, over the mud.
+    local dry = self.weather == "drought"
+    self.world:setDry(dry)
+    if dry and self.world.fords then self:say("THE FORD DRIES: A SHORTCUT", self.heart.x, 30, self.heart.z, "t") end
     for _, g in ipairs(self.waves[self.wave]) do
         local kind, n, every, gate, at = g[1], g[2], g[3], g[4], g[5]
         for k = 0, n - 1 do
@@ -1026,6 +1034,9 @@ function Game:spawnAt(kind, x, z, c, r)
     if d.hopEvery then en.hopCd = d.hopEvery * self.dice:random() end
     if d.clickEvery then en.clickCd = d.clickEvery * 0.6 end
     if d.digEvery then en.digCd, en.digs = d.digEvery * 0.5, 0 end
+    if d.strikeEvery then en.strikeCd = d.strikeEvery * 0.6 end
+    if d.diveEvery then en.diveCd = d.diveEvery * 0.6 end
+    if d.tossEvery then en.tossCd = d.tossEvery * 0.6 end
     if d.sinkEvery then en.sinkCd, en.cut = d.sinkEvery * (0.5 + self.dice:random() * 0.5), 0 end
     if d.moth then en.y = 10 end
     self.enemies[#self.enemies + 1] = en
@@ -1036,8 +1047,8 @@ function Game:spawn(kind, gate)
     local e = self.world.entrances[gate] or self.world.entrances[1]
     local d = D.ENEMIES[kind]
     self.seen[kind] = true
-    -- From off the left edge, or up out of a hole in the floor.
-    local x, z = e.x - (e.hole and 0 or TILE * 0.6), e.z
+    -- From off the edge, or up out of a hole in the floor.
+    local x, z = e.x + (e.dx or 0) * TILE * 0.6, e.z + (e.dz or 0) * TILE * 0.6
     if kind == "mite" then
         for _ = 1, d.swarm do self:spawnAt(kind, x + (self.dice:random() - 0.5) * 10, z + (self.dice:random() - 0.5) * 10, e.c, e.r) end
     else
@@ -1117,7 +1128,7 @@ end
 -- What an Oyster Mushroom has stripped (`strip`) comes off it, and grows back.
 function Game:armor(e)
     local d = D.ENEMIES[e.kind]
-    if e.state == "belly" then return 0 end
+    if e.state == "belly" or e.state == "molt" then return 0 end
     return max(0, (e.rolling and d.rolledArmor or d.armor) - (e.strip or 0))
 end
 
@@ -1133,7 +1144,8 @@ function Game:hurt(e, amount, pierce, quiet, deep)
     amount = amount * self:vs(e.kind)
     -- On its back, a click beetle is soft.
     if e.state == "belly" then amount = amount * (D.ENEMIES[e.kind].belly or 1) end
-    local a = pierce and 0 or self:armor(e)
+    -- A needle through a Rhinoceros Beetle's plates pierces only part of them.
+    local a = self:armor(e) * (pierce and (D.ENEMIES[e.kind].hardPlates or 0) or 1)
     local dmg = quiet and amount or max(amount * 0.15, amount - a)
     if not quiet then
         -- Most of it turned by a shell: it rings, and the sparks are grey.
@@ -1234,7 +1246,8 @@ function Game:infectable(x, z, range, maxHp)
     local best
     for _, e in ipairs(self.enemies) do
         local d = D.ENEMIES[e.kind]
-        if not e.dead and not d.boss and not d.fly and e.kind ~= "brine" and not (e.infected and e.infected > 0)
+        if not e.dead and not d.boss and not d.fly and e.kind ~= "brine" and e.kind ~= "mold" and not e.slide
+            and not (e.infected and e.infected > 0)
             and not e.hidden and not e.under and not e.train and e.hp <= maxHp and (e.x - x) ^ 2 + (e.z - z) ^ 2 <= range * range then
             if not best or e.hp > best.hp then best = e end
         end
@@ -1273,6 +1286,7 @@ function Game:update(dt)
     end
     for _, n in ipairs(self.nodes) do
         if n.salted and n.salted > 0 then n.salted = n.salted - dt end
+        if n.moldy and n.moldy > 0 then n.moldy = n.moldy - dt end
     end
     if self.phase == "wave" then self.pulseCd = max(0, self.pulseCd - dt) end
     for _, l in ipairs(self.links) do
@@ -1609,7 +1623,7 @@ end
 function Game:drift()
     local open = {}
     for _, n in ipairs(self.nodes) do
-        if n.conn and not n.heart and not n.tower and (n.salted or 0) <= 0 then open[#open + 1] = n end
+        if n.conn and not n.heart and not n.tower and (n.salted or 0) <= 0 and (n.moldy or 0) <= 0 then open[#open + 1] = n end
     end
     if not open[1] then return end
     local n = open[self.dice:random(#open)]
@@ -2176,7 +2190,7 @@ function Game:earthstar(n, t, S, power, boost, dt)
         local deep = e.under or e.tunnel
         self:hurt(e, deep and dmg * S("deep") or dmg, false, false, true)
         if expose and deep then e.exposed = expose end
-        if e.under and unearth and e.kind == "cricket" and not e.dead then
+        if e.under and unearth and (e.kind == "cricket" or e.kind == "wireworm") and not e.dead then
             -- Driven up out of the soil, dazed.
             e.under, e.state, e.surfaceT, e.prey = false, "up", unearth, nil
             e.y = self.world:groundAt(e.x, e.z)
@@ -2641,9 +2655,11 @@ end
 --   first     before chewing and shelves (it digs, leaps, hops or swims past both)
 --   own       after them, before it tramples, bites into a link or walks on
 local MOVES = {
-    burrowed = { mole = true, cricket = true },
-    first = { springtail = true, cricket = true, click = true, waterbug = true, bombardier = true, mole = true },
-    own = { mite = true, slug = true, spider = true, queen = true, stag = true, dung = true, pillbug = true, brine = true },
+    burrowed = { mole = true, cricket = true, wireworm = true },
+    first = { springtail = true, cricket = true, click = true, waterbug = true, bombardier = true, mole = true,
+        wireworm = true, diver = true, naiad = true },
+    own = { mite = true, slug = true, spider = true, queen = true, stag = true, dung = true, pillbug = true, brine = true,
+        leafcutter = true, mold = true, rhino = true },
 }
 
 function Game:move(e, dt)
@@ -2654,7 +2670,7 @@ function Game:move(e, dt)
     e.mark = max(0, e.mark - dt)
     if e.exposed then e.exposed = e.exposed > dt and e.exposed - dt or nil end
     if e.confCd then e.confCd = e.confCd > dt and e.confCd - dt or nil end
-    if (e.strip or 0) > 0 then e.strip = max(0, e.strip - (e.stripRegrow or 0.5) * dt) end
+    if (e.strip or 0) > 0 then e.strip = max(0, e.strip - (e.stripRegrow or 0.5) * (d.plates or 1) * dt) end
     -- A Bleeding Tooth's sap: it bleeds on a while after it has let go.
     if (e.bleedT or 0) > 0 then
         e.bleedT = e.bleedT - dt
@@ -2768,8 +2784,8 @@ function Game:move(e, dt)
     if MOVES.own[e.kind] and self[e.kind](self, e, d, slow, dt) then return end
     self:trample(e, d, dt)
 
-    -- Into a link in its way: it stops to chew it, once a link.
-    if d.chew and d.chewFor and not e.blind then
+    -- Into a link in its way: it stops to chew it, once a link (not swimming under it).
+    if d.chew and d.chewFor and not e.blind and not e.under then
         local l = self:linkNear(e, 3.5)
         if l and not l.bitten[e] then
             l.bitten[e] = true
@@ -2790,6 +2806,7 @@ function Game:move(e, dt)
 
     local speed = d.speed
     if e.raged then speed = speed * d.rage end
+    if e.under and d.swim then speed = speed * d.swim end
     if self:walk(e, speed * slow, dt) then self:reachHeart(e) end
 end
 
@@ -2821,7 +2838,8 @@ function Game:pillbug(e, d, slow, dt)
     end
 end
 
--- Brine runs down the first link it touches (see Game:slide).
+-- Brine runs down the first link it touches (see Game:slide); Green Mold
+-- creeps up it.
 function Game:brine(e)
     local l = self:linkNear(e, 4)
     if l then
@@ -2829,6 +2847,7 @@ function Game:brine(e)
         return true
     end
 end
+Game.mold = Game.brine
 
 -- A cordyceps host: back the way it came, biting its own, until it fruits.
 function Game:host(e, d, dt)
@@ -2898,6 +2917,7 @@ function Game:fly(e, d, pace, dt)
         speed = speed * e.daze
     end
     e.y = (d.moth and 10 or 12) + sin(e.anim * (d.moth and 3 or 5)) * 2
+    if d.boss then return self:bossFly(e, d, speed, dt) end
     if e.state == "lured" then
         local n = e.lamp
         e.lureT = e.lureT - dt
@@ -2935,6 +2955,51 @@ function Game:fly(e, d, pace, dt)
             if dd < 6 then self:gnawTower(n, d.nibble * dt, "EATEN") end
             return
         end
+    end
+    local h = self.heart
+    local arrived, dd = toward(e, h.x, h.z, speed, dt)
+    e.togo = dd
+    if arrived or dd < 4 then self:reachHeart(e) end
+end
+
+-- A boss on the wing, neither lured nor baited: every few seconds it dives at
+-- a tower in reach (the nearest, or for a Hornet the deadliest), strikes it
+-- and stuns it, and flies on for the sprout.
+function Game:bossFly(e, d, speed, dt)
+    local n = e.dive
+    if n and not n.tower then e.dive, n = nil, nil end
+    if n then
+        local _, dd = toward(e, n.x, n.z, speed * 2.6, dt)
+        e.y = max(n.y + 6, e.y - dd * 0.2)
+        e.togo = 300 + dd
+        if dd < 6 then
+            e.dive = nil
+            if not n.tower.warded then n.tower.stun = max(n.tower.stun, d.diveStun) end
+            self:burst(n.x, n.y + 8, n.z, 10, { "w", "r", "t" }, 20)
+            self:shock(n.x, n.z, 12, 0.35, "r", "w")
+            self:cue("stun", n.x, n.z)
+            self:gnawTower(n, d.dive, d.deadliest and "STUNG" or "SNATCHED")
+        end
+        return
+    end
+    e.diveCd = e.diveCd - dt * self:pace()
+    if e.diveCd <= 0 then
+        local best, bs
+        for _, o in ipairs(self.nodes) do
+            local t = o.tower
+            local d2 = (o.x - e.x) ^ 2 + (o.z - e.z) ^ 2
+            if t and d2 <= d.diveR * d.diveR then
+                local s = d.deadliest and self:threat(t) or -d2
+                if not bs or s > bs then best, bs = o, s end
+            end
+        end
+        if best then
+            e.dive, e.diveCd = best, d.diveEvery
+            self:say(d.deadliest and "IT DIVES" or "IT SWOOPS", e.x, 24, e.z, "r")
+            self:cue("charge", e.x, e.z)
+            return
+        end
+        e.diveCd = 0.5
     end
     local h = self.heart
     local arrived, dd = toward(e, h.x, h.z, speed, dt)
@@ -3271,7 +3336,11 @@ function Game:collapse(t)
 end
 
 function Game:mite(e, d, slow, dt)
-    if e.gnaw and e.gnaw.state ~= "alive" then e.gnaw = nil end
+    if e.gnaw and e.gnaw.state ~= "alive" then
+        -- A leafcutter that has cut its link through carries a piece of it off.
+        if d.laden and e.gnawed then e.full = true end
+        e.gnaw = nil
+    end
     if not e.gnaw and not e.full and not e.blind then
         local l = self:linkNear(e, d.sniff)
         if l then
@@ -3286,13 +3355,114 @@ function Game:mite(e, d, slow, dt)
             self:biteLink(l, d.chew * dt, e)
             self:chewing(e)
             e.gnawed = (e.gnawed or 0) + dt
-            if e.gnawed > 6 then e.full, e.gnaw = true, nil end -- had enough; back to the march
+            if e.gnawed > (d.gnawFor or 6) then e.full, e.gnaw = true, nil end -- had enough; back to the march
         end
         return true
     end
     -- Back to the trail tile it left, then on.
-    if self:walk(e, d.speed * slow, dt) then self:reachHeart(e) end
+    if self:walk(e, d.speed * slow * (e.full and d.laden or 1), dt) then self:reachHeart(e) end
     return true
+end
+
+-- A leafcutter is a mite with a job: one link, cut through, and a piece of
+-- it carried home.
+function Game:leafcutter(e, d, slow, dt) return self:mite(e, d, slow, dt) end
+
+-- A wireworm digs like a cricket nymph, for buried links first.
+function Game:wireworm(e, d, slow, dt) return self:cricket(e, d, slow, dt) end
+
+-- A diving beetle: under, while it swims a flooded tile.
+function Game:diver(e)
+    e.under = self.world:floodedAt(e.x, e.z) and e.state == "walk"
+    return false
+end
+
+-- The Dragonfly Nymph: under water like a diving beetle, and every few
+-- seconds it shoots its jaw out at the nearest tower in reach. Brought down to
+-- half its health on dry ground, it climbs out and splits its skin -- soft
+-- while it does -- and a Dragonfly hatches. Answers true while it molts.
+function Game:naiad(e, d, slow, dt)
+    if e.state == "molt" then
+        e.moltT = e.moltT - dt * self:pace()
+        e.anim = e.anim + dt
+        if fr() < dt * 8 then self:sparks(e.x, e.y + 8, e.z, 1, { "w", "l" }, 8) end
+        if e.moltT <= 0 then self:hatch(e) end
+        return true
+    end
+    self:diver(e)
+    if e.under then return false end
+    if e.hp <= e.maxHp * d.molt then
+        e.state, e.moltT = "molt", d.moltFor
+        self:say("IT SPLITS ITS SKIN", e.x, 26, e.z, "r")
+        self:shock(e.x, e.z, 20, 0.5, "w", "l")
+        self:cue("clack", e.x, e.z)
+        return true
+    end
+    e.strikeT = e.strikeT and e.strikeT > dt and e.strikeT - dt or nil
+    e.strikeCd = e.strikeCd - dt * self:pace()
+    if e.strikeCd <= 0 then
+        local best, bd
+        for _, n in ipairs(self.nodes) do
+            if n.tower then
+                local d2 = (n.x - e.x) ^ 2 + (n.z - e.z) ^ 2
+                if d2 <= d.strikeR * d.strikeR and (not bd or d2 < bd) then best, bd = n, d2 end
+            end
+        end
+        e.strikeCd = best and d.strikeEvery or 0.5
+        if best then
+            e.strikeT = 0.4
+            e.h = atan2(best.z - e.z, best.x - e.x)
+            self:burst(best.x, best.y + 6, best.z, 8, { "w", "s", "r" }, 18)
+            self:cue("clack", best.x, best.z)
+            self:gnawTower(best, d.strike, "SNATCHED")
+        end
+    end
+    return false
+end
+
+-- Out of the nymph's split skin, a Dragonfly: a boss of its own, with what
+-- health the nymph had left. The empty skin is left lying for the network.
+function Game:hatch(e)
+    local d = D.ENEMIES[e.kind]
+    e.dead = true
+    local f = self:spawnAt("dragonfly", e.x, e.z, e.tc, e.tr)
+    f.maxHp = e.maxHp * d.molt
+    f.hp = min(f.maxHp, e.hp)
+    f.h = e.h
+    self.seen.dragonfly = true
+    self.events.boss = "dragonfly"
+    self.bossIntro = { kind = "dragonfly", t = 3.5 }
+    self.corpses[#self.corpses + 1] = { kind = "naiad", x = e.x, z = e.z, h = e.h, value = self:corpseValue(e.kind), life = 25 }
+    self:burst(e.x, 8, e.z, 24, { "w", "l", "g" }, 28)
+    self:shock(e.x, e.z, 30, 0.8, "w", "l")
+    self:say("A DRAGONFLY HATCHES", e.x, 30, e.z, "r")
+    self:cue("boss", e.x, e.z)
+    self.events.shake = 0.4
+end
+
+-- The Rhinoceros Beetle's horn: every few seconds the nearest tower in reach
+-- is tossed, hurt and stunned. It walks on regardless.
+function Game:rhino(e, d, _, dt)
+    e.tossT = e.tossT and e.tossT > dt and e.tossT - dt or nil
+    e.tossCd = e.tossCd - dt * self:pace()
+    if e.tossCd > 0 then return end
+    local best, bd
+    for _, n in ipairs(self.nodes) do
+        if n.tower then
+            local d2 = (n.x - e.x) ^ 2 + (n.z - e.z) ^ 2
+            if d2 <= d.tossR * d.tossR and (not bd or d2 < bd) then best, bd = n, d2 end
+        end
+    end
+    if not best then e.tossCd = 0.5 return end
+    e.tossCd, e.tossT = d.tossEvery, 0.5
+    e.h = atan2(best.z - e.z, best.x - e.x)
+    if not best.tower.warded then best.tower.stun = max(best.tower.stun, d.tossStun) end
+    self:say("TOSSED", best.x, best.y + 18, best.z, "r")
+    self:burst(best.x, best.y + 4, best.z, 14, { "t", "n", "w" }, 26)
+    self:shock(best.x, best.z, 14, 0.4, "t", "n")
+    self:cue("thump", best.x, best.z)
+    self.events.shake = 0.2
+    self:gnawTower(best, d.toss, "TOSSED")
 end
 
 -- A slug stops to eat any fruiting body it passes.
@@ -3409,7 +3579,7 @@ function Game:cricketPrey(e, d)
                 -- A step short of the thread, on its near side.
                 local k = dd > 4 and 4 / dd or 0
                 local x, z = qx + (e.x - qx) * k, qz + (e.z - qz) * k
-                local score = dd + ((l.a.conn or l.b.conn) and 0 or d.reach)
+                local score = dd + ((l.a.conn or l.b.conn) and 0 or d.reach) - ((d.buried and l.buried) and d.reach or 0)
                 if not w:floodedAt(x, z) and (not bd or score < bd) then best, bx, bz, bd = l, x, z, score end
             end
         end
@@ -3601,7 +3771,8 @@ function Game:dung(e, d, _, dt)
     e.ballRoll = (e.ballRoll or 0) + dt
 end
 
--- Brine touches a link and runs down it, away from the Heart.
+-- Brine touches a link and runs down it, away from the Heart; mold creeps
+-- up it, towards the Heart.
 function Game:attach(e, l)
     local a, b = l.a, l.b
     local from, to
@@ -3611,9 +3782,10 @@ function Game:attach(e, l)
         local da, db = dist(e, a), dist(e, b)
         if da < db then from, to = a, b else from, to = b, a end
     end
+    if D.ENEMIES[e.kind].creep then from, to = to, from end
     local _, t = segDist(e.x, e.z, from.x, from.z, to.x, to.z)
     e.slide, e.from, e.to, e.st = l, from, to, t
-    self.events.brine = true
+    if e.kind == "mold" then self.events.mold = true else self.events.brine = true end
     self:cue("splash", e.x, e.z, 0.7)
 end
 
@@ -3627,12 +3799,13 @@ function Game:slide(e, d, dt)
         self:cue("fizzle", e.x, e.z)
         return
     end
-    e.st = e.st + d.slide * dt / max(1, l.len)
+    e.st = e.st + (d.slide or d.creep * self:pace()) * dt / max(1, l.len)
     local f, t = e.from, e.to
     e.x, e.z = f.x + (t.x - f.x) * e.st, f.z + (t.z - f.z) * e.st
     e.y = (f.y + (t.y - f.y) * e.st) + 1
     e.h = atan2(t.z - f.z, t.x - f.x)
     e.togo = 0
+    if e.st >= 1 and d.creep then return self:overgrow(e, d, l, t) end
     if e.st >= 1 then
         -- The link it came down is sterile, and so is whatever grew at the end.
         local node = t
@@ -3662,6 +3835,37 @@ function Game:slide(e, d, dt)
         end
         self:recompute()
     end
+end
+
+-- Mold at the top of its link: the link behind it rots through, a tower on
+-- the node is overgrown and its pocket moldy a while, and the mold creeps on
+-- up the next link towards the Heart. At the Heart it is the sprout it eats.
+function Game:overgrow(e, d, l, node)
+    local nextLink
+    for _, o in ipairs(node.links) do
+        local other = o.a == node and o.b or o.a
+        if o ~= l and alive(o) and other.hop < node.hop then nextLink = o break end
+    end
+    self:cut(l)
+    if node.heart then
+        self:reachHeart(e)
+        self:recompute()
+        return
+    end
+    if node.tower then
+        self:burst(node.x, node.y + 6, node.z, 14, { "m", "g", "d" }, 22)
+        self:destroyTower(node, "OVERGROWN")
+    end
+    node.moldy = d.moldFor
+    self:splat(node.x, node.z, 9, "m", d.moldFor)
+    if nextLink then
+        local other = nextLink.a == node and nextLink.b or nextLink.a
+        e.slide, e.from, e.to, e.st = nextLink, node, other, 0
+    else
+        e.dead = true
+        self:motes(node.x, 2, node.z, 8, { "m", "g" }, 4, 6, 0.8)
+    end
+    self:recompute()
 end
 
 return Game

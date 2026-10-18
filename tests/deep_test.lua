@@ -57,15 +57,46 @@ local function at(g, kind, x, z)
 end
 
 return {
-    { "each grows off a species already on the network, behind no level and no wave", function()
+    { "each grows off a species already on the network, behind no wave", function()
         for _, id in ipairs(DEEP) do
             local row = D.NET[id]
             C.yes(row and row.species == id, id .. " is on the network")
-            C.no(row.won, id .. " waits on no level")
+            C.yes(not row.won or D.LEVEL[row.won], id .. " waits on a level that is there")
             C.no(D.TOWER[id].unlock, id .. " waits on no wave")
             local from = D.NET[row.at]
             C.yes(from and from.tower and D.NET[from.tower], id .. " grows off another species' branch")
             C.yes(row.price[1] > D.NET.needle.price[1], id .. " costs more than the needle")
+        end
+    end },
+
+    -- What a level sends, the player can answer before playing it: of every
+    -- enemy's answers that are deep species, one is open by then.
+    { "the deep species open in time for the levels that need them", function()
+        local at = {}
+        for k, l in ipairs(D.LEVELS) do at[l.id] = k end
+        local deep = {}
+        for _, id in ipairs(DEEP) do deep[id] = true end
+        for k, l in ipairs(D.LEVELS) do
+            local kinds = {}
+            for _, w in ipairs(l.waves) do for _, g in ipairs(w) do kinds[g[1]] = true end end
+            for kind, e in pairs(D.ENEMIES) do if e.from and kinds[e.from] then kinds[kind] = true end end
+            for kind in pairs(kinds) do
+                local any, open = false, false
+                for _, c in ipairs(D.COUNTERS[kind] or {}) do
+                    if deep[c] then
+                        any = true
+                        local won = D.NET[c].won
+                        if not won or at[won] < k then open = true end
+                    end
+                end
+                C.yes(not any or open, l.id .. ": an answer to " .. kind .. " is open before it")
+            end
+        end
+        -- And each of the last three levels opens one of them.
+        for _, id in ipairs({ "puddle", "stump", "compost" }) do
+            local opens = false
+            for _, d in ipairs(DEEP) do if D.NET[d].won == id then opens = true end end
+            C.yes(opens, id .. " opens a deep species")
         end
     end },
 

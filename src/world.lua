@@ -48,7 +48,8 @@ World.TILE = TILE
 --   T  the flowerpot's terracotta rim (raised)    X  the log's bark wall (raised)
 --   K  a pile of bricks on the shed floor (raised): a wall the trail is fixed by
 --   ,  the shed's floorboards
--- An E that is not on the left edge is a hole in the floor: the drainage hole
+--   f  a ford: open water that a drought dries to mud, and then a trail
+-- An E that is not on an edge is a hole in the floor: the drainage hole
 -- of the flowerpot, where the bugs come up from below.
 --
 -- A stone is high ground: the Giant Water Bug cannot reach what grows on it,
@@ -148,10 +149,62 @@ MAPS.log = {
     "E======.L.p..p.X",
     "XXXXXXXXXXXXXXXX",
 }
+-- The Puddle: a rain puddle on a garden path. Both trails go the long way
+-- round, wading the south shore; in a drought the ford across the middle
+-- (f) dries to mud and the top trail takes it, eight tiles shorter.
+MAPS.puddle = {
+    "################",
+    "E==...L..C...p.#",
+    "#.=.S.oooo...C.#",
+    "#L=..ooPooo..S.#",
+    "#.=ffffffffffH.#",
+    "#C=..oooPoo..=L#",
+    "#.=.S.oooo..C=.#",
+    "#B=..L....p..=.#",
+    "E===~~~~~~~===.#",
+    "#p..C...B..L..p#",
+    "################",
+}
+-- The Old Stump: the sprout in the heart of a cut stump, four trails coming
+-- in from its four sides, each curling a quarter turn round the rings.
+MAPS.stump = {
+    "XXXXXXXXXXXXEXX",
+    "X..L...C..p.=.X",
+    "E==..========.X",
+    "X.=..=..B..C..X",
+    "X.=.L===..S...X",
+    "X.=.C..=..===.X",
+    "X.=.p.C=L.=.=SX",
+    "XL=.===H===.=.X",
+    "X.=.=.L=C.p.=.X",
+    "X.===S.=..B.=.X",
+    "X.C..L.===..=LX",
+    "X..B..p..=.C=.X",
+    "X.========.S==E",
+    "X.=.L...C..p..X",
+    "XXEXXXXXXXXXXXX",
+}
+-- The Compost Heap: rot and riches. Three trails braid together and come
+-- the last six tiles to the sprout as one lane.
+MAPS.compost = {
+    "XXXXXXXXXXXXXXXXX",
+    "E=====.B..C..L.BX",
+    "XB.C.=..B..C....X",
+    "X..L.=====.B..L.X",
+    "XC.B.....=..C.B.X",
+    "E====.B..=.....LX",
+    "XL..=..C.======HX",
+    "X.B.=.B..=..B...X",
+    "XC..======C..L.BX",
+    "X.L...B.=..C....X",
+    "E========.B.L.C.X",
+    "XXXXXXXXXXXXXXXXX",
+}
 World.MAPS = MAPS
 
 -- The boards built from the painted tileset (src/tiled.lua) rather than traced.
-local TILED = { crack = true, pond = true, lawn = true, flowerpot = true, shed = true, log = true }
+local TILED = { crack = true, pond = true, lawn = true, flowerpot = true, shed = true, log = true,
+    puddle = true, stump = true, compost = true }
 
 local POCKET = {
     p = { kind = "pebble", quality = "poor" },
@@ -161,8 +214,9 @@ local POCKET = {
     S = { kind = "stone", quality = "normal", high = true },
     B = { kind = "beetle", quality = "rich" },
 }
--- Tiles that are water on top, and tiles an enemy can walk.
-local WET = { ["~"] = true, o = true, P = true }
+-- Tiles that are water on top, and tiles an enemy can walk (a ford only
+-- when it has dried).
+local WET = { ["~"] = true, o = true, P = true, f = true }
 local WALK = { ["="] = true, E = true, H = true, ["~"] = true }
 World.WET, World.WALK = WET, WALK
 World.QUALITY = {
@@ -472,8 +526,12 @@ function World.new(id)
                 add("ell", MAT.mound, { at = ell(cx, -0.5, cz, 7, 3, 7) })
                 self.heart = { x = cx, z = cz, y = 2.2 + lift, c = c, r = r }
             elseif ch == "E" then
-                -- Off the left edge, it is a hole the bugs come up out of.
-                self.entrances[#self.entrances + 1] = { c = c, r = r, x = cx, z = cz, hole = c > 0 }
+                -- Off an edge the bugs come in from beyond it (dx, dz the way
+                -- out); anywhere else it is a hole they come up out of.
+                local dx = c == 0 and -1 or (c == self.cols - 1 and 1 or 0)
+                local dz = dx == 0 and (r == 0 and -1 or (r == self.rows - 1 and 1 or 0)) or 0
+                self.entrances[#self.entrances + 1] = { c = c, r = r, x = cx, z = cz, hole = dx == 0 and dz == 0,
+                    dx = dx, dz = dz }
             elseif self.tiled then
                 -- The tiles bring their own grass, reeds and gravel.
             elseif ch == "r" then
@@ -637,10 +695,38 @@ end
 
 -- The trail as a flow field: every trail tile knows how many steps it is from
 -- the Heart, and an enemy on it walks to whichever neighbour is one fewer.
+-- Steps to the Heart from every trail tile, worked out once for wet weather
+-- and once for a drought (when a ford is dry); `dry` picks which is used.
 function World:route()
+    self.fords = false
+    for r = 0, self.rows - 1 do
+        for c = 0, self.cols - 1 do if self.cell(c, r) == "f" then self.fords = true end end
+    end
+    self.dists = { [false] = self:steps(false), [true] = self:steps(true) }
+    self:setDry(false)
+end
+
+function World:setDry(dry)
+    self.dry = dry and self.fords or false
+    self.dist = self.dists[self.dry]
+end
+
+-- Is the gate at (c, r) a hole in the floor rather than a way in off an edge?
+function World:holeAt(c, r)
+    for _, e in ipairs(self.entrances) do if e.c == c and e.r == r then return e.hole end end
+    return false
+end
+
+-- Is the tile a dry ford, walked like a trail?
+function World:dryFord(c, r) return self.dry and self.cell(c, r) == "f" end
+
+function World:steps(dry)
     local dist = {}
     local function key(c, r) return r * self.cols + c end
-    local function walkable(c, r) return WALK[self.cell(c, r)] end
+    local function walkable(c, r)
+        local ch = self.cell(c, r)
+        return WALK[ch] or (dry and ch == "f")
+    end
     local h = self.heart
     local queue, head = { { h.c, h.r } }, 1
     dist[key(h.c, h.r)] = 0
@@ -655,8 +741,8 @@ function World:route()
             end
         end
     end
-    self.dist = dist
     for _, e in ipairs(self.entrances) do assert(dist[key(e.c, e.r)], "an entrance with no way to the Heart") end
+    return dist
 end
 
 -- Steps to the Heart from tile (c, r), or nil off the trail.
@@ -860,7 +946,10 @@ end
 
 -- Is (x, z) on water? `flooded`: on the trail where it is flooded.
 function World:wetAt(x, z) return WET[self.cellAt(x, z)] or false end
-function World:floodedAt(x, z) return self.cellAt(x, z) == "~" end
+function World:floodedAt(x, z)
+    local ch = self.cellAt(x, z)
+    return ch == "~" or (ch == "f" and not self.dry)
+end
 
 -- Screen pixel (relative to the board's image) of a room point, and its depth,
 -- in the view shown.

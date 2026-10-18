@@ -207,6 +207,7 @@ function codex.where(tab, id)
                 for _, g in ipairs(w) do if g[1] == id then return "IT COMES ON " .. l.name end end
             end
         end
+        if D.ENEMIES[id].from then return "IT HATCHES FROM THE " .. D.ENEMIES[D.ENEMIES[id].from].name end
         return "IT COMES IN CHALLENGE MODE, ON ANY LEVEL"
     end
     -- A species or a seed: grown on the network, once what it waits on is done.
@@ -255,12 +256,15 @@ function codex.lines(tab, id, w)
         add(table.concat(parts, "  "), "l")
         add("HITS THE SPROUT FOR " .. number(d.heart) .. "  CORPSE WORTH " .. number(d.corpse), "l")
         local met = {}
+        local kind = d.from or id -- a Dragonfly comes wherever its nymph does
         for _, l in ipairs(D.LEVELS) do
             local here = false
-            for _, wave in ipairs(l.waves) do for _, g in ipairs(wave) do if g[1] == id then here = true end end end
+            for _, wave in ipairs(l.waves) do for _, g in ipairs(wave) do if g[1] == kind then here = true end end end
             if here then met[#met + 1] = l.name end
         end
-        for _, g in ipairs(D.CHALLENGE) do if g[1] == id then met[#met + 1] = "CHALLENGE MODE" end end
+        for _, c in ipairs(D.CHALLENGES) do
+            for _, g in ipairs(c.wave) do if g[1] == kind then met[#met + 1] = "CHALLENGE MODE (" .. c.name .. ")" end end
+        end
         head("COMES ON")
         add(#met > 0 and table.concat(met, ", ") or "NOWHERE YET", "w")
         if D.COUNTERS[id] then

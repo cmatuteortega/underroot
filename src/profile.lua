@@ -241,7 +241,8 @@ function P.opens(level)
     return list
 end
 
--- A level is open once the one before it is won; challenge mode once the last is.
+-- A level is open once the one before it is won; a challenge once its own
+-- level is (`id`, or any challenge at all without one).
 -- One won already, or any after it, keeps it open: a save from before the
 -- Flowerpot, the Shed Floor and the Rotting Log came in still has the Pond
 -- Edge and the Lawn.
@@ -250,7 +251,18 @@ function P.levelOpen(n)
     for k = n, #D.LEVELS do if P.won[D.LEVELS[k].id] then return true end end
     return false
 end
-function P.challengeOpen() return P.won[D.LEVELS[#D.LEVELS].id] end
+function P.challengeOpen(id)
+    if id then return P.won[D.CHALLENGE[id].won] or false end
+    for _, c in ipairs(D.CHALLENGES) do if P.won[c.won] then return true end end
+    return false
+end
+
+-- The challenges open, in order.
+function P.challenges()
+    local list = {}
+    for _, c in ipairs(D.CHALLENGES) do if P.won[c.won] then list[#list + 1] = c end end
+    return list
+end
 
 clear()
 

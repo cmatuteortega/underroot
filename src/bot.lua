@@ -156,6 +156,83 @@ PLANS.lawn = {
     { "lay", "mat", { 6, 8 } }, { "up", { 4, 8 }, 1 }, { "up", { 12, 3 }, 1 }, { "up", { 10, 10 }, 2 }, { "up", { 4, 8 }, 1 },
 }
 
+-- The Puddle: hold the turn up to the sprout from the stone beside it, an
+-- Earthstar over each end of the wading lane for the divers, and Fly
+-- Agarics on bridges for the Dragonfly.
+PLANS.puddle = {
+    { "link", "H", { 13, 3 } }, { "build", "puffer", { 13, 3 } },
+    { "link", "H", { 12, 6 } }, { "build", "needle", { 12, 6 } },
+    { "link", { 12, 6 }, { 10, 7 } }, { "build", "earthstar", { 10, 7 } },
+    { "lay", "mat", { 13, 7 } },
+    { "link", "H", { 14, 5 } }, { "build", "mane", { 14, 5 } },
+    { "up", { 13, 3 }, 2 }, { "up", { 12, 6 }, 1 },
+    { "link", { 10, 7 }, { 8, 9 } }, { "build", "puffer", { 8, 9 } },
+    { "link", { 13, 3 }, { 13, 2 } }, { "build", "agaric", { 13, 2 } },
+    { "link", { 8, 9 }, { 5, 7 } }, { "build", "earthstar", { 5, 7 } },
+    { "link", { 13, 2 }, { 9, 1 } }, { "build", "needle", { 9, 1 } },
+    { "up", { 10, 7 }, 1 }, { "up", { 8, 9 }, 2 }, { "up", { 14, 5 }, 1 },
+    { "link", { 5, 7 }, { 4, 6 } }, { "build", "mortar", { 4, 6 } },
+    { "link", { 8, 9 }, { 11, 9 } }, { "build", "agaric", { 11, 9 } },
+    { "link", { 11, 9 }, { 14, 9 } }, { "build", "puffer", { 14, 9 } },
+    { "lay", "mat", { 13, 6 } },
+    { "up", { 13, 2 }, 1 }, { "up", { 11, 9 }, 1 }, { "up", { 5, 7 }, 1 }, { "up", { 12, 6 }, 1 },
+    { "link", { 9, 1 }, { 6, 1 } }, { "build", "puffer", { 6, 1 } },
+    { "up", { 4, 6 }, 1 }, { "up", { 9, 1 }, 1 }, { "up", { 13, 3 }, 2 }, { "up", { 8, 9 }, 2 },
+    { "up", { 6, 1 }, 2 }, { "up", { 14, 9 }, 2 }, { "up", { 10, 7 }, 1 }, { "up", { 14, 5 }, 1 },
+    { "up", { 13, 2 }, 1 }, { "up", { 11, 9 }, 1 }, { "up", { 5, 7 }, 1 }, { "up", { 4, 6 }, 1 }, { "up", { 9, 1 }, 1 },
+    { "lay", "mat", { 12, 8 } },
+}
+
+-- The Old Stump: a ring of four round the sprout, Oysters one hop out on
+-- it, mats on the last tile of every trail, and mortars on the stones.
+PLANS.stump = {
+    { "link", "H", { 6, 6 } }, { "build", "puffer", { 6, 6 } },
+    { "link", "H", { 8, 8 } }, { "build", "puffer", { 8, 8 } },
+    { "link", "H", { 8, 6 } }, { "build", "needle", { 8, 6 } },
+    { "link", "H", { 6, 8 } }, { "build", "oyster", { 6, 8 } },
+    { "lay", "mat", { 8, 7 } }, { "lay", "mat", { 6, 7 } },
+    { "link", { 6, 6 }, { 8, 6 } }, { "link", { 8, 6 }, { 8, 8 } }, { "link", { 8, 8 }, { 6, 8 } }, { "link", { 6, 8 }, { 6, 6 } },
+    { "up", { 6, 6 }, 2 }, { "up", { 8, 8 }, 2 },
+    { "link", { 8, 8 }, { 10, 8 } }, { "build", "mane", { 10, 8 } },
+    { "lay", "mat", { 7, 6 } }, { "lay", "mat", { 7, 8 } },
+    { "link", { 8, 6 }, { 10, 4 } }, { "build", "mortar", { 10, 4 } },
+    { "up", { 6, 8 }, 1 }, { "up", { 8, 6 }, 1 },
+    { "link", { 6, 6 }, { 4, 5 } }, { "build", "oyster", { 4, 5 } },
+    { "link", { 6, 8 }, { 5, 9 } }, { "build", "needle", { 5, 9 } },
+    { "link", { 8, 6 }, { 8, 3 } }, { "build", "puffer", { 8, 3 } },
+    { "link", { 8, 8 }, { 10, 9 } }, { "build", "puffer", { 10, 9 } },
+    { "up", { 10, 4 }, 1 }, { "up", { 10, 8 }, 1 }, { "up", { 6, 6 }, 2 }, { "up", { 8, 8 }, 2 },
+    { "up", { 6, 8 }, 1 }, { "up", { 8, 6 }, 1 },
+    { "link", { 10, 8 }, { 13, 6 } }, { "build", "mortar", { 13, 6 } },
+    { "up", { 4, 5 }, 1 }, { "up", { 5, 9 }, 1 }, { "up", { 8, 3 }, 2 }, { "up", { 10, 9 }, 2 }, { "up", { 13, 6 }, 1 },
+    { "up", { 10, 4 }, 1 }, { "up", { 4, 5 }, 1 }, { "up", { 5, 9 }, 1 }, { "up", { 10, 8 }, 1 }, { "up", { 13, 6 }, 1 },
+}
+
+-- The Compost Heap: hold the one lane into the sprout, a Bleeding Tooth on
+-- the loop beside it for the cutters, an Inky Cap drinking the rich rot.
+PLANS.compost = {
+    { "link", "H", { 15, 5 } }, { "build", "puffer", { 15, 5 } },
+    { "link", "H", { 12, 7 } }, { "build", "needle", { 12, 7 } },
+    { "link", "H", { 15, 8 } }, { "build", "tooth", { 15, 8 } },
+    { "lay", "mat", { 13, 6 } },
+    { "link", { 15, 5 }, { 14, 4 } }, { "build", "puffer", { 14, 4 } },
+    { "link", { 12, 7 }, { 13, 8 } }, { "build", "mane", { 13, 8 } },
+    { "link", { 13, 8 }, { 15, 8 } },
+    { "up", { 15, 5 }, 2 }, { "up", { 12, 7 }, 1 },
+    { "link", { 14, 4 }, { 12, 4 } }, { "build", "inky", { 12, 4 } },
+    { "link", { 12, 7 }, { 10, 8 } }, { "build", "mortar", { 10, 8 } },
+    { "lay", "mat", { 11, 6 } },
+    { "link", { 12, 4 }, { 11, 3 } }, { "build", "puffer", { 11, 3 } },
+    { "link", { 10, 8 }, { 11, 9 } }, { "build", "needle", { 11, 9 } },
+    { "up", { 14, 4 }, 2 }, { "up", { 13, 8 }, 1 }, { "up", { 15, 8 }, 1 }, { "up", { 12, 4 }, 1 },
+    { "link", { 10, 8 }, { 7, 6 } }, { "build", "puffer", { 7, 6 } },
+    { "up", { 10, 8 }, 1 }, { "up", { 11, 3 }, 2 }, { "up", { 11, 9 }, 1 }, { "up", { 7, 6 }, 2 },
+    { "up", { 15, 5 }, 2 }, { "up", { 12, 7 }, 1 }, { "up", { 14, 4 }, 2 }, { "up", { 13, 8 }, 1 },
+    { "up", { 10, 8 }, 1 }, { "up", { 12, 4 }, 1 }, { "up", { 15, 8 }, 1 }, { "up", { 11, 9 }, 1 },
+    { "up", { 11, 3 }, 2 }, { "up", { 7, 6 }, 2 },
+    { "lay", "mat", { 9, 7 } }, { "lay", "mat", { 9, 5 } },
+}
+
 -- The rotation the generic player grows in.
 local ROTATION = { "puffer", "needle", "puffer", "mane", "stink", "relay", "puffer", "inky", "lamp", "mortar",
     "needle", "puffer", "giant", "cordyceps", "stink", "puffer", "needle", "lamp", "mortar", "puffer", "relay", "needle" }
@@ -500,7 +577,8 @@ function B.run(args)
         if D.LEVEL[a] then lv = D.LEVEL[a] end
         if D.SEED[a] then sprout = a end
         if a == "generic" then generic = true end
-        if a == "challenge" then challenge = true end
+        if a == "challenge" then challenge = "bombardier" end
+        if D.CHALLENGE[a] then challenge = a end
         if a == "endless" then endless = true end
     end
     print(lv.name .. (challenge and " (challenge)" or "") .. ((generic or not PLANS[lv.id]) and ", generic player" or "")

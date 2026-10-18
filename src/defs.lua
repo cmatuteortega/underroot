@@ -365,6 +365,29 @@ D.ENEMIES = {
     moth = { name = "NIGHT MOTH", hp = 22, speed = 15, armor = 0, fly = true, moth = true, nibble = 4, bite = 4,
         heart = 1, corpse = 3, blurb = "COMES OUT AT NIGHT. FLIES TO THE BRIGHTEST LIGHT AND EATS IT", "agaric" },
 
+    -- Swims under a flooded trail tile, out of reach of all but an Earthstar,
+    -- `swim` times as fast; on dry ground it walks and chews like an ant.
+    diver = { name = "DIVING BEETLE", short = "DIVER", hp = 40, speed = 12, armor = 2, chew = 5, chewFor = 1.2, bite = 5,
+        swim = 1.6, heart = 2, corpse = 8,
+        blurb = "SWIMS UNDER THE FLOODED TRAIL, WHERE ONLY AN EARTHSTAR HEARS IT" },
+    -- A cricket nymph's small cousin, and hungrier for what is buried: it
+    -- burrows to the nearest link in reach, a Truffle's buried ones first.
+    wireworm = { name = "WIREWORM", hp = 22, speed = 10, armor = 1, bite = 3,
+        sinkEvery = 2, sinkFor = 0.5, reach = 90, burrow = 22, surfaceFor = 1.6, cuts = 1, buried = true,
+        heart = 1, corpse = 3, size = 0.8,
+        blurb = "BURROWS TO A LINK AND CUTS IT, A TRUFFLE'S BURIED ONES FIRST" },
+    -- Leaves the trail for the nearest link it can smell, chews it through,
+    -- and carries the piece home, slower.
+    leafcutter = { name = "LEAFCUTTER ANT", short = "LEAFCUTTER", hp = 28, speed = 18, armor = 0, chew = 12, bite = 5,
+        sniff = 44, gnawFor = 5, laden = 0.7, heart = 1, corpse = 4,
+        blurb = "LEAVES THE TRAIL TO CUT A LINK, AND CARRIES THE PIECE OFF" },
+    -- A rival fungus: it walks until it touches a link, then creeps up it
+    -- towards the sprout. A tower it reaches is overgrown, its pocket moldy
+    -- for `moldFor` seconds, and the link behind it is cut. Prune ahead of it.
+    mold = { name = "GREEN MOLD", short = "MOLD", hp = 45, speed = 9, armor = 0, creep = 7, moldFor = 12, bite = 4,
+        heart = 3, corpse = 0,
+        blurb = "CREEPS UP YOUR LINKS TO THE SPROUT, OVERGROWING TOWERS. PRUNE AHEAD OF IT" },
+
     -- Bosses: the big bugs. They do not get tougher wave by wave; they are
     -- tuned for the wave they come on.
     queen = { name = "QUEEN ANT", boss = true, hp = 750, speed = 7, armor = 2, gnaw = 14, gnawR = 8,
@@ -415,14 +438,40 @@ D.ENEMIES = {
     -- of the second `tunnelFor` seconds later, itself dazed for `daze`. Bosses
     -- and fliers do not use it. Killed, it takes its tunnels with it, and what
     -- is down them.
+    -- The Puddle's boss. A nymph first: under a flooded tile it cannot be
+    -- touched but by an Earthstar, and every few seconds it shoots out its
+    -- mask of a jaw at the nearest tower. Down to `molt` of its health it
+    -- climbs out, splits its skin and flies as a Dragonfly.
+    naiad = { name = "DRAGONFLY NYMPH", short = "NYMPH", boss = true, hp = 1700, speed = 7.5, armor = 6, bite = 40,
+        swim = 1.3, strikeEvery = 6, strikeR = 34, strike = 30, molt = 0.5, moltFor = 2.5,
+        heart = 12, corpse = 30, size = 2.6,
+        blurb = "UNDER WATER ONLY AN EARTHSTAR HEARS IT. AT HALF HEALTH IT HATCHES AND FLIES" },
+    -- What hatches: a flier, fast, that hawks the towers it passes.
+    dragonfly = { name = "DRAGONFLY", boss = true, fly = true, hp = 850, speed = 15, armor = 2, bite = 30,
+        diveEvery = 4, diveR = 54, dive = 28, diveStun = 1.5, heart = 12, corpse = 40, size = 2.6,
+        from = "naiad", blurb = "A BOSS ON THE WING. IT SNATCHES AT THE TOWERS IT PASSES. A FLY AGARIC DAZES IT" },
+    -- The Old Stump's boss. Its plates (armor 12) grow back fast, and a
+    -- needle only half pierces them; every few seconds its horn tosses the
+    -- nearest tower, hurting and stunning it.
+    rhino = { name = "RHINOCEROS BEETLE", short = "RHINO", boss = true, hp = 2300, speed = 6.5, armor = 12, bite = 60,
+        plates = 1.5, hardPlates = 0.5, tossEvery = 7, tossR = 30, toss = 45, tossStun = 3,
+        heart = 14, corpse = 70, size = 3,
+        blurb = "ARMOR 12 THAT GROWS BACK. ONLY AN OYSTER STRIPS IT. ITS HORN TOSSES TOWERS" },
+    -- The second challenge boss. A flier that every few seconds dives at the
+    -- deadliest tower in reach and stings it still.
+    hornet = { name = "HORNET", boss = true, fly = true, hp = 1700, speed = 12, armor = 3, bite = 40,
+        diveEvery = 6, diveR = 90, dive = 45, diveStun = 4, deadliest = true,
+        heart = 14, corpse = 50, size = 2.4,
+        blurb = "CHALLENGE MODE'S FLIER. DIVES AT YOUR DEADLIEST TOWER AND STINGS IT STILL" },
     mole = { name = "MOLE CRICKET", boss = true, hp = 1500, speed = 7, armor = 5, bite = 40,
         digEvery = 10, digFor = 2.5, digs = 2, reach = 96, save = 5, most = 14, keep = 3, burrow = 26, surfaceFor = 1.2,
         tunnelFor = 3, daze = 0.8, heart = 12, corpse = 60, size = 2.6,
         blurb = "DIGS A TUNNEL AHEAD, AND THE REST FOLLOW. KILL IT AND THE TUNNEL CAVES IN", "earthstar" },
 }
 D.ENEMY_ORDER = { "ant", "pillbug", "mite", "gnat", "moth", "brine", "slug", "spider", "knight", "springtail",
-    "cricket", "centi",
-    "queen", "stag", "dung", "click", "waterbug", "centipede", "bombardier", "mole" }
+    "cricket", "centi", "diver", "wireworm", "leafcutter", "mold",
+    "queen", "stag", "dung", "click", "waterbug", "centipede", "bombardier", "mole", "naiad", "dragonfly", "rhino",
+    "hornet" }
 
 -- What the encyclopedia says of each enemy: the whole of what it does, where
 -- the loadout's chip has room for one line (`blurb`).
@@ -473,6 +522,27 @@ for kind, about in pairs({
     mole = "EVERY 10S IT STOPS AND DIGS, STILL AND OPEN TO ANYTHING, THEN BURROWS STRAIGHT ACROSS TO THE TRAIL FURTHER "
         .. "ON, THROUGH THE WALL TO THE NEXT TURN, AND COMES UP DAZED. THE TUNNEL STAYS OPEN, AND WALKERS THAT REACH "
         .. "THE HOLE FOLLOW IT. KILL IT AND THE TUNNEL CAVES IN, WITH WHATEVER IS DOWN IT.",
+    diver = "A BEETLE WITH A BUBBLE OF AIR UNDER ITS WINGS. ON A FLOODED TRAIL TILE IT SWIMS UNDER, X1.6 AS FAST, "
+        .. "AND NOTHING CAN SEE OR HURT IT BUT AN EARTHSTAR (AND WHAT A SEISMIC ONE SHOWS). ON DRY GROUND IT WALKS "
+        .. "AND CHEWS EVERY LINK IT WALKS INTO.",
+    wireworm = "A THIN, HARD GRUB. EVERY 2S IT LOOKS FOR A LINK WITHIN 90, A TRUFFLE'S BURIED ONES FIRST, BURROWS "
+        .. "TO IT UNDER THE BOARD AND CUTS IT, THEN SITS SOFT FOR 1.6S AND GOES BACK TO THE TRAIL. AN EARTHSTAR HEARS "
+        .. "IT UNDERGROUND.",
+    leafcutter = "AN ANT WITH A JOB. IT LEAVES THE TRAIL FOR THE NEAREST LINK WITHIN 44 AND CHEWS IT AT 12 A SECOND "
+        .. "UNTIL IT IS CUT, THEN CARRIES THE PIECE OFF TO THE SPROUT, SLOWER. A BLEEDING TOOTH'S SAP HURTS IT, "
+        .. "AND INK BLINDS IT.",
+    mold = "A RIVAL FUNGUS. IT WALKS UNTIL IT TOUCHES A LINK, THEN CREEPS UP IT TOWARDS THE SPROUT. A TOWER IT "
+        .. "REACHES IS OVERGROWN AND GONE, NOTHING GROWS IN THAT POCKET FOR 12S, AND THE LINK BEHIND IT IS CUT. "
+        .. "PRUNE THE LINK AHEAD OF IT AND IT DRIES UP, OR KILL IT ON THE THREAD.",
+    naiad = "THE PUDDLE'S BOSS, A NYMPH THE SIZE OF A STAG BEETLE. UNDER A FLOODED TILE ONLY AN EARTHSTAR CAN HURT "
+        .. "IT. EVERY 6S IT SHOOTS OUT ITS JAW AT THE NEAREST TOWER WITHIN 34 FOR 30. AT HALF ITS HEALTH IT "
+        .. "CLIMBS OUT, SPLITS ITS SKIN AND FLIES ON AS A DRAGONFLY.",
+    dragonfly = "WHAT THE NYMPH BECOMES: A FLIER, FAST, STRAIGHT FOR THE SPROUT. EVERY 4S IT SNATCHES AT A TOWER "
+        .. "WITHIN 54, 28 AND A STUN OF 1.5S. ONLY WHAT HITS FLIERS REACHES IT, AND A FLY AGARIC DAZES IT.",
+    rhino = "THE OLD STUMP'S BOSS. ARMOR 12, AND WHAT AN OYSTER STRIPS GROWS BACK THREE TIMES AS FAST; A NEEDLE "
+        .. "PIERCES ONLY HALF OF IT. EVERY 7S ITS HORN TOSSES THE NEAREST TOWER WITHIN 30: 45, AND STUNNED FOR 3S.",
+    hornet = "CHALLENGE MODE'S SECOND BOSS, OPEN ONCE THE COMPOST HEAP IS WON. A FLIER: EVERY 6S IT DIVES AT THE "
+        .. "DEADLIEST TOWER WITHIN 90 AND STINGS IT FOR 45 AND A STUN OF 4S, THEN GOES ON FOR THE SPROUT.",
 }) do D.ENEMIES[kind].about = about end
 
 -- What answers each enemy: the species the loadout picker lights up when the
@@ -498,6 +568,14 @@ D.COUNTERS = {
     springtail = { "puffer", "stink", "lamp" },
     click = { "needle", "mortar", "mane" },
     mole = { "needle", "mortar", "mat" },
+    diver = { "earthstar", "puffer" },
+    wireworm = { "earthstar", "mane", "tooth" },
+    leafcutter = { "tooth", "puffer", "inky" },
+    mold = { "needle", "puffer", "mane" },
+    naiad = { "earthstar", "agaric" },
+    dragonfly = { "agaric", "needle" },
+    rhino = { "oyster", "mortar" },
+    hornet = { "agaric", "turkey", "mane" },
 }
 
 -- Weather, per wave: a wave row's `weather` names one of these, and the
@@ -768,6 +846,74 @@ local LAWN = {
         { "slug", 3, 6, 1, 16 }, { "cricket", 3, 4, 3, 14 } },
 }
 
+-- The Puddle: two trails that wade the south shore, where Diving Beetles
+-- swim under. Droughts dry the ford across the middle for the top trail.
+-- The Dragonfly Nymph comes last, and hatches.
+local PUDDLE = {
+    { { "ant", 8, 1.4, 1, 0 }, { "diver", 2, 4, 2, 6 } },
+    { weather = "rain", { "ant", 8, 1.3, 1, 0 }, { "diver", 3, 3, 2, 4 }, { "gnat", 3, 1.5, 1, 8 } },
+    { weather = "drought", { "ant", 10, 1.1, 1, 0 }, { "pillbug", 1, 1, 1, 4 }, { "diver", 3, 2.5, 2, 6 } },
+    { weather = "night", { "moth", 5, 1.6, 1, 0 }, { "diver", 5, 2, 2, 2 }, { "brine", 1, 1, 1, 6 }, { "ant", 8, 1, 2, 8 } },
+    { { "ant", 10, 1, 2, 0 }, { "queen", 1, 1, 1, 4, MID }, { "diver", 4, 2, 2, 8 }, { "gnat", 5, 1.2, 1, 10 } },
+    { weather = "rain", { "slug", 2, 8, 2, 0 }, { "brine", 2, 6, 1, 2 }, { "diver", 6, 1.6, 2, 4 }, { "cricket", 2, 5, 1, 8 } },
+    { weather = "drought", { "knight", 2, 5, 1, 0 }, { "spider", 3, 4, 1, 3 }, { "ant", 12, 0.9, 2, 5 }, { "gnat", 6, 1, 1, 8 } },
+    { weather = "night", { "moth", 8, 1.2, 1, 0 }, { "diver", 6, 1.5, 2, 2 }, { "slug", 2, 7, 2, 6 }, { "mite", 2, 6, 1, 8 } },
+    { weather = "rain", { "diver", 6, 1.5, 2, 0 }, { "waterbug", 1, 1, 2, 3, 0.25 }, { "ant", 12, 0.9, 1, 6 },
+        { "brine", 2, 7, 1, 10 } },
+    { weather = "frost", { "pillbug", 4, 3, 1, 0 }, { "knight", 3, 5, 2, 2 }, { "diver", 6, 1.4, 2, 6 }, { "gnat", 8, 0.9, 1, 8 } },
+    { weather = "drought", { "spider", 4, 4, 1, 0 }, { "knight", 4, 4, 1, 3 }, { "cricket", 3, 4, 2, 5 }, { "ant", 16, 0.7, 1, 8 },
+        { "diver", 4, 2, 2, 10 } },
+    { weather = "night", { "moth", 12, 0.9, 1, 0 }, { "slug", 3, 6, 2, 2 }, { "diver", 8, 1.2, 2, 4 }, { "brine", 3, 6, 1, 8 } },
+    { weather = "rain", { "knight", 5, 3, 2, 0 }, { "diver", 10, 1, 2, 2 }, { "gnat", 12, 0.7, 1, 4 }, { "ant", 18, 0.6, 1, 8 } },
+    { { "ant", 14, 0.8, 1, 0 }, { "naiad", 1, 1, 2, 4 }, { "diver", 8, 1.2, 2, 8 }, { "gnat", 10, 0.8, 1, 12 },
+        { "knight", 3, 5, 1, 14 } },
+}
+
+-- The Old Stump: four short trails into the middle, and shells down all of
+-- them. The Rhinoceros Beetle comes last.
+local STUMP = {
+    { { "ant", 6, 1.4, 1, 0 }, { "ant", 6, 1.4, 3, 3 } },
+    { { "ant", 6, 1.3, 2, 0 }, { "ant", 6, 1.3, 4, 2 }, { "pillbug", 2, 4, 1, 6 } },
+    { { "knight", 2, 5, 1, 0 }, { "ant", 8, 1.1, 3, 2 }, { "pillbug", 2, 4, 2, 6 }, { "gnat", 4, 1.4, 4, 8 } },
+    { weather = "rain", { "springtail", 6, 1, 2, 0 }, { "knight", 2, 5, 4, 2 }, { "ant", 10, 1, 1, 4 }, { "brine", 1, 1, 3, 8 } },
+    { { "knight", 2, 5, 3, 0 }, { "ant", 10, 1, 2, 3 }, { "spider", 2, 5, 4, 8 } },
+    { weather = "night", { "moth", 6, 1.4, 2, 0 }, { "stag", 1, 1, 1, 3, 0.25 }, { "centi", 2, 6, 3, 4 }, { "ant", 10, 1, 4, 8 } },
+    { weather = "drought", { "pillbug", 4, 3, 1, 0 }, { "knight", 3, 4, 3, 2 }, { "mite", 2, 6, 2, 4 }, { "springtail", 6, 0.8, 4, 8 } },
+    { weather = "frost", { "knight", 4, 3, 2, 0 }, { "slug", 2, 8, 4, 2 }, { "spider", 3, 4, 1, 4 }, { "gnat", 8, 1, 3, 6 } },
+    { { "knight", 3, 4, 4, 0 }, { "click", 1, 1, 2, 3, 0.25 }, { "ant", 12, 0.9, 1, 6 }, { "centi", 2, 6, 3, 8 } },
+    { weather = "rain", { "knight", 5, 3, 1, 0 }, { "pillbug", 4, 3, 3, 2 }, { "brine", 2, 7, 2, 4 }, { "springtail", 8, 0.7, 4, 8 } },
+    { weather = "night", { "spider", 4, 4, 2, 0 }, { "moth", 10, 1, 4, 2 }, { "knight", 4, 4, 3, 4 }, { "centi", 3, 5, 1, 8 } },
+    { weather = "drought", { "knight", 6, 2.5, 4, 0 }, { "pillbug", 5, 3, 2, 2 }, { "mite", 3, 5, 1, 4 }, { "ant", 16, 0.7, 3, 8 } },
+    { weather = "frost", { "knight", 6, 2.5, 1, 0 }, { "slug", 3, 6, 3, 2 }, { "springtail", 10, 0.6, 2, 4 }, { "gnat", 12, 0.7, 4, 6 },
+        { "centi", 3, 4, 2, 10 } },
+    { { "ant", 14, 0.8, 2, 0 }, { "rhino", 1, 1, 3, 4 }, { "knight", 5, 3, 1, 8 }, { "pillbug", 4, 3, 4, 10 },
+        { "springtail", 8, 0.7, 2, 14 } },
+}
+
+-- The Compost Heap: three trails into one lane, and everything that eats the
+-- network rather than the sprout: mold, leafcutters, wireworms. The Dung
+-- Beetle comes last.
+local COMPOST = {
+    { { "ant", 8, 1.3, 1, 0 }, { "leafcutter", 3, 3, 2, 4 } },
+    { { "leafcutter", 5, 2, 1, 0 }, { "ant", 8, 1.2, 3, 2 }, { "mite", 1, 1, 2, 6 } },
+    { weather = "rain", { "mold", 2, 6, 2, 0 }, { "ant", 10, 1.1, 1, 2 }, { "leafcutter", 4, 2, 3, 5 } },
+    { { "wireworm", 4, 2, 1, 0 }, { "slug", 1, 1, 2, 2 }, { "ant", 10, 1, 3, 4 }, { "mite", 2, 6, 1, 8 } },
+    { weather = "night", { "leafcutter", 6, 1.5, 2, 0 }, { "mole", 1, 1, 1, 3, MID }, { "moth", 5, 1.6, 3, 6 }, { "ant", 10, 1, 2, 8 } },
+    { weather = "rain", { "mold", 3, 5, 1, 0 }, { "wireworm", 5, 1.8, 3, 2 }, { "slug", 2, 8, 2, 4 }, { "ant", 12, 0.9, 1, 8 } },
+    { weather = "drought", { "leafcutter", 8, 1.2, 1, 0 }, { "centi", 2, 6, 3, 2 }, { "mite", 3, 5, 2, 4 }, { "spider", 2, 5, 1, 8 } },
+    { weather = "night", { "slug", 3, 6, 2, 0 }, { "moth", 8, 1.2, 1, 2 }, { "wireworm", 6, 1.5, 3, 4 }, { "mold", 2, 6, 2, 8 } },
+    { { "knight", 3, 4, 1, 0 }, { "leafcutter", 8, 1.1, 2, 2 }, { "mite", 3, 5, 3, 4 }, { "gnat", 8, 1, 1, 8 } },
+    { weather = "rain", { "mold", 4, 4, 3, 0 }, { "centipede", 1, 1, 1, 3, MID }, { "ant", 12, 0.9, 2, 6 },
+        { "wireworm", 5, 1.6, 1, 8 } },
+    { weather = "frost", { "slug", 4, 5, 1, 0 }, { "pillbug", 4, 3, 3, 2 }, { "leafcutter", 10, 0.9, 2, 4 }, { "mite", 3, 4, 1, 8 } },
+    { weather = "night", { "spider", 4, 4, 2, 0 }, { "moth", 10, 1, 3, 2 }, { "wireworm", 8, 1.2, 1, 4 }, { "mold", 3, 5, 2, 8 } },
+    { weather = "drought", { "knight", 5, 3, 1, 0 }, { "leafcutter", 12, 0.8, 3, 2 }, { "centi", 3, 5, 2, 4 }, { "mite", 4, 4, 1, 8 } },
+    { weather = "rain", { "mold", 5, 3.5, 2, 0 }, { "slug", 4, 5, 3, 2 }, { "wireworm", 10, 1, 1, 4 }, { "ant", 18, 0.6, 2, 6 },
+        { "gnat", 10, 0.8, 3, 10 } },
+    { { "ant", 16, 0.7, 1, 0 }, { "dung", 1, 1, 2, 4 }, { "leafcutter", 10, 1, 3, 8 }, { "mold", 4, 4, 1, 10 },
+        { "wireworm", 8, 1.2, 2, 14 } },
+}
+
 -- The levels, in the order they open: each is won to open the next. `map`
 -- names a map in src/world.lua. Species come as the waves are cleared on
 -- every level (see D.unlockAt); `unlock`, if given, overrides a species'
@@ -804,14 +950,35 @@ D.LEVELS = {
         mutateAfter = { [3] = true, [5] = true, [8] = true, [10] = true, [12] = true },
         loadout = { "puffer", "needle", "mat", "mane", "mortar", "stink" },
         idea = "OPEN GRASS, THREE GATES. EVERYTHING AT ONCE", boss = "QUEEN, STAG, GIANT CENTIPEDE" },
+    { id = "puddle", name = "THE PUDDLE", map = "puddle", waves = PUDDLE, start = 160, heart = 22, growth = 0.08,
+        mutateAfter = { [2] = true, [4] = true, [7] = true, [9] = true, [11] = true },
+        loadout = { "puffer", "needle", "mat", "mane", "earthstar", "agaric" },
+        idea = "A RAIN PUDDLE. DROUGHT DRIES A SHORTCUT", boss = "QUEEN, WATER BUG, DRAGONFLY" },
+    { id = "stump", name = "THE OLD STUMP", map = "stump", waves = STUMP, start = 165, heart = 26, growth = 0.285,
+        mutateAfter = { [2] = true, [4] = true, [7] = true, [9] = true, [11] = true },
+        loadout = { "puffer", "needle", "mat", "mane", "oyster", "mortar" },
+        idea = "THE SPROUT IN THE MIDDLE, FOUR WAYS IN", boss = "STAG, CLICK, RHINOCEROS BEETLE" },
+    { id = "compost", name = "THE COMPOST HEAP", map = "compost", waves = COMPOST, start = 140, heart = 20, growth = 0.5,
+        mutateAfter = { [3] = true, [5] = true, [8] = true, [10] = true, [12] = true },
+        loadout = { "puffer", "needle", "mane", "inky", "tooth", "mortar" },
+        idea = "ROT AND RICHES. WHAT EATS THE NETWORK", boss = "MOLE, CENTIPEDE, DUNG BEETLE" },
 }
 D.LEVEL = {}
 for _, l in ipairs(D.LEVELS) do D.LEVEL[l.id] = l end
 
--- Challenge mode, open once the Lawn is won: any level with this wave added
--- at the end, and the Bombardier Beetle in it.
-D.CHALLENGE = { weather = "night", { "bombardier", 1, 1, 1, 0 }, { "knight", 4, 3, 2, 3 }, { "moth", 8, 1, 2, 5 },
-    { "spider", 4, 4, 1, 8 }, { "ant", 20, 0.6, 2, 10 } }
+-- Challenge mode: any level with a last wave added, a boss of its own in it.
+-- Each opens once its `won` level is won: the Bombardier Beetle with the
+-- Lawn, the Hornet with the Compost Heap.
+D.CHALLENGES = {
+    { id = "bombardier", name = "BOMBARDIER", won = "lawn", blurb = "A LAST WAVE ON ANY LEVEL: THE BOMBARDIER BEETLE",
+        wave = { weather = "night", { "bombardier", 1, 1, 1, 0 }, { "knight", 4, 3, 2, 3 }, { "moth", 8, 1, 2, 5 },
+            { "spider", 4, 4, 1, 8 }, { "ant", 20, 0.6, 2, 10 } } },
+    { id = "hornet", name = "HORNET", won = "compost", blurb = "A LAST WAVE ON ANY LEVEL: THE HORNET",
+        wave = { { "hornet", 1, 1, 1, 0 }, { "gnat", 12, 0.7, 2, 3 }, { "knight", 4, 3, 1, 5 }, { "spider", 4, 4, 2, 8 },
+            { "moth", 6, 1, 1, 10 }, { "ant", 20, 0.6, 2, 12 } } },
+}
+D.CHALLENGE = {}
+for _, c in ipairs(D.CHALLENGES) do D.CHALLENGE[c.id] = c end
 
 -- The loadout: how many species a run brings, picked before a level from all
 -- of them. The rest stay home, off the toolbar. Hyphae, prune and the pulse
@@ -1017,27 +1184,31 @@ species("lamp", shelf, 50, 3, {
 
 -- Deeper in, one off each line: the Fly Agaric and Oyster Mushroom off the
 -- needle, the Earthstar off the mat, the Bleeding Tooth off the Lion's Mane,
--- the Truffle off the Inky Cap and the Turkey Tail off the relay. No level
--- opens them yet; the levels that will are still to come.
+-- the Truffle off the Inky Cap and the Turkey Tail off the relay. Each is
+-- open by the level that needs it: the Lawn opens the Fly Agaric and the
+-- Earthstar for the Puddle's fliers and swimmers, the Puddle the Oyster for
+-- the Old Stump's shells, the Old Stump the Bleeding Tooth for the Compost
+-- Heap's cutters, and the Compost Heap the Turkey Tail. The Truffle waits on
+-- nothing but its branch.
 species("agaric", needle, 40, 2.6, {
     { id = "power", "TOXIC WARTS", "HITS FLIERS HARDER", { "damage", "spreadDamage" }, 0.75, P3 },
     { id = "rate", "QUICK FLICK", "SHOOTS FASTER", { "every" }, 0.8, P2 },
     { id = "body", "STOUT STALK", "MORE HP, CHEAPER TO GROW", { "hp", "cost" }, 0.8, PS },
-})
+}, { won = "lawn" })
 species("oyster", needle, 45, 2.8, {
     { id = "power", "STICKIER DROPS", "STRIPS MORE ARMOR, HITS HARDER", { "strip", "damage" }, 0.75, P3 },
     { id = "rate", "WET GILLS", "DRIPS FASTER", { "every" }, 0.8, P2 },
     { id = "body", "THICK FANS", "MORE HP, CHEAPER TO GROW", { "hp", "cost" }, 0.8, PS },
-})
+}, { won = "puddle" })
 species("earthstar", mat, 45, 2.6, {
     { id = "power", "HEAVY THUMP", "THUMPS HARDER", { "damage" }, 0.75, P3 },
     { id = "rate", "QUICK BEAT", "THUMPS MORE OFTEN", { "every" }, 0.8, P2 },
     { id = "body", "PAPER SKIN", "MORE HP, CHEAPER TO GROW", { "hp", "cost" }, 0.8, PS },
-})
+}, { won = "lawn" })
 species("tooth", mane, 40, 2.4, {
     { id = "power", "BITTER SAP", "WHAT CUTS ITS LINKS IS HURT MORE", { "sapHit", "bleed" }, 0.7, P3 },
     { id = "body", "LUMPY CAP", "MORE HP, CHEAPER TO GROW", { "hp", "cost" }, 0.8, PS },
-})
+}, { won = "stump" })
 species("truffle", inky, 50, 2.8, {
     { id = "power", "RIPE SPORES", "MORE INTEREST, HIGHER CAP", { "interest", "cap" }, 0.7, P3 },
     { id = "body", "DEEP MOUND", "MORE HP, CHEAPER TO GROW", { "hp", "cost" }, 0.8, PS },
@@ -1045,7 +1216,7 @@ species("truffle", inky, 50, 2.8, {
 species("turkey", relay, 40, 2.4, {
     { id = "power", "BANDED BEAT", "MORE HASTE PER SPECIES", { "perSpecies" }, 0.7, P3 },
     { id = "body", "LEATHER BRACKETS", "MORE HP, CHEAPER TO GROW", { "hp", "cost" }, 0.8, PS },
-})
+}, { won = "compost" })
 
 -- The threads themselves, and the pulse down them.
 add({ id = "hyphae", at = "sprout", name = "HYPHAE", blurb = "THE THREADS: THICKER, WIDER, LONGER", world = "linkHp", from = 0.7,
@@ -1111,12 +1282,12 @@ end
 -- their bodies, then finds where they are weak and hits them harder again
 -- (the two damage nodes multiply, the full branch to the numbers defs writes).
 local NOTES = {
-    { id = "ants", name = "ANTS", kinds = { "ant", "queen" } },
-    { id = "shells", name = "SHELLS", kinds = { "pillbug", "knight", "stag", "dung", "click", "bombardier" } },
+    { id = "ants", name = "ANTS", kinds = { "ant", "queen", "leafcutter" } },
+    { id = "shells", name = "SHELLS", kinds = { "pillbug", "knight", "stag", "dung", "click", "bombardier", "diver", "rhino" } },
     { id = "crawlers", name = "CRAWLERS", kinds = { "mite", "centi", "centiseg", "centipede", "centseg" } },
-    { id = "fliers", name = "FLIERS", kinds = { "gnat", "moth" } },
-    { id = "diggers", name = "DIGGERS", kinds = { "cricket", "mole", "springtail" } },
-    { id = "soft", name = "SOFT THINGS", kinds = { "slug", "brine", "spider", "waterbug" } },
+    { id = "fliers", name = "FLIERS", kinds = { "gnat", "moth", "dragonfly", "hornet" } },
+    { id = "diggers", name = "DIGGERS", kinds = { "cricket", "mole", "springtail", "wireworm" } },
+    { id = "soft", name = "SOFT THINGS", kinds = { "slug", "brine", "spider", "waterbug", "mold", "naiad" } },
 }
 add({ id = "notes", at = "sprout", name = "FIELD NOTES", blurb = "WHAT THE NETWORK KNOWS OF WHAT EATS IT. EACH OPENS ONCE ONE IS MET",
     free = true })

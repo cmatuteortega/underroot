@@ -30,7 +30,9 @@ local SW, SH = 62, 26
 local function enemiesOf(lv)
     local seen = {}
     for _, w in ipairs(lv.waves) do for _, g in ipairs(w) do seen[g[1]] = true end end
-    if S.challenge then for _, g in ipairs(D.CHALLENGE) do seen[g[1]] = true end end
+    if S.challenge then for _, g in ipairs(D.CHALLENGE[S.challenge].wave) do seen[g[1]] = true end end
+    -- What hatches out of what is sent comes too.
+    for kind, e in pairs(D.ENEMIES) do if e.from and seen[e.from] then seen[kind] = true end end
     local list = {}
     for _, kind in ipairs(D.ENEMY_ORDER) do if seen[kind] then list[#list + 1] = kind end end
     return list

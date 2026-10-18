@@ -597,7 +597,6 @@ local function draw()
     end
 
     if S.game.phase == "won" then
-        local last = S.level == D.LEVELS[#D.LEVELS]
         centred(S.level.name .. (S.game.challenge and " (CHALLENGE)" or "") .. ": THE SPROUT LIVES", floor(S.vh / 2) - 24, "g")
         centred("KILLS " .. S.game.stats.kills .. "   BOSSES " .. S.game.stats.bosses .. "   DRUNK " .. floor(S.game.stats.drunk) .. "   CUTS " .. S.game.stats.cuts, floor(S.vh / 2) - 12, "w")
         local buttons = wonButtons()
@@ -612,7 +611,9 @@ local function draw()
         centred("+" .. S.game.spores .. " SPORES   " .. Profile.spores .. " IN THE BANK", y, "t"); y = y + 10
         -- A first win opens more of the network: what, by name.
         for _, row in ipairs(S.game.opened or {}) do centred("NEW ON THE NETWORK: " .. row.name, y, "g"); y = y + 10 end
-        if last and not S.game.challenge then centred("CHALLENGE MODE IS OPEN", y, "r") end
+        for _, c in ipairs(D.CHALLENGES) do
+            if c.won == S.level.id and not S.game.challenge then centred("CHALLENGE MODE IS OPEN: THE " .. c.name, y, "r"); y = y + 10 end
+        end
     elseif S.game.phase == "lost" then
         centred("THE SPROUT HAS WILTED", floor(S.vh / 2) - 24, "r")
         if S.game.endless then
