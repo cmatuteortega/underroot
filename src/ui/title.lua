@@ -116,23 +116,12 @@ function title.backdrop()
     local T0 = title
     local age = flair.now() - (T0.t0 or 0)
     local cx = floor(S.vw / 2)
-    local gy0, low = title.ground()
+    local gy0 = title.ground()
     if T0.w ~= S.vw or T0.h ~= S.vh then T0.w, T0.h, T0.threads = S.vw, S.vh, T0.grow(cx, gy0) end
     local gy = gy0 + drop
     color("o")
     love.graphics.rectangle("fill", 0, 0, S.vw, S.vh)
-    -- A few stars, each blinking on its own beat, strewn down to where the
-    -- ground ends up so the dropping ground uncovers more of them.
-    local rng = love.math.newRandomGenerator(3)
-    for _ = 1, floor(S.vw * low / 900) do
-        local x, y, beat = rng:random(0, S.vw - 1), rng:random(0, low - 4), rng:random() * 6
-        if y < gy - 4 and (age + beat) % 6 > 0.4 then
-            color(rng:random() < 0.3 and "s" or "k")
-            love.graphics.rectangle("fill", x, y, 1, 1)
-        else
-            rng:random()
-        end
-    end
+    title.stars(gy, 0, 0, 0)
     -- The ground: a lip of lit soil, then deep soil to the bottom.
     color("u")
     love.graphics.rectangle("fill", 0, gy, S.vw, S.vh - gy)
@@ -152,10 +141,36 @@ function title.backdrop()
         end
     end
     blit(M.sprout(0), cx, gy)
-    -- The name, as big as the screen's width allows, on a teal shadow.
+    local _, _, _, under = title.marks()
+    title.name(-floor(smooth(title.f.name) * (under + 2) + 0.5))
+end
+
+-- A few stars over ground at `gy`, each blinking on its own beat, strewn
+-- down to where the ground ends up so the dropping ground uncovers more of
+-- them; `dx`, `dy` moves them (round the screen across), and none are drawn
+-- above `top`. The network's screen has the same night over its ground.
+function title.stars(gy, dx, dy, top)
+    local _, low = title.ground()
+    local age = flair.now() - (title.t0 or 0)
+    local rng = love.math.newRandomGenerator(3)
+    for _ = 1, floor(S.vw * low / 900) do
+        local x, y, beat = rng:random(0, S.vw - 1), rng:random(0, low - 4), rng:random() * 6
+        x, y = (x + dx) % S.vw, y + dy
+        if y < gy - 4 and y >= top and (age + beat) % 6 > 0.4 then
+            color(rng:random() < 0.3 and "s" or "k")
+            love.graphics.rectangle("fill", x, y, 1, 1)
+        else
+            rng:random()
+        end
+    end
+end
+
+-- The name, as big as the screen's width allows, on a teal shadow, and the
+-- line under it; `dy` pixels down from its place.
+function title.name(dy)
     local name = "MYCELIO TD"
-    local x, y, s, under = title.marks()
-    y = y - floor(smooth(title.f.name) * (under + 2) + 0.5)
+    local x, y, s = title.marks()
+    y = y + dy
     love.graphics.push()
     love.graphics.translate(x, y)
     love.graphics.scale(s, s)

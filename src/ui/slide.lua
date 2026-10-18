@@ -3,7 +3,9 @@
 -- left; on a way back (to one already passed on the way here), right. The
 -- screens under the night sky -- the title, the home screen, the settings and
 -- the level picker -- keep the sky, the ground and the sprout where they are
--- (src/ui/title.lua's backdrop), and only what is laid over it goes. Leaving a
+-- (src/ui/title.lua's backdrop), and only what is laid over it goes. The
+-- network dives down into that ground from the home screen and comes back
+-- up out of it (src/ui/network.lua), so that way does not slide either. Leaving a
 -- run, the board stays put under the HUD going and the new screen coming.
 --
 -- Each screen draws onto `slide.front` (its backdrop onto S.ui, under it, while
@@ -22,7 +24,7 @@ slide.TIME = 0.35
 -- The screens under the night sky.
 slide.NIGHT = { title = true, home = true, settings = true, levels = true }
 -- Ways that are not a slide: the screen's own animation does it.
-slide.OWN = { ["title>home"] = true }
+slide.OWN = { ["title>home"] = true, ["home>network"] = true, ["network>home"] = true }
 
 slide.cur = nil -- the screen up
 slide.stack = {} -- the screens passed on the way to it, the first one first

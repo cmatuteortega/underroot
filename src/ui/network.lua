@@ -11,6 +11,12 @@
 -- network's own numbers; dimmed while it waits, a silhouette behind a win.
 -- Zoomed out the nodes are only dots, to see the whole of it at once.
 --
+-- Opened from the home screen it dives in: the home screen's own picture
+-- at first (the sprout on its ground low on the screen, the name over it),
+-- then the ground going up and the view zooming in on what is under it, the
+-- title's own roots going dark in the soil as the network's come up; BACK
+-- comes up out of it the same way.
+--
 -- Drag (or the arrows) to pan, the wheel, a pinch or + and - to zoom. A node
 -- tapped is shown in the panel; tapped again, or its button, or G, grows a
 -- rank. TAB picks the next node there are spores for.
@@ -31,6 +37,7 @@ local M = require "src.models"
 local Draw = require "src.ui.draw"
 local Pixels = require "src.ui.pixels"
 local flair = require "src.ui.flair"
+local Title = require "src.ui.title"
 
 local floor, max, min = math.floor, math.max, math.min
 local color, box, text, wrapLines, say, inside, wide =
@@ -48,6 +55,9 @@ net.STEPS = { 12, 16, 22, 27, 31, 36, 40, 46 }
 net.ICONS, net.NAMES = 22, 40
 net.TESTING = 100000 -- what F8 and the seven taps put in the bank
 net.SKY = 36 -- the most night over the ground, HUD pixels
+net.DIVE_TIME, net.DIVE_STEP = 1.1, 6 -- how long the dive takes, and the step it starts from
+net.TAKEOVER = 0.3 -- how far into the dive the title's roots give way to the network's
+net.dive = nil -- the dive under way: { t0, out = true going back up }
 
 net.cam = { x = 0, y = 0 } -- the pan, HUD pixels
 net.zoom = 3
@@ -87,6 +97,7 @@ end
 -- on the node it grows on.
 function net.open(id)
     net.back = S.menu == "loadout" and "loadout" or nil
+    net.dive = (S.menu == "home" and not S.script) and { t0 = flair.now() } or nil
     S.menu = "network"
     net.sel, net.sure = nil, 0
     if id then
@@ -116,7 +127,38 @@ end
 
 function net.close()
     sound("back")
-    if net.back == "loadout" and S.pick then S.menu = "loadout" else S.openHome() end
+    if net.back == "loadout" and S.pick then S.menu = "loadout"
+    elseif S.script then S.openHome()
+    else net.sel, net.dive = nil, { t0 = flair.now(), out = true } end
+end
+
+local function smooth(f) return f * f * (3 - 2 * f) end
+
+-- How far the dive is (0 the home screen's view, 1 the network's), or nil
+-- when there is none. Back up at the top, it is the home screen again, its
+-- choices coming up one by one as they do after the title.
+function net.diving()
+    local d = net.dive
+    if not d then return end
+    local f = (flair.now() - d.t0) / net.DIVE_TIME
+    if f >= 1 then
+        net.dive = nil
+        if d.out then
+            Title.down = flair.now() - Title.DROP_TIME
+            S.openHome()
+            return 0
+        end
+        return
+    end
+    return d.out and 1 - smooth(f) or smooth(f)
+end
+
+-- HUD pixels a step out, as zoomed and as far as the dive has got: from the
+-- dive's own step, as far in again each moment, to the zoom's.
+function net.step(e)
+    local step = net.STEPS[net.zoom]
+    if not e then return step end
+    return net.DIVE_STEP * (step / net.DIVE_STEP) ^ e
 end
 
 --- where things are ---------------------------------------------------------------------------
@@ -151,6 +193,20 @@ function net.layout()
     L.cx = floor(L.area.x + L.area.w / 2 + net.cam.x)
     L.cy = floor(L.area.y + L.area.h / 2 + net.cam.y)
     L.step = net.STEPS[net.zoom]
+    L.sky = L.area -- what the night and the ground fill
+    local d = net.dive
+    if d then
+        -- From where the home screen has the sprout to where the network has it.
+        local e = (flair.now() - d.t0) / net.DIVE_TIME
+        e = smooth(max(0, min(1, e)))
+        if d.out then e = 1 - e end
+        local _, low = Title.ground()
+        local hx = floor(S.vw / 2)
+        L.cx = floor(hx + (L.cx - hx) * e + 0.5)
+        L.cy = floor(low + (L.cy - low) * e + 0.5)
+        L.step = net.step(e)
+        L.e, L.sky = e, { x = 0, y = 0, w = S.vw, h = S.vh }
+    end
     return L
 end
 
@@ -161,15 +217,15 @@ local function at(L, id)
 end
 
 -- Zoomed in far enough for pictures, and for names.
-local function icons() return net.STEPS[net.zoom] >= net.ICONS end
-local function names() return net.STEPS[net.zoom] >= net.NAMES end
+local function icons(L) return L.step >= net.ICONS end
+local function names(L) return L.step >= net.NAMES end
 
 -- A node's socket: a dot zoomed out, room for its picture zoomed in, the
 -- sprout's biggest and a species' or seed's bigger than the rest.
-local function radius(row)
-    local step = net.STEPS[net.zoom]
+local function radius(L, row)
+    local step = L.step
     local k = not row.at and 1 or ((row.species or row.seed) and 2 or 3)
-    if not icons() then return ({ 6, 4, 3 })[k] end
+    if not icons(L) then return min(({ 6, 4, 3 })[k], max(1, floor(step / 4))) end
     return floor(step * ({ 0.42, 0.355, 0.29 })[k])
 end
 
@@ -199,6 +255,7 @@ end
 
 function net.getCam() return { x = net.cam.x, y = net.cam.y } end
 function net.drag(from, dx, dy)
+    if net.dive then return end
     net.cam.x, net.cam.y = from.x + dx, from.y + dy
     clampCam()
 end
@@ -206,6 +263,7 @@ end
 -- Zoomed a step in (+1) or out (-1), about the middle of the screen or
 -- about (fx, fy) on it, HUD pixels: what is there stays there. True if it did.
 function net.zoomBy(d, fx, fy)
+    if net.dive then return false end
     local z = max(1, min(#net.STEPS, net.zoom + d))
     if z == net.zoom then return false end
     local f = net.STEPS[z] / net.STEPS[net.zoom]
@@ -619,15 +677,15 @@ end
 
 -- The sprout standing on the ground, as big as the zoom has the nodes.
 local sprouts = {}
-local function sproutPic()
-    local s = max(1, min(2, floor(net.STEPS[net.zoom] / 24 * 4) / 4))
+local function sproutPic(L)
+    local s = max(1, min(2, floor(L.step / 24 * 4) / 4))
     sprouts[s] = sprouts[s] or (s == 1 and M.sprout(0) or M.scaled(s, M.sprout, 0))
     return sprouts[s]
 end
 
 -- Where the sprout's picture is, for pointing at it: its middle, and how far that reaches.
 local function sproutSpot(L)
-    local pic = sproutPic()
+    local pic = sproutPic(L)
     local b = ink(pic)
     local x, y = at(L, D.NETWORK[1].id)
     local h = pic.oj - b.y
@@ -635,36 +693,26 @@ local function sproutSpot(L)
 end
 
 -- The night over the ground and the soil under it, as the title has them:
--- the stars further off than the ground, so they go by slower; a few stones
--- in the soil, where the ground has them, to see it go by.
+-- its stars, further off than the ground so they go by slower, and, at the
+-- top of the dive, its own roots under the sprout, going dark in the soil as
+-- the network's come up in their place. A few stones in the soil, where the
+-- ground has them, to see it go by.
 local function ground(L)
-    local gy = L.cy
+    local gy, V = L.cy, L.sky
+    local _, low = Title.ground()
+    local hx = floor(S.vw / 2)
     color("o")
-    love.graphics.rectangle("fill", L.area.x, L.area.y, L.area.w, L.area.h)
-    local now = flair.now()
-    local rng = love.math.newRandomGenerator(3)
-    local W, H = 640, 240
-    local ox, oy = floor(net.cam.x / 4), floor(net.cam.y / 4)
-    for _ = 1, 160 do
-        local x, y, beat = rng:random(0, W - 1), rng:random(0, H - 1), rng:random() * 6
-        local sx = L.area.x + (x + ox) % W
-        local sy = gy - 4 - (y - oy) % H
-        if sy >= L.area.y and (now + beat) % 6 > 0.4 then
-            color(rng:random() < 0.3 and "s" or "k")
-            love.graphics.rectangle("fill", sx, sy, 1, 1)
-        else
-            rng:random()
-        end
-    end
-    if gy >= L.area.y + L.area.h then return end
-    local top = max(L.area.y, gy)
+    love.graphics.rectangle("fill", V.x, V.y, V.w, V.h)
+    Title.stars(gy, floor((L.cx - hx) / 4), floor((gy - low) / 4), V.y)
+    if gy >= V.y + V.h then return end
+    local top = max(V.y, gy)
     color("u")
-    love.graphics.rectangle("fill", L.area.x, top, L.area.w, L.area.y + L.area.h - top)
+    love.graphics.rectangle("fill", V.x, top, V.w, V.y + V.h - top)
     -- A stone or none a patch of ground, the same ones wherever it is looked at.
     local cell = 24
-    local ix0, iy0 = floor((L.area.x - L.cx) / cell), max(0, floor((top - gy) / cell))
-    for iy = iy0, iy0 + floor(L.area.h / cell) + 1 do
-        for ix = ix0, ix0 + floor(L.area.w / cell) + 1 do
+    local ix0, iy0 = floor((V.x - L.cx) / cell), max(0, floor((top - gy) / cell))
+    for iy = iy0, iy0 + floor(V.h / cell) + 1 do
+        for ix = ix0, ix0 + floor(V.w / cell) + 1 do
             local h = (ix * 73856093 + iy * 19349663) % 1000
             if h < 230 then
                 local x, y = L.cx + ix * cell + h % cell, gy + 6 + iy * cell + floor(h / 7) % cell
@@ -673,15 +721,25 @@ local function ground(L)
             end
         end
     end
+    if Title.threads and L.e and L.e < net.TAKEOVER then
+        local gy0 = Title.ground()
+        color(L.e < net.TAKEOVER / 2 and "c" or "d")
+        for _, t in ipairs(Title.threads) do
+            for _, q in ipairs(t) do
+                love.graphics.rectangle("fill", L.cx + q.x - hx, gy + q.y - gy0, 1, 1)
+            end
+        end
+    end
     color("n")
-    love.graphics.rectangle("fill", L.area.x, gy, L.area.w, 2)
+    love.graphics.rectangle("fill", V.x, gy, V.w, 2)
     color("m")
-    love.graphics.rectangle("fill", L.area.x, gy - 1, L.area.w, 1)
+    love.graphics.rectangle("fill", V.x, gy - 1, V.w, 1)
 end
 
 local GROW_TIME = 0.7
 
 function net.draw()
+    net.diving()
     color("o")
     love.graphics.rectangle("fill", 0, 0, S.vw, S.vh)
     local L = net.layout()
@@ -689,8 +747,17 @@ function net.draw()
     local states = {}
     for k, row in ipairs(D.NETWORK) do states[row.id] = { Profile.nodeState(row.id), k } end
 
-    love.graphics.setScissor(L.area.x, L.area.y, L.area.w, L.area.h)
+    love.graphics.setScissor(L.sky.x, L.sky.y, L.sky.w, L.sky.h)
     ground(L)
+    -- At the top of the dive, the title's roots are all there is under the
+    -- sprout, as on the home screen; the network comes up in their place.
+    if L.e and L.e < net.TAKEOVER / 2 then
+        blit(sproutPic(L), L.cx, L.cy)
+        love.graphics.setScissor()
+        local _, low = Title.ground()
+        Title.name(L.cy - low)
+        return
+    end
     -- The threads first, the dim ones under the lit.
     for pass = 1, 2 do
         for k, row in ipairs(D.NETWORK) do
@@ -714,7 +781,7 @@ function net.draw()
                         thread(x0, y0, x1, y1, 1, true)
                     end
                     color(r >= N.ranks(row) and "l" or "c")
-                    love.graphics.setLineWidth(depth <= 2 and 2 or 1)
+                    love.graphics.setLineWidth((depth <= 2 and L.step >= net.ICONS) and 2 or 1)
                     local tx, ty = thread(x0, y0, x1, y1, upto)
                     love.graphics.setLineWidth(1)
                     if upto < 1 and tx then
@@ -743,7 +810,7 @@ function net.draw()
         if not row.at then
             -- The sprout, on the ground over it all; named when pointed at.
             local x, y = at(L, row.id)
-            blit(sproutPic(), x, y)
+            blit(sproutPic(L), x, y)
             if net.sel == row.id or S.hover.netNode == row.id then
                 local sx, sy, reach = sproutSpot(L)
                 color("w")
@@ -755,9 +822,9 @@ function net.draw()
             end
         elseif st ~= "unknown" then
             local x, y = at(L, row.id)
-            local rad = radius(row)
+            local rad = radius(L, row)
             local r, n = N.rank(Profile.ranks(), row.id), N.ranks(row)
-            local iconic = icons()
+            local iconic = icons(L)
             local fill, edge
             if iconic then
                 -- A socket dark enough for the picture in it; the edge says where it stands.
@@ -821,7 +888,7 @@ function net.draw()
                 end
             end
             -- Names: the sprout's, every species' and seed's close up, and the one pointed at.
-            local named = not row.at or (names() and (row.species or row.seed))
+            local named = not row.at or (names(L) and (row.species or row.seed))
                 or ((net.sel == row.id or S.hover.netNode == row.id) and iconic)
             if named then
                 local s = row.name
@@ -834,6 +901,13 @@ function net.draw()
         end
     end
     love.graphics.setScissor()
+
+    -- Diving, the name goes up with the ground, and nothing else is up yet.
+    if L.e then
+        local _, low = Title.ground()
+        Title.name(L.cy - low)
+        return
+    end
 
     -- The top: BACK, the spores, how much is grown, ALL and REGROW.
     local b = L.back
@@ -888,6 +962,7 @@ end
 --- pointing and keys ------------------------------------------------------------------------
 
 function net.hover(mx, my)
+    if net.dive then return end
     local L = net.layout()
     if inside(mx, my, L.back.x, L.back.y, L.back.w, L.back.h) then S.hover.netBack = true return end
     if inside(mx, my, L.regrow.x, L.regrow.y, L.regrow.w, L.regrow.h) then S.hover.netRegrow = true return end
@@ -904,7 +979,7 @@ function net.hover(mx, my)
     for _, row in ipairs(D.NETWORK) do
         if Profile.nodeState(row.id) ~= "unknown" then
             local x, y = at(L, row.id)
-            local reach = radius(row)
+            local reach = radius(L, row)
             if not row.at then x, y, reach = sproutSpot(L) end
             local d = (x - mx) ^ 2 + (y - my) ^ 2
             reach = reach + (S.touch and 6 or 3)
@@ -924,6 +999,7 @@ function net.under()
 end
 
 function net.click(b)
+    if net.dive then return end
     if b == 2 then
         if net.sel then net.sel = nil; sound("back") else net.close() end
         return
@@ -960,6 +1036,7 @@ end
 
 local PAN = 24
 function net.key(key)
+    if net.dive then return end
     if key == "escape" or key == "backspace" then
         if net.sel then net.sel = nil; sound("back") else net.close() end
     elseif key == "left" then net.drag(net.getCam(), PAN, 0)

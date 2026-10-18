@@ -179,7 +179,10 @@ end
 -- under the sprout. Each node sits over the middle of what grows from it,
 -- and a branch is packed against the one before as close as their nodes
 -- allow, row by row (a tidy tree): a short branch tucks in under a long one's
--- shoulder instead of taking a column of its own all the way down. Each
+-- shoulder instead of taking a column of its own all the way down. At
+-- every fork the deepest branch goes in the middle and the shallower ones
+-- out to either side of it by turns, so the whole of it digs down to a
+-- point, a pyramid upside down under the sprout, and so does each branch. Each
 -- node a little above or below its row (`N.JIG`, by its id), so the rows
 -- read as soil dug into, not a grid.
 N.GAP, N.FIRST, N.ROW, N.JIG = 1.15, 2.6, 1.6, 0.18 -- steps between neighbours, to the first row, between rows, off it
@@ -196,13 +199,39 @@ function N.layout()
             table.insert(kids[row.at], row.id)
         end
     end
+    -- How many rows deep each branch goes, and what grows from each node in
+    -- the order it is laid out: the deepest in the middle.
+    local tall, order = {}, {}
+    local function height(id)
+        local h = 0
+        for _, k in ipairs(kids[id]) do h = math.max(h, height(k) + 1) end
+        tall[id] = h
+        return h
+    end
+    height(D.NETWORK[1].id)
+    for id, ks in pairs(kids) do
+        local sorted = {}
+        for n, k in ipairs(ks) do sorted[n] = { k = k, n = n } end
+        table.sort(sorted, function(a, b)
+            if tall[a.k] ~= tall[b.k] then return tall[a.k] > tall[b.k] end
+            return a.n < b.n
+        end)
+        local left, right = {}, {}
+        for n, e in ipairs(sorted) do
+            if n % 2 == 1 then right[#right + 1] = e.k else left[#left + 1] = e.k end
+        end
+        local o = {}
+        for n = #left, 1, -1 do o[#o + 1] = left[n] end
+        for _, k in ipairs(right) do o[#o + 1] = k end
+        order[id] = o
+    end
     -- A branch laid out about its own node (at 0): where each of its nodes
     -- is across (`x`, relative), and its outline, the leftmost and rightmost
     -- of it a row (`l`, `r`, from its own row down).
     local rel = {}
     local function shape(id)
         local l, r = { 0 }, { 0 }
-        local ks = kids[id]
+        local ks = order[id]
         if #ks == 0 then return l, r end
         local shifts, ol, orr = {}, nil, nil
         for n, k in ipairs(ks) do
@@ -237,7 +266,7 @@ function N.layout()
     end
     local function place(id, depth, x)
         places[id] = { x = x, y = N.depthY(depth) + (depth > 0 and jig(id) or 0), depth = depth }
-        for _, k in ipairs(kids[id]) do place(k, depth + 1, x + rel[k]) end
+        for _, k in ipairs(order[id]) do place(k, depth + 1, x + rel[k]) end
     end
     place(root, 0, 0)
     local b = { l = 0, r = 0, bottom = 0 }

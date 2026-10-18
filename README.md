@@ -97,7 +97,12 @@ board, and mutations not grown are not offered at all.
 The network's screen is the title's ground seen close up: the sprout
 standing on it under the night, and the network dug down under it a row a
 step deeper, each node over what grows from it and its threads curving down
-to them like roots. Every node shows what it grows in a round socket --
+to them like roots. At every fork the deepest branch is in the middle and
+the shallower ones out to either side by turns, so it digs down to a point
+under the sprout. Opened from the home screen it dives in: the ground goes
+up and the view zooms in on what is under it, the title's roots going dark
+as the network's come up in their place; BACK comes up out of it the same
+way, to the home screen's choices coming up one by one. Every node shows what it grows in a round socket --
 the species (an upgrade node at the tier its next rank brings), the seed, the
 enemy a field note is on (its body for what bodies are worth), or a glyph for the hyphae, the ring, the pulse,
 sugar and mutations -- dimmed while what it grows from is not grown yet, a
