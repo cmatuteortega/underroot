@@ -16,6 +16,7 @@ local Home = require "src.ui.home"
 local Settings = require "src.ui.settings"
 local Menu = require "src.ui.menu"
 local Hud = require "src.ui.hud"
+local Slide = require "src.ui.slide"
 
 local floor, max, min, abs, sqrt = math.floor, math.max, math.min, math.abs, math.sqrt
 local padBoard, fit, centre, point, stepRange, zoomTo, zoomBy =
@@ -58,7 +59,8 @@ local SLOP = 3 -- HUD pixels a tap may wander and still be a tap
 local PINCH_STEP = 1.2 -- how far the fingers spread (or close) for a step of the network's zoom
 
 function input.mousepressed(x, y, b, istouch)
-    if S.painter or S.pinch or S.turning then return end
+    -- Nothing is pressed on a screen still sliding in.
+    if S.painter or S.pinch or S.turning or Slide.busy() then return end
     S.touch = istouch and true or false
     point(x, y)
     findHover()
@@ -226,7 +228,7 @@ function input.keypressed(key)
         sound("on")
         return
     end
-    if S.painter then return end
+    if S.painter or Slide.busy() then return end
     screen().key(key)
 end
 

@@ -35,6 +35,7 @@ local Run = require "src.ui.run"
 local Loadout = require "src.ui.loadout"
 local Hud = require "src.ui.hud"
 local Input = require "src.ui.input"
+local Slide = require "src.ui.slide"
 
 local floor, min, max = math.floor, math.min, math.max
 local IDX = T.IDX
@@ -225,23 +226,34 @@ end
 function love.draw()
     -- The HUD's picture starts empty each frame (nothing where the board shows
     -- through) and everything on it is drawn solid, so laying it over the board
-    -- covers a pixel fully or not at all.
+    -- covers a pixel fully or not at all. The screen up is drawn on a picture
+    -- of its own and laid on it, so it can slide in as the last one slides
+    -- out (src/ui/slide.lua); its backdrop goes straight onto it, under,
+    -- when that stays put.
+    Slide.check()
     love.graphics.setCanvas(S.ui)
+    love.graphics.clear(0, 0, 0, 0)
+    local screen = S.menu and not S.painter and Input.screen()
+    local backdrop = screen and screen.backdrop
+    if backdrop and Slide.fixed() then backdrop() end
+    love.graphics.setCanvas(Slide.front)
     love.graphics.clear(0, 0, 0, 0)
     if S.painter then
         flair.loading()
     elseif S.menu then
-        Input.screen().draw()
+        if backdrop and not Slide.fixed() then backdrop() end
+        screen.draw()
     else
         Hud.draw()
         love.graphics.setCanvas(S.canvas)
         Board.draw()
     end
     love.graphics.setCanvas(S.ui)
+    Slide.compose()
     flair.draw()
     love.graphics.setCanvas()
     love.graphics.setColor(1, 1, 1)
-    if S.painter or S.menu then
+    if (S.painter or S.menu) and not Slide.showsBoard() then
         -- Nothing to stretch: the loading bar or the picker is the whole screen.
     elseif S.turning and not (S.pinch and not S.pinch.done) then
         -- Going round: the frame that was left turns half way, then the new

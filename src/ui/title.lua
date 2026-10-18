@@ -19,7 +19,8 @@ local sound = flair.sound
 local title = {}
 
 function title.open()
-    S.menu, title.t0, title.down = "title", flair.now(), nil
+    -- Back from the home screen, the network goes on from where it had got to.
+    S.menu, title.t0, title.down = "title", title.t0 or flair.now(), nil
     S.mode, S.drag, S.selected = "grow", nil, nil
 end
 
@@ -59,18 +60,39 @@ function title.grow(cx, gy)
     return threads
 end
 
--- How far the ground goes down once the title is tapped, making room in the
--- sky for the home screen's choices (src/ui/home.lua), and how long it takes.
-title.DROP_TIME = 0.7
+-- Where the ground is on the title, and how far it goes down once the title is
+-- tapped, making room in the sky for the home screen's choices
+-- (src/ui/home.lua); how long that takes, and the name going up off the top
+-- for the level picker.
+title.DROP_TIME, title.NAME_TIME = 0.7, 0.35
 function title.ground() return floor(S.vh * 0.6), max(floor(S.vh * 0.6), floor(S.vh * 0.88)) end
 
--- How far down the ground is now: none on the title, all the way once it has
--- dropped, eased between.
+-- How far down the ground is (0 where the title has it, 1 all the way) and
+-- how far up the name is (0 in place, 1 off the top), each going toward where
+-- the screen up wants it, a frame at a time.
+title.f = { drop = 0, name = 0 }
+local function toward(v, want, step)
+    if v < want then return min(want, v + step) end
+    return max(want, v - step)
+end
+local function smooth(f) return f * f * (3 - 2 * f) end
+
+function title.ease()
+    local now = flair.now()
+    local dt = min(0.1, now - (title.last or now))
+    title.last = now
+    local f = title.f
+    local drop, name = S.menu == "title" and 0 or 1, S.menu == true and 1 or 0
+    -- The shots photograph where it is going, not on the way.
+    if S.script then f.drop, f.name = drop, name end
+    f.drop = toward(f.drop, drop, dt / title.DROP_TIME)
+    f.name = toward(f.name, name, dt / title.NAME_TIME)
+end
+
+-- How far down the ground is now, in pixels.
 function title.drop()
     local gy, low = title.ground()
-    if not title.down then return 0 end
-    local f = min(1, (flair.now() - title.down) / title.DROP_TIME)
-    return floor((low - gy) * f * f * (3 - 2 * f) + 0.5)
+    return floor((low - gy) * smooth(title.f.drop) + 0.5)
 end
 
 -- Where the name goes and how big (x, y, scale), where the lettering under it
@@ -84,10 +106,13 @@ function title.marks()
     return x, y, s, y + 6 * s + 11, low - M.sprout(0).oj
 end
 
--- The night, the ground `drop` pixels lower than the title has it, the network
--- and the sprout on it, and the name over it all. Shared by the title, the home
--- screen and the settings.
-function title.scene(drop)
+-- The night, the ground as far down as it has got, the network and the sprout
+-- on it, and the name over it all, unless it has gone up: the backdrop the
+-- title, the home screen, the settings and the level picker share, which stays
+-- put while they slide (src/ui/slide.lua).
+function title.backdrop()
+    title.ease()
+    local drop = title.drop()
     local T0 = title
     local age = flair.now() - (T0.t0 or 0)
     local cx = floor(S.vw / 2)
@@ -129,7 +154,8 @@ function title.scene(drop)
     blit(M.sprout(0), cx, gy)
     -- The name, as big as the screen's width allows, on a teal shadow.
     local name = "MYCELIO TD"
-    local x, y, s = title.marks()
+    local x, y, s, under = title.marks()
+    y = y - floor(smooth(title.f.name) * (under + 2) + 0.5)
     love.graphics.push()
     love.graphics.translate(x, y)
     love.graphics.scale(s, s)
@@ -143,7 +169,6 @@ function title.scene(drop)
 end
 
 function title.draw()
-    title.scene(0)
     local age = flair.now() - (title.t0 or 0)
     if age % 1.2 < 0.8 then
         centred(say("PRESS ANY KEY", "TAP TO BEGIN"), S.vh - S.inset.b - 14, "w", "o")

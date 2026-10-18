@@ -44,7 +44,12 @@ It opens on the title; a key, click or tap sends the sprout and the ground
 down and brings up the home screen's four ways on: LEVELS (`L`, the level
 picker), NETWORK (`N`), ENCYCLOPEDIA (`E`) and SETTINGS (`S`, the sound for
 now). The network, the encyclopedia and the settings go back to it, and so
-does BACK on the level picker. The Crack is open; winning a level opens the next
+does BACK on the level picker, which keeps the sprout at the bottom under the
+same night (the name goes up off the top for it). Every screen slides into the
+next: the one that was up goes off one side as the new one comes in from the
+other, leftward going in and rightward coming back; between the screens under
+the night only what is laid over it moves, and leaving a run the board stays
+put as the new screen comes over it. The Crack is open; winning a level opens the next
 (what is won is kept in the save directory), and winning the Lawn opens challenge
 mode, which adds a last wave with the Bombardier Beetle to any level.
 
@@ -570,7 +575,8 @@ What is new for Underfoot:
 | `src/ui/toolbar.lua` | the toolbar's buttons and where they sit |
 | `src/ui/panel.lua` | the info panel for a species, a fruiting body or a seed |
 | `src/ui/input.lua` | mouse, fingers and keys: taps, drags, pans, pinches, the wheel, handed to the screen that is up |
-| `src/ui/title.lua`, `home.lua`, `settings.lua`, `menu.lua`, `loadout.lua`, `network.lua`, `codex.lua` | the title, the home screen after it, the settings, the level picker, the loadout, the Spore Bank's network, the encyclopedia |
+| `src/ui/title.lua`, `home.lua`, `settings.lua`, `menu.lua`, `loadout.lua`, `network.lua`, `codex.lua` | the title (and the night the home screen, the settings and the level picker share), the home screen after it, the settings, the level picker, the loadout, the Spore Bank's network, the encyclopedia |
+| `src/ui/slide.lua` | the way from one screen to the next: the old one sliding out, the new one in |
 | `src/ui/run.lua` | starting a run and each frame of it: the rules stepped, and what the profile keeps |
 | `src/ui/flair.lua`, `audio.lua` | the HUD's flourishes and the weather's coming and going; the sound's glue to the screen |
 | `src/profile.lua` | what is kept between runs (`save.txt`): wins, records, loadouts, the spores and the network's ranks, enemies met |

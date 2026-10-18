@@ -30,7 +30,7 @@ home.STAGGER = 0.08 -- seconds between one choice coming up and the next
 -- Seconds since the ground started down; the choices come up once it is
 -- there, one after another.
 local function age() return flair.now() - (Title.down or -1e9) end
-local function shown(k) return age() >= Title.DROP_TIME + (k - 1) * home.STAGGER end
+local function shown(k) return Title.f.drop >= 1 and age() >= Title.DROP_TIME + (k - 1) * home.STAGGER end
 
 -- A box a choice, down the middle between the lettering and the sprout; two
 -- by two where a column will not fit.
@@ -59,8 +59,9 @@ function home.choose(k)
     elseif c.id == "settings" then Settings.open() end
 end
 
+home.backdrop = Title.backdrop
+
 function home.draw()
-    Title.scene(Title.drop())
     for k, c in ipairs(home.layout()) do
         if shown(k) then
             local ch = home.CHOICES[k]

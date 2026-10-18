@@ -46,8 +46,9 @@ function settings.layout()
     return L
 end
 
+settings.backdrop = Title.backdrop
+
 function settings.draw()
-    Title.scene(Title.drop())
     local L = settings.layout()
     local b = L.back
     box(b.x, b.y, b.w, b.h, S.hover.back and "n" or "u", S.hover.back and "t" or "k")

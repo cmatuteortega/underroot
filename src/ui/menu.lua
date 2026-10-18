@@ -1,5 +1,6 @@
 -- The level picker, from the home screen (src/ui/home.lua), with BACK to it
--- top left and the spores in the bank beside it.
+-- top left and the spores in the bank beside it, under the same night with
+-- the sprout down at the bottom (the name goes up off the top for it).
 
 local D = require "src.defs"
 local Font = require "src.font"
@@ -8,9 +9,10 @@ local S = require "src.ui.state"
 local Draw = require "src.ui.draw"
 local flair = require "src.ui.flair"
 local Loadout = require "src.ui.loadout"
+local Title = require "src.ui.title"
 
 local floor, ceil, max, min = math.floor, math.ceil, math.max, math.min
-local color, box, text, centred, wrap, say, inside = Draw.color, Draw.box, Draw.text, Draw.centred, Draw.wrap, Draw.say, Draw.inside
+local box, text, centred, wrap, say, inside = Draw.box, Draw.text, Draw.centred, Draw.wrap, Draw.say, Draw.inside
 local sound, deny = flair.sound, flair.deny
 
 -- The level picker: a card a level, in rows of as many as fit across (three
@@ -44,10 +46,7 @@ local function back()
 end
 
 local function draw()
-    color("o")
-    love.graphics.rectangle("fill", 0, 0, S.vw, S.vh)
     local cards, switch = levelCards()
-    centred("MYCELIO TD", cards[1].y - 30, "g", "o")
     centred("WHERE DOES THE SPROUT COME UP?", cards[1].y - 18, "t", "o")
     for k, c in ipairs(cards) do
         local l = D.LEVELS[k]
@@ -124,6 +123,7 @@ local function key(key)
 end
 
 return {
+    backdrop = Title.backdrop,
     draw = draw,
     hover = hover,
     under = under,
