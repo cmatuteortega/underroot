@@ -23,8 +23,9 @@ local info = Panel.info
 local sound, deny = flair.sound, flair.deny
 
 -- The loadout picker: what the level sends (a chip an enemy, bosses last),
--- a card a species under it, and BACK and GO under those, all centred
--- down the screen. A narrow screen takes fewer cards a row.
+-- a card a species under it, and GROW under those, all centred down the
+-- screen; BACK top left, as on every screen, the spores beside it. A narrow
+-- screen takes fewer cards a row.
 local SW, SH = 62, 26
 local function enemiesOf(lv)
     local seen = {}
@@ -71,8 +72,8 @@ local function layout()
     end
 
     local height = 22 + 10 + lines * 12 + 6 + 8 + seedRows * 14 + 8 + rows * (SH + 4) + 6 + 16
-    local y = max(S.inset.t + 4, floor((S.vh - S.inset.b - 12 - height) / 2))
-    if open and not wide() then y = S.inset.t + 4 end
+    local y = max(S.inset.t + 20, floor((S.vh - S.inset.b - 12 - height) / 2))
+    if open and not wide() then y = S.inset.t + 20 end
     local top = y
     y = y + 32
     -- Each chip row centred on its own.
@@ -98,8 +99,8 @@ local function layout()
         cards[k] = { x = x0 + col * (SW + 4), y = y + row * (SH + 4), w = SW, h = SH, t = t }
     end
     y = y + rows * (SH + 4) + 6
-    local back = { x = mid - 54, y = y, w = 50, h = 16 }
-    local go = { x = mid + 4, y = y, w = 50, h = 16 }
+    local back = { x = S.inset.l + 4, y = S.inset.t + 4, w = 34, h = 12 }
+    local go = { x = mid - 25, y = y, w = 50, h = 16 }
     return { top = top, chips = chips, chipsY = top + 32, seeds = seeds, seedsY = seedsY, cards = cards, cardsY = cardsY,
         back = back, go = go, mid = mid }
 end
@@ -198,7 +199,7 @@ local function draw()
     local list = picked()
     local clock = flair.now()
     centred(lv.name .. (S.challenge and " (CHALLENGE)" or ""), L.top, "g", "o", L.mid)
-    text("SPORES " .. Profile.spores .. say("   N: NETWORK", ""), S.inset.l + 4, S.inset.t + 7, "t")
+    text("SPORES " .. Profile.spores .. say("   N: NETWORK", ""), L.back.x + L.back.w + 6, S.inset.t + 7, "t")
     local count = #list .. "/" .. D.LOADOUT
     centred("PICK A SEED AND THE SPECIES TO BRING  " .. count, L.top + 11, #list == D.LOADOUT and "l" or "t", "o", L.mid)
     text("COMING", floor(L.mid - Font.width("COMING") / 2), L.chipsY - 9, "s")
@@ -263,7 +264,7 @@ local function draw()
 
     local b, g = L.back, L.go
     box(b.x, b.y, b.w, b.h, S.hover.back and "n" or "u", S.hover.back and "t" or "k")
-    text("BACK", b.x + floor((b.w - Font.width("BACK")) / 2), b.y + 5, "w")
+    text("BACK", b.x + floor((b.w - Font.width("BACK")) / 2), b.y + 4, "w")
     local ready = #list > 0
     box(g.x, g.y, g.w, g.h, ready and (S.hover.go and "m" or "d") or "u", ready and "g" or "k")
     text("GROW", g.x + floor((g.w - Font.width("GROW")) / 2), g.y + 5, ready and "g" or "k")

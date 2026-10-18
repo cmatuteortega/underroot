@@ -10,6 +10,7 @@ local S = require "src.ui.state"
 local Draw = require "src.ui.draw"
 local Pixels = require "src.ui.pixels"
 local flair = require "src.ui.flair"
+local Palette = require "src.palette"
 
 local floor, max, min = math.floor, math.max, math.min
 local color, text, centred, say = Draw.color, Draw.text, Draw.centred, Draw.say
@@ -62,15 +63,19 @@ end
 
 -- Where the ground is on the title, and how far it goes down once the title is
 -- tapped, making room in the sky for the home screen's choices
--- (src/ui/home.lua); how long that takes, and the name going up off the top
--- for the level picker.
-title.DROP_TIME, title.NAME_TIME = 0.7, 0.35
+-- (src/ui/home.lua); how long that takes, the name going up off the top
+-- for the level picker, and the sprout sinking out of sight under the stars
+-- dimming as a level is picked, before its loadout comes in.
+title.DROP_TIME, title.NAME_TIME, title.SINK_TIME = 0.7, 0.35, 0.45
+title.sinkTo = nil -- the level whose loadout opens once the sprout is out of sight
 function title.ground() return floor(S.vh * 0.6), max(floor(S.vh * 0.6), floor(S.vh * 0.88)) end
 
--- How far down the ground is (0 where the title has it, 1 all the way) and
--- how far up the name is (0 in place, 1 off the top), each going toward where
--- the screen up wants it, a frame at a time.
-title.f = { drop = 0, name = 0 }
+-- How far down the ground is (0 where the title has it, 1 all the way), how
+-- far up the name is (0 in place, 1 off the top) and how far the sprout has
+-- sunk (0 not at all, 1 out of sight under a sky gone dark), each going
+-- toward where the screen up wants it, a frame at a time. Back from the
+-- loadout or a run, the sprout comes back up and the stars out.
+title.f = { drop = 0, name = 0, sink = 0 }
 local function toward(v, want, step)
     if v < want then return min(want, v + step) end
     return max(want, v - step)
@@ -83,16 +88,20 @@ function title.ease()
     title.last = now
     local f = title.f
     local drop, name = S.menu == "title" and 0 or 1, S.menu == true and 1 or 0
+    local sink = (title.sinkTo or S.menu == "loadout") and 1 or 0
     -- The shots photograph where it is going, not on the way.
-    if S.script then f.drop, f.name = drop, name end
+    if S.script then f.drop, f.name, f.sink = drop, name, sink end
     f.drop = toward(f.drop, drop, dt / title.DROP_TIME)
     f.name = toward(f.name, name, dt / title.NAME_TIME)
+    f.sink = toward(f.sink, sink, dt / title.SINK_TIME)
 end
 
--- How far down the ground is now, in pixels.
+-- How far down the ground is now, in pixels: the drop, and the sprout
+-- sinking all the way under the bottom of the screen.
 function title.drop()
     local gy, low = title.ground()
-    return floor((low - gy) * smooth(title.f.drop) + 0.5)
+    local under = S.vh - low + M.sprout(0).oj + 2
+    return floor((low - gy) * smooth(title.f.drop) + under * smooth(title.f.sink) + 0.5)
 end
 
 -- Where the name goes and how big (x, y, scale), where the lettering under it
@@ -121,7 +130,7 @@ function title.backdrop()
     local gy = gy0 + drop
     color("o")
     love.graphics.rectangle("fill", 0, 0, S.vw, S.vh)
-    title.stars(gy, 0, 0, 0)
+    title.stars(gy, 0, 0, 0, floor(smooth(title.f.sink) * 3 + 0.5))
     -- The ground: a lip of lit soil, then deep soil to the bottom.
     color("u")
     love.graphics.rectangle("fill", 0, gy, S.vw, S.vh - gy)
@@ -147,9 +156,10 @@ end
 
 -- A few stars over ground at `gy`, each blinking on its own beat, strewn
 -- down to where the ground ends up so the dropping ground uncovers more of
--- them; `dx`, `dy` moves them (round the screen across), and none are drawn
--- above `top`. The network's screen has the same night over its ground.
-function title.stars(gy, dx, dy, top)
+-- them; `dx`, `dy` moves them (round the screen across), none are drawn
+-- above `top`, and each is `dim` steps darker (three and they are out). The
+-- network's screen has the same night over its ground.
+function title.stars(gy, dx, dy, top, dim)
     local _, low = title.ground()
     local age = flair.now() - (title.t0 or 0)
     local rng = love.math.newRandomGenerator(3)
@@ -157,8 +167,12 @@ function title.stars(gy, dx, dy, top)
         local x, y, beat = rng:random(0, S.vw - 1), rng:random(0, low - 4), rng:random() * 6
         x, y = (x + dx) % S.vw, y + dy
         if y < gy - 4 and y >= top and (age + beat) % 6 > 0.4 then
-            color(rng:random() < 0.3 and "s" or "k")
-            love.graphics.rectangle("fill", x, y, 1, 1)
+            local k = rng:random() < 0.3 and "s" or "k"
+            for _ = 1, dim or 0 do k = Palette.darker[k] end
+            if k ~= "o" then
+                color(k)
+                love.graphics.rectangle("fill", x, y, 1, 1)
+            end
         else
             rng:random()
         end

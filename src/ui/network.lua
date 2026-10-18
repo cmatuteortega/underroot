@@ -134,23 +134,21 @@ end
 
 local function smooth(f) return f * f * (3 - 2 * f) end
 
--- How far the dive is (0 the home screen's view, 1 the network's), or nil
--- when there is none. Back up at the top, it is the home screen again, its
--- choices coming up one by one as they do after the title.
+-- Called as each frame is drawn: the dive in done, the network is up; back
+-- up at the top, it is the home screen again, its choices coming up one by
+-- one as they do after the title. That last frame is still drawn here, as
+-- the top of the dive (the dive is kept, ended, so it is): never the
+-- network's own view for a frame between.
 function net.diving()
     local d = net.dive
-    if not d then return end
-    local f = (flair.now() - d.t0) / net.DIVE_TIME
-    if f >= 1 then
+    if not d or d.over or flair.now() - d.t0 < net.DIVE_TIME then return end
+    if d.out then
+        d.over = true
+        Title.down = flair.now() - Title.DROP_TIME
+        S.openHome()
+    else
         net.dive = nil
-        if d.out then
-            Title.down = flair.now() - Title.DROP_TIME
-            S.openHome()
-            return 0
-        end
-        return
     end
-    return d.out and 1 - smooth(f) or smooth(f)
 end
 
 -- HUD pixels a step out, as zoomed and as far as the dive has got: from the

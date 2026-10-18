@@ -49,7 +49,10 @@ same night (the name goes up off the top for it). Every screen slides into the
 next: the one that was up goes off one side as the new one comes in from the
 other, leftward going in and rightward coming back; between the screens under
 the night only what is laid over it moves, and leaving a run the board stays
-put as the new screen comes over it. The Crack is open; winning a level opens the next
+put as the new screen comes over it. A level picked, the sprout first sinks
+out of sight and the stars go out, and then its loadout slides in (BACK top
+left on it, as on every screen); back from it, the sprout comes up again. The
+Crack is open; winning a level opens the next
 (what is won is kept in the save directory), and winning the Lawn opens challenge
 mode, which adds a last wave with the Bombardier Beetle to any level.
 

@@ -45,7 +45,19 @@ local function back()
     if S.game and S.game.phase ~= "lost" and S.game.phase ~= "won" then S.menu = nil else S.openHome() end
 end
 
+-- A level picked: the sprout sinks out of sight and the stars go out
+-- (src/ui/title.lua), and then its loadout comes in. The shots go straight there.
+local function pick(n)
+    sound("select")
+    if S.script then Loadout.open(n) else Title.sinkTo = n end
+end
+
 local function draw()
+    if Title.sinkTo and Title.f.sink >= 1 then
+        local n = Title.sinkTo
+        Title.sinkTo = nil
+        Loadout.open(n)
+    end
     local cards, switch = levelCards()
     centred("WHERE DOES THE SPROUT COME UP?", cards[1].y - 18, "t", "o")
     for k, c in ipairs(cards) do
@@ -85,6 +97,7 @@ end
 
 -- What is pointed at: a level, the challenge switch or BACK.
 local function hover(mx, my)
+    if Title.sinkTo then return end
     local cards, switch = levelCards()
     for k, c in ipairs(cards) do
         if inside(mx, my, c.x, c.y, c.w, c.h) then S.hover.level = k return end
@@ -107,16 +120,18 @@ local function under()
 end
 
 local function click(b)
+    if Title.sinkTo then return end
     if b == 2 or S.hover.back then back() return end
-    if S.hover.level and Profile.levelOpen(S.hover.level) then sound("select"); Loadout.open(S.hover.level)
+    if S.hover.level and Profile.levelOpen(S.hover.level) then pick(S.hover.level)
     elseif S.hover.level then deny()
     elseif S.hover.challenge then S.challenge = not S.challenge; sound(S.challenge and "on" or "off") end
 end
 
 local function key(key)
+    if Title.sinkTo then return end
     local n = tonumber(key)
     if n and D.LEVELS[n] then
-        if Profile.levelOpen(n) then sound("select"); Loadout.open(n) else deny() end
+        if Profile.levelOpen(n) then pick(n) else deny() end
     end
     if key == "c" and Profile.challengeOpen() then S.challenge = not S.challenge; sound(S.challenge and "on" or "off") end
     if key == "escape" or key == "backspace" then back() end
