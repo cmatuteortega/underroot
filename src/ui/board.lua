@@ -221,13 +221,25 @@ local PICTURE = {
         return M.mole(turned(e.h), floor(e.anim * (dig and 7 or 5)) % 2, dig)
     end,
     brine = function(e) return M.brine(floor(e.anim * 4) % 2) end,
+    diver = function(e) return M.diver(turned(e.h), floor(e.anim * 7) % 2) end,
+    wireworm = function(e) return M.wireworm(turned(e.h), floor(e.anim * 5) % 2) end,
+    leafcutter = function(e)
+        local rate = e.gnaw and 14 or 9
+        return M.leafcutter(turned(e.h), floor(e.anim * rate) % 2, e.full)
+    end,
+    mold = function(e) return M.mold(floor(e.anim * 2) % 2) end,
+    naiad = function(e) return M.naiad(turned(e.h), floor(e.anim * 5) % 2, e.strikeT ~= nil, e.state == "molt") end,
+    dragonfly = function(e) return M.dragonfly(turned(e.h), floor(e.anim * 24) % 2) end,
+    rhino = function(e) return M.rhino(turned(e.h), floor(e.anim * 5) % 2, e.tossT ~= nil) end,
+    hornet = function(e) return M.hornet(turned(e.h), floor(e.anim * 22) % 2) end,
 }
 
 local function enemyPicture(e) return (PICTURE[e.kind] or PICTURE.brine)(e) end
 
 local SHADOW = { ant = 4, pillbug = 4.5, brine = 3.5, gnat = 2.5, slug = 6, spider = 5, knight = 5,
     queen = 11, stag = 13, dung = 10, moth = 3.5, waterbug = 12, centipede = 6, centseg = 5.5, bombardier = 10,
-    springtail = 3, click = 10, mole = 10, cricket = 5.5, centi = 3.5, centiseg = 3 }
+    springtail = 3, click = 10, mole = 10, cricket = 5.5, centi = 3.5, centiseg = 3,
+    diver = 4.5, wireworm = 3, leafcutter = 4, mold = 4.5, naiad = 11, dragonfly = 9, rhino = 13, hornet = 8 }
 
 -- Something under the water: rings spreading on the surface where it is.
 local function ripples(x, z, t)
@@ -522,7 +534,8 @@ local function draw()
         hole(t.a.x, t.a.z, 6)
     end
     for _, e in ipairs(S.game.enemies) do
-        if e.under and (e.kind == "mole" or e.kind == "cricket") then heave(e.x, e.z, S.game.clock, e.kind == "cricket" and 0.5)
+        if e.under and (e.kind == "mole" or e.kind == "cricket" or e.kind == "wireworm") then
+            heave(e.x, e.z, S.game.clock, e.kind == "cricket" and 0.5 or (e.kind == "wireworm" and 0.35))
         elseif e.under then ripples(e.x, e.z, S.game.clock) end
         if e.under and (e.exposed or 0) > 0 then
             -- Found by an Earthstar: a rust mark over it, for everything to aim at.

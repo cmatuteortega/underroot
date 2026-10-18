@@ -5,13 +5,15 @@ save directory keep the first name, and the app ids the second, so an installed
 copy updates in place.)
 
 A tower defense where you are the mycelium under a sprout, built from the design
-doc (`DESIGN.md`, 13 oct 2026). Six levels, each its own map and waves (The
-Crack, The Flowerpot, The Shed Floor, The Rotting Log, The Pond Edge, The Lawn),
-weather that changes wave by wave, eighteen fruiting bodies that each fork into two
-upgrade branches of two tiers, twelve enemies, eight bosses (big bugs: a Queen Ant, a
-Stag Beetle, a Dung Beetle with its ball, a Click Beetle, a Mole Cricket, a Giant
-Water Bug, a Giant Centipede and, in challenge mode, a Bombardier Beetle; three
-on every level, the two met part way through it at a third of their health), and
+doc (`DESIGN.md`, 13 oct 2026). Nine levels, each its own map and waves (The
+Crack, The Flowerpot, The Shed Floor, The Rotting Log, The Pond Edge, The Lawn,
+The Puddle, The Old Stump, The Compost Heap), weather that changes wave by wave,
+eighteen fruiting bodies that each fork into two upgrade branches of two tiers,
+sixteen enemies, twelve bosses (big bugs: a Queen Ant, a Stag Beetle, a Dung
+Beetle with its ball, a Click Beetle, a Mole Cricket, a Giant Water Bug, a Giant
+Centipede, a Dragonfly Nymph that hatches into a Dragonfly, a Rhinoceros Beetle
+and, in challenge mode, a Bombardier Beetle and a Hornet; three on every level,
+the two met part way through it weaker), and
 Mutations between waves. All of it sits on the MVP's sever / prune /
 regrow loop, the Fairy Ring and the Spore Pulse. It is drawn isometrically with
 Survive School's 3D method and the frog prototype's world painter (sekiroclone).
@@ -21,12 +23,12 @@ love .                 # LÖVE 11.x
 love . --shots         # dev: a scripted game that clicks like a player, writes
                        # screenshots to the save directory, prints a summary, quits
 love . --shots pond    # dev: the same for another level (flowerpot, shed, log, pond,
-                       # lawn), the bot playing;
-                       # add `challenge` for the challenge wave
+                       # lawn, puddle, stump, compost), the bot playing;
+                       # add `challenge` (or `hornet`) for a challenge wave
 love . --sheet         # dev: every look of every model on one sheet (sheet.png)
 love . --sounds        # dev: every sound and loop written as a .wav (sounds/), to listen to
 love . --bot 10        # dev: plays the Crack headless 10 times, prints how it went
-love . --bot 10 lawn   # dev: another level; add `challenge`, or `generic` for the
+love . --bot 10 lawn   # dev: another level; add `challenge` (or `hornet`), or `generic` for the
                        # map-agnostic player instead of the level's build order,
                        # or `endless` to play on past the win until the sprout falls,
                        # or a seed (oak, tomato, dandelion, sunflower, flytrap)
@@ -53,8 +55,10 @@ put as the new screen comes over it. A level picked, the sprout first sinks
 out of sight and the stars go out, and then its loadout slides in (BACK top
 left on it, as on every screen); back from it, the sprout comes up again. The
 Crack is open; winning a level opens the next
-(what is won is kept in the save directory), and winning the Lawn opens challenge
-mode, which adds a last wave with the Bombardier Beetle to any level.
+(what is won is kept in the save directory). Winning the Lawn opens challenge
+mode, which adds a last wave with the Bombardier Beetle to any level; winning
+the Compost Heap opens a second challenge, the Hornet. The switch under the
+level cards goes OFF, BOMBARDIER, HORNET (once open) and back.
 
 A level won offers four ways on: the next level (`N`), endless (`E`), the same
 level again (`R`) or the levels (`M`). Endless keeps the run going past the last
@@ -75,15 +79,17 @@ sprout, each bought a rank at a time, and each only once the node it grows
 from has a rank. A first run has the Spore Puffer, the bean and three
 mutations, and everything held back; a fully grown network is the game as
 `src/defs.lua` writes it, every number exactly as today. The last six
-species (the Fly Agaric, Earthstar, Oyster Mushroom, Bleeding Tooth, Truffle and
-Turkey Tail) wait on no level yet, only on the branch they grow from: levels
-still to come will open them.
+species open in time for the level that needs them: winning the Lawn opens
+the Fly Agaric and the Earthstar (the Puddle's Dragonfly and Diving Beetles),
+the Puddle the Oyster Mushroom (the Old Stump's Rhinoceros Beetle), the Old
+Stump the Bleeding Tooth (the Compost Heap's cutters) and the Compost Heap the
+Turkey Tail; the Truffle waits only on its branch.
 
 | branch | grows from the sprout | then |
 | --- | --- | --- |
-| damage | Spore Puffer (free) | Enoki Needle, Puffball Mortar (win the Shed Floor), Humongous Fungus (win the Lawn); off the needle, Fly Agaric and Oyster Mushroom |
-| control | Slime Mat | Stinkhorn (win the Crack), Cordyceps Bloom (win the Pond Edge); off the mat, Earthstar |
-| support | Relay | Lion's Mane, Inky Cap; Turkey Tail off the relay, Bleeding Tooth off the mane, Truffle off the Inky Cap |
+| damage | Spore Puffer (free) | Enoki Needle, Puffball Mortar (win the Shed Floor), Humongous Fungus (win the Lawn); off the needle, Fly Agaric (win the Lawn) and Oyster Mushroom (win the Puddle) |
+| control | Slime Mat | Stinkhorn (win the Crack), Cordyceps Bloom (win the Pond Edge); off the mat, Earthstar (win the Lawn) |
+| support | Relay | Lion's Mane, Inky Cap; Turkey Tail off the relay (win the Compost Heap), Bleeding Tooth off the mane (win the Old Stump), Truffle off the Inky Cap |
 | defence | Shelf Fungus (win the Flowerpot) | Ghost Lamp (win the Rotting Log) |
 | hyphae | link HP, flow, cost, growing speed | Fairy Rings, the Spore Pulse and its power, more shared mutations |
 | sprout | the sprout's HP, sugar, starting nutrients, wave bonus | the seeds and each seed's own mutations, more shared mutations |
@@ -144,8 +150,12 @@ next level might, and again (`B.campaign`; `tests/bot_test.lua` keeps it to
 the shape below). With the build orders it loses the Crack seven or so times
 before it falls (around run 8-10), then the Flowerpot, the Shed Floor and the
 Rotting Log come quickly, the Pond Edge holds it up for a few runs, and the
-Lawn falls around run 14-18, with a little over a third of the network grown;
-the rest is the other species and their upgrades, for replays and endless.
+Lawn falls around run 14-18, with a little over a third of the network grown.
+The last three are each harder than the one before, for a player with more of
+the network: the Puddle takes a few runs, the Old Stump a few more, the
+Compost Heap the most, and the story is done around run 30 with a little under
+half the network grown; the rest is the other species and their upgrades, for
+replays and endless.
 The Crack, now the first level of a network that starts with one species, has
 its waves grow tougher by 6% rather than 10%. A player without a build order
 will take longer. The prices are each row's `price` in `src/defs.lua`, the
@@ -239,7 +249,7 @@ chew through any thread they cross.
 | `N` | after a win: on to the next level's loadout |
 | `L` `N` `E` `S` (or `1`–`4`) on the home screen | the levels, the network, the encyclopedia, the settings (`Esc` back to the title) |
 | `M` | the level picker (`Esc` or BACK there goes back to the run, or to the home screen) |
-| `1`–`6`, `C` in the picker | pick a level; challenge mode on or off |
+| `1`–`9`, `C` in the picker | pick a level; the challenge switch (off, then each challenge open) |
 | `E` on the home screen | the encyclopedia: `1`–`4` or left / right for its tabs, a click for a page, left / right through the pages, wheel or up / down to scroll, `Esc` back |
 | click a species in the loadout | read it in the panel; click it again to bring it or leave it (as many as the network has made room for) |
 | a species' key in the loadout | bring it or leave it at once |
@@ -366,8 +376,16 @@ cuts it, and stays still and soft for 2.2 s. It cuts two that way, then climbs
 back to the trail; a fed link before a starved one), Centipede (the Lawn: the
 small one, a head and four segments, each its own enemy; every body wears the
 links within 4 at 7 a second as it runs along, and it splits where it is broken;
-not lured, panicked or infected). Each wave's
-enemies have 10% more HP than the last.
+not lured, panicked or infected), Diving Beetle (the Puddle: on a flooded trail
+tile it swims under, x1.6 as fast, and only an Earthstar can hear or hurt it;
+on dry ground it walks and chews like an ant), Wireworm (the Compost Heap: a
+small burrower like the Cricket Nymph that goes for a Truffle's buried links
+first and cuts one), Leafcutter Ant (the Compost Heap: leaves the trail for the
+nearest link within 44, chews it through and carries the piece to the sprout,
+slower), Green Mold (the Compost Heap: a rival fungus that, touching a link,
+creeps up it towards the sprout; a tower it reaches is overgrown, the pocket
+stays moldy for 12 s and the link behind it is cut; prune the link ahead of it
+and it dries up). Each wave's enemies have 10% more HP than the last.
 
 **Bosses.** The design doc's human-world bosses became big bugs (see
 `DESIGN.md`). They come with a banner and a health bar across the top, and they
@@ -414,6 +432,21 @@ shake the board.
   turns its back and sprays the sprout itself every 2.5 s until it dies. The first
   thing in the line of the spray takes it instead: a Shelf Fungus on the trail, a
   fruiting body between them. Answer: cover, then burst damage.
+- **Dragonfly Nymph** (the Puddle, wave 14): under a flooded tile only an
+  Earthstar can hurt it, and every six seconds its mask of a jaw shoots out at
+  the nearest tower for 30. Brought to half its health on dry ground it stops,
+  splits its skin (soft, for 2.5 s) and a **Dragonfly** hatches: a flier, fast,
+  straight for the sprout, that every four seconds swoops on a tower within 54
+  for 28 and a short stun. Answer: Earthstars over the wading lane, then Fly
+  Agarics (which daze it) and needles.
+- **Rhinoceros Beetle** (the Old Stump, wave 14): armor 12, and what an Oyster
+  strips grows back three times as fast; a needle pierces only half of it. Every
+  seven seconds its horn tosses the nearest tower within 30, for 45 and a 3 s
+  stun. Answer: Oysters one hop from the sprout, where they strip hardest.
+- **Hornet** (challenge mode, once the Compost Heap is won): a flier that every
+  six seconds dives on the deadliest tower within 90 and stings it, 45 and a
+  4 s stun. Answer: Fly Agarics, and a Turkey Tail or a Lion's Mane to shake the
+  stuns off.
 
 **Levels.** Each is its own map and waves, picked from the level picker.
 
@@ -425,11 +458,17 @@ shake the board.
 | 4. The Rotting Log | inside a hollow log, dark nearly every wave; two long straights meet at the sprout | 13 | Fairy Rings close with three nodes here; slugs and mites | Click Beetle |
 | 5. The Pond Edge | the two trails meet on the west shore and wade one flooded lane across a pond; lily pads on the water, stones on the banks, reeds round it | 12 | flooding, high ground; rain often; the Cricket Nymph | Giant Water Bug |
 | 6. The Lawn | open mown grass, a long dirt path, three gates | 15 | everything at once, each wave 20% tougher than the last (10% elsewhere); the small Centipede | Queen Ant, Stag Beetle, Giant Centipede |
+| 7. The Puddle | a rain puddle on a paved path; both trails wade its south shore, and a drought dries the ford across its middle (the top trail goes eight tiles shorter, over the mud) | 14 | water that changes the map; the Diving Beetle | Queen Ant, Giant Water Bug, Dragonfly Nymph |
+| 8. The Old Stump | the cut top of a stump, the sprout in its heart, four trails curling in from its four sides | 14 | everything near the sprout: the inner guard, rings round it; shells down every trail | Stag Beetle, Click Beetle, Rhinoceros Beetle |
+| 9. The Compost Heap | three trails braided into one lane for the last six tiles, rich pockets everywhere | 15 | what eats the network: Green Mold, the Leafcutter, the Wireworm; each wave half as tough again as the last | Mole Cricket, Giant Centipede, Dung Beetle |
 
 They come in the design doc's order. The Crack, the first, also brings the
 three bosses the levels after it each have one of. A save from before the
 Flowerpot, the Shed Floor and the Rotting Log came in keeps every level it had
 open: a level is open once the one before it is won, or it or any after it is.
+
+A gate is on an edge of the board (the bugs come in from beyond it) or, off the
+edges, a hole in the floor they come up out of.
 
 The pockets past the Crack's: a **lily pad** (normal, lies low: rain washes it)
 and a **stone** (normal, high ground: the Water Bug cannot reach it, and a mortar
@@ -484,6 +523,13 @@ reaches the sprout nearly dead. In challenge mode it wins the Crack 4 times in 5
 the Lawn 3 and the Pond Edge never: the Bombardier is meant to be a wall. A player
 who adapts should do better than a script that can't.
 
+On a fully grown network, over ten or so runs each, it wins about a third of
+the Lawn, half the Puddle, two in five of the Old Stump and one in ten of the
+Compost Heap: each later level is harder than the one before, since a player
+reaching it brings more of the network. (The bot never builds a second route,
+so the Rhinoceros Beetle and the Dung Beetle usually reach the sprout, as the
+Water Bug does on the Pond Edge.)
+
 `generic` swaps the build order for a player that works on any map (grow to the
 pocket that watches the most trail, put the next of a fixed rotation on it). It is
 much weaker, losing the Crack at the Stag Beetle every time, so it is for new maps
@@ -491,8 +537,7 @@ before they have a build order, not for tuning.
 
 ### Not in yet
 
-Green Mold; elite modifiers, props, sprout seeds and the Compost
-Heap. Each of those is a row and a model more, below.
+Elite modifiers and props. Each of those is a row and a model more, below.
 
 ## How it sounds
 

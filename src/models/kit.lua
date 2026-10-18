@@ -140,6 +140,14 @@ local R = {
     springtail = ramp("w", "s", "k", "u"),
     click = ramp("t", "n", "u", "o"),
     mole = ramp("t", "n", "n", "u"),
+    diver = ramp("s", "k", "d", "o"),
+    worm = ramp("w", "t", "t", "n"),
+    cutter = ramp("t", "r", "n", "u"),
+    mold = ramp("g", "g", "m", "d"),
+    nymph = ramp("t", "n", "d", "u"),
+    dragon = ramp("l", "c", "k", "o"),
+    rhino = ramp("t", "n", "u", "o"),
+    hornet = ramp("t", "t", "r", "u"),
 }
 M.R = R
 

@@ -82,7 +82,9 @@ grow and cripplingly expensive, so it is a bet on surviving long enough.
 ### Six more
 
 Built, and grown deep in the network (off the needle, the mat, the mane, the
-Inky Cap and the relay); no level opens them yet. Each answers a threat the roster above handles thinly (fliers,
+Inky Cap and the relay), each opened by the level before the one that needs it:
+the Lawn opens the Fly Agaric and the Earthstar, the Puddle the Oyster, the Old
+Stump the Bleeding Tooth, the Compost Heap the Turkey Tail. Each answers a threat the roster above handles thinly (fliers,
 burrowers, armor, link-cutters) or widens a thin role (economy, support), and
 each claims a place in the graph no other tower wants.
 
@@ -137,6 +139,15 @@ and asks for a different answer.
 Green Mold and Brine Drop are the two enemies that make you cut your own network on
 purpose. Introduce them gently, since pruning feels bad the first time.
 
+Three more, built for the last three levels, so the six deep towers each have
+something to answer:
+
+| Enemy | Behavior | Threat to the network | Counterplay |
+| --- | --- | --- | --- |
+| Diving Beetle | Swims under a flooded trail tile, faster | Can't be seen or hit while it swims | Earthstar (hears it underwater) |
+| Wireworm | A small burrower that goes for buried links first | The one bug that threatens a Truffle's safe spine | Earthstar, Lion's Mane, Bleeding Tooth |
+| Leafcutter Ant | Leaves the trail to cut the nearest link and carries the piece home | Cuts on purpose, off the trail | Bleeding Tooth's sap, area damage |
+
 ## Bosses and elites
 
 Bosses are the big bugs: the same world as everything else, three times the size,
@@ -153,6 +164,9 @@ different assumption about how the network behaves.
 | Giant Water Bug | Lurks under the flooded lane, surfaces beside a fruiting body and drags it under | Building on high ground and keeping a Lion's Mane in reach |
 | Giant Centipede | A long train of armored segments, each with its own HP; every segment cuts the links it crosses, and it splits where it is broken | Area damage across a whole lane, and rebuilding behind it |
 | Bombardier Beetle | Turns at the end of the trail and sprays a boiling cone that hits the sprout itself | Using Shelf Fungus and leaves as cover for the sprout |
+| Dragonfly Nymph | Swims under the flooded lane and shoots out its jaw at towers; at half health it climbs out, splits its skin and hatches into a Dragonfly, a flying boss that swoops on towers | Earthstar for the nymph, then Fly Agaric for the flier: one boss, two answers |
+| Rhinoceros Beetle | Armor 12 that grows back, half proof against piercing; its horn tosses towers | Oyster Mushrooms one hop from the Heart: the inner guard |
+| Hornet | A second challenge boss, a flier that dives on the deadliest tower and stings it still | Fly Agaric, and a Turkey Tail to shake off the stun |
 
 Elite modifiers can be added to any normal enemy to make waves unpredictable:
 
@@ -227,7 +241,8 @@ one, so the hyphae spread across the screen as it is bought.
 
 ## Levels and biomes
 
-Seven levels, each teaching one new idea about the network.
+Seven levels, each teaching one new idea about the network, and three more after
+them (below).
 
 | Level | Setting | New idea | Introduces | Boss |
 | --- | --- | --- | --- | --- |
@@ -235,13 +250,23 @@ Seven levels, each teaching one new idea about the network.
 | 2. The Flowerpot | Cracked terracotta pot | Cutting and regrowing | Pillbug, Lion's Mane, Mole Cricket (boss) | Queen Ant |
 | 3. The Shed Floor | Dusty boards, bottle caps, Lego | Chokepoints and blockers | Wolf Spider, Shelf Fungus | Stag Beetle |
 | 4. The Rotting Log | Damp, rich, dark | Fairy Rings and loops | Slug, Mite Swarm, Inky Cap | Click Beetle |
-| 5. The Compost Heap | Heat and decay | Economy and decomposition | Green Mold, Cordyceps | Dung Beetle |
+| 5. The Compost Heap | Heat and decay | Economy and decomposition (moved after the Lawn: see below) | Green Mold, Cordyceps | Dung Beetle |
 | 6. The Pond Edge | Water and reeds | Flooding, high ground | Brine Drop, Mole Cricket (the small one, a nymph) | Giant Water Bug |
 | 7. The Lawn | Open grass, human tools | Everything at once | Beetle Knight, Centipede | Giant Centipede |
 
+After the Lawn (the sixth in the game, the Compost Heap having moved), three
+more, each harder than the one before, since by then the player has more of the
+network:
+
+| Level | Setting | New idea | Introduces | Boss |
+| --- | --- | --- | --- | --- |
+| 7. The Puddle | A rain puddle on a paved path | Water that changes the map: a drought dries a shortcut ford across it | Diving Beetle | Dragonfly Nymph, hatching into a Dragonfly |
+| 8. The Old Stump | The cut top of a stump, the sprout in the middle | Four trails in from every side: everything happens by the Heart | (shells down every trail) | Rhinoceros Beetle |
+| 9. The Compost Heap | Heat and decay | What eats the network: three trails braided into one lane | Green Mold, Leafcutter Ant, Wireworm | Dung Beetle |
+
 The boss named is the level's own and comes last; each level also brings two of the others before it.
 The Bombardier Beetle is a challenge-mode boss that can appear in any level once the
-story is done. The Mole Cricket comes part way through the Flowerpot (whose spiral
+Lawn is won, and the Hornet a second once the Compost Heap is. The Mole Cricket comes part way through the Flowerpot (whose spiral
 it cuts across) and the Rotting Log, in place of a second Stag Beetle.
 
 ## Tone, art and open questions

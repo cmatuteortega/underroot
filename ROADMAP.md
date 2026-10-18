@@ -156,7 +156,10 @@ The board is painted by the CPU, pixel by pixel.
 
 ## Phase 7: content and balance (the rest of `DESIGN.md`)
 
-- [ ] The Compost Heap (level 7) with Green Mold.
+- [x] The Compost Heap with Green Mold, after the Puddle and the Old Stump
+  (levels 7-9), with the Diving Beetle, Wireworm, Leafcutter Ant, the Dragonfly
+  Nymph / Dragonfly, the Rhinoceros Beetle and the Hornet challenge.
+- [ ] Balance the last three by hand: they are tuned only against the bot so far.
 - [ ] Elite modifiers (Fungicidal, Scent-masked, Armored shell, Hive-minded).
 - [ ] Colony traits.
 - [ ] Props and new pocket kinds, if the tileset gets tiles for them.

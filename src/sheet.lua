@@ -46,6 +46,18 @@ function S.run()
     rows[#rows + 1] = { "bomb", M.bombardier(0.6, 1, true), M.bombardier(3.8, 0, true), M.corpse("bombardier", 0.4) }
     headings("mole", function(h) return M.mole(h, 0) end, 4)
     rows[#rows + 1] = { "mole", M.mole(0.6, 0, true), M.mole(0.6, 1, true), M.corpse("mole", 0.4) }
+    headings("diver", function(h) return M.diver(h, 0) end, 6)
+    headings("worm", function(h) return M.wireworm(h, 0) end, 6)
+    rows[#rows + 1] = { "cutter", M.leafcutter(0.5, 0), M.leafcutter(0.5, 1, true), M.leafcutter(2.6, 0, true), M.mold(0), M.mold(1),
+        M.corpse("diver", 0), M.corpse("wireworm", 1), M.corpse("leafcutter", 2) }
+    headings("naiad", function(h) return M.naiad(h, 0) end, 4)
+    rows[#rows + 1] = { "naiad", M.naiad(0.6, 1, true), M.naiad(0.6, 0, false, true), M.corpse("naiad", 0.4) }
+    headings("dfly", function(h) return M.dragonfly(h, 0) end, 4)
+    rows[#rows + 1] = { "dfly", M.dragonfly(0.6, 1), M.corpse("dragonfly", 0.4) }
+    headings("rhino", function(h) return M.rhino(h, 0) end, 4)
+    rows[#rows + 1] = { "rhino", M.rhino(0.6, 1, true), M.rhino(2.4, 0, true), M.corpse("rhino", 0.4) }
+    headings("hornet", function(h) return M.hornet(h, 0) end, 4)
+    rows[#rows + 1] = { "hornet", M.hornet(0.6, 1), M.corpse("hornet", 0.4) }
     rows[#rows + 1] = { "dead", M.corpse("ant", 0, true), M.corpse("spider", 1), M.corpse("knight", 2), M.corpse("slug", 0.5),
         M.corpse("gnat", 0), M.corpse("pillbug", 0, true) }
 

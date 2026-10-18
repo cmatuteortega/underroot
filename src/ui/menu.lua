@@ -17,22 +17,26 @@ local sound, deny = flair.sound, flair.deny
 
 -- The level picker: a card a level, in rows of as many as fit across (three
 -- on a wide screen, two rows of them; down the middle on a narrow one), and
--- the challenge switch under them once it is open.
+-- the challenge switch under them once it is open. When they do not all fit
+-- down the screen (one to a row, on a phone held upright) each is cut down to
+-- its name and how it stands.
 local LW, LH = 124, 50
 local function levelCards()
     local n = #D.LEVELS
     local cols = max(1, min(3, floor((S.vw - S.inset.l - S.inset.r - 8 + 6) / (LW + 6))))
     local rows = ceil(n / cols)
     local gap = cols == 1 and 4 or 6
+    local room = S.vh - S.inset.t - S.inset.b - 76 -- the title, the switch and the hint
+    local lh = rows * (LH + gap) - gap > room and max(22, floor((room + gap) / rows) - gap) or LH
     local cards = {}
-    local y0 = floor(S.vh / 2 - (rows * LH + (rows - 1) * gap) / 2) - 8
+    local y0 = floor(S.vh / 2 - (rows * lh + (rows - 1) * gap) / 2) - 8
     for k = 1, n do
         local row, col = floor((k - 1) / cols), (k - 1) % cols
         local across = min(cols, n - row * cols)
         local x0 = floor((S.vw - (across * LW + (across - 1) * 6)) / 2)
-        cards[k] = { x = x0 + col * (LW + 6), y = y0 + row * (LH + gap), w = LW, h = LH, n = k }
+        cards[k] = { x = x0 + col * (LW + 6), y = y0 + row * (lh + gap), w = LW, h = lh, n = k }
     end
-    y0 = y0 + rows * (LH + gap) + 4
+    y0 = y0 + rows * (lh + gap) + 4
     local switch = { x = floor((S.vw - LW) / 2), y = y0, w = LW, h = 16, challenge = true }
     return cards, switch
 end
@@ -74,12 +78,19 @@ local function draw()
         local open, on = Profile.levelOpen(k), S.hover.level == k
         box(c.x, c.y, c.w, c.h, on and open and "n" or "u", Profile.won[l.id] and "g" or (open and (on and "l" or "c") or "k"))
         text(k .. "  " .. l.name, c.x + 4, c.y + 4, open and "w" or "k")
+        local small = c.h < LH
         if not open then
-            text("WIN " .. D.LEVELS[k - 1].name, c.x + 4, c.y + 14, "r")
-            text("TO OPEN IT", c.x + 4, c.y + 21, "r")
+            if small then
+                text("WIN " .. D.LEVELS[k - 1].name, c.x + 4, c.y + c.h - 8, "r")
+            else
+                text("WIN " .. D.LEVELS[k - 1].name, c.x + 4, c.y + 14, "r")
+                text("TO OPEN IT", c.x + 4, c.y + 21, "r")
+            end
         else
-            local y = wrap(l.idea, c.x + 4, c.y + 14, c.w - 8, "t")
-            wrap("BOSS: " .. l.boss, c.x + 4, y + 1, c.w - 8, "r")
+            if not small then
+                local y = wrap(l.idea, c.x + 4, c.y + 14, c.w - 8, "t")
+                wrap("BOSS: " .. l.boss, c.x + 4, y + 1, c.w - 8, "r")
+            end
             local tag = Profile.won[l.id] and "WON" or (#l.waves .. " WAVES")
             text(tag, c.x + c.w - Font.width(tag) - 4, c.y + c.h - 8, Profile.won[l.id] and "g" or "s")
             -- The endless record, bottom left, once there is one.

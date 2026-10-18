@@ -14,13 +14,14 @@ local M = {}
 --- enemies ----------------------------------------------------------------------------
 
 -- A worker ant, front +x. `leg` 0/1 is which tripod is forward.
-local function antParts(leg)
+local function antParts(leg, body)
+    body = body or RAMP.ant
     local parts = {
-        { id = 1, ramp = RAMP.ant, at = ell(3.4, 2.3, 0, 1.3, 1.1, 1.1),
+        { id = 1, ramp = body, at = ell(3.4, 2.3, 0, 1.3, 1.1, 1.1),
             print = function(ux, uy, uz) if ux > 0.3 and abs(uz) > 0.6 and uy > 0 then return IDX.o end end },
-        { id = 2, ramp = RAMP.ant, at = ell(1.2, 2.2, 0, 1.5, 0.85, 0.9) },
-        { id = 3, ramp = RAMP.ant, at = ell(-0.3, 2.0, 0, 0.5, 0.5, 0.5) },
-        { id = 4, ramp = RAMP.ant, at = ell(-2.4, 2.6, 0, 2.1, 1.6, 1.6),
+        { id = 2, ramp = body, at = ell(1.2, 2.2, 0, 1.5, 0.85, 0.9) },
+        { id = 3, ramp = body, at = ell(-0.3, 2.0, 0, 0.5, 0.5, 0.5) },
+        { id = 4, ramp = body, at = ell(-2.4, 2.6, 0, 2.1, 1.6, 1.6),
             print = function(ux) if abs((ux + 1) % 0.5 - 0.25) < 0.04 then return IDX.n end end },
     }
     for n, x in ipairs({ 2.0, 1.2, 0.4 }) do
@@ -667,6 +668,228 @@ end
 
 --- what is left -----------------------------------------------------------------------
 
+-- A diving beetle: a smooth, flat oval, dark olive with a pale rim, oar-flat
+-- hind legs fringed for swimming.
+local function diverParts(leg)
+    local parts = {
+        { id = 1, ramp = R.diver, at = ell(-0.6, 2.4, 0, 4.2, 1.7, 2.9),
+            print = function(ux, uy, uz)
+                if uy > 0 and abs(uz) < 0.04 then return IDX.o end
+                if abs(uz) > 0.82 and uy > -0.3 then return IDX.t end -- the yellow rim
+            end },
+        { id = 2, ramp = R.diver, at = ell(3.2, 2.2, 0, 1.6, 1.3, 2.3),
+            print = function(ux, uy, uz)
+                if abs(uz) > 0.8 and uy > -0.3 then return IDX.t end
+                if ux > 0.5 and abs(uz) > 0.45 and uy > -0.2 then return IDX.o end
+            end },
+    }
+    for _, side in ipairs({ -1, 1 }) do
+        local fwd = (leg + (side > 0 and 1 or 0)) % 2 == 0 and 0.8 or -0.8
+        limb(parts, 2.6, 1.6, side * 1.6, 4.4 + fwd, side * 3.6, 1, 0.3, R.ink, 3)
+        limb(parts, 0.8, 1.6, side * 2, 1.4 - fwd, side * 4.6, 1.2, 0.32, R.ink, 3)
+        -- The oars, swept back.
+        parts[#parts + 1] = seg(-1.6, 1.8, side * 2.2, -5.6 + fwd, 1.4, side * 5.4, 0.55, R.diver, 4, 0.2)
+    end
+    return parts
+end
+
+function M.diver(h, leg)
+    local hs = step(h, 16)
+    return kept("diver" .. hs .. leg, function() return place(diverParts(leg), heading(hs / 16 * TAU), A.scale(1.2, 1.2, 1.2)) end)
+end
+
+-- A wireworm: a thin, hard, shining grub in segments, three pairs of stubs of
+-- legs behind its head. It wriggles (`wig` 0/1).
+local function wormParts(wig)
+    local parts = {}
+    for k = 0, 6 do
+        local x = 3 - k * 1.25
+        local z = sin(k * 1.1 + wig * math.pi) * 0.45
+        parts[#parts + 1] = { id = 1, ramp = R.worm, at = ell(x, 1.1, z, 0.85, 0.75, 0.75),
+            print = function(ux) if ux < -0.75 then return IDX.n end end }
+    end
+    parts[#parts + 1] = { id = 2, ramp = R.jaw, at = ell(3.9, 1.1, 0, 0.6, 0.55, 0.6) }
+    for _, side in ipairs({ -1, 1 }) do
+        for k = 0, 2 do parts[#parts + 1] = seg(2.9 - k * 0.6, 0.8, side * 0.5, 2.9 - k * 0.6, 0.1, side * 1.2, 0.15, R.ink, 3) end
+    end
+    return parts
+end
+
+function M.wireworm(h, wig)
+    local hs = step(h, 8)
+    return kept("worm" .. hs .. wig, function() return place(wormParts(wig), heading(hs / 8 * TAU), A.scale(1.5, 1.5, 1.5)) end)
+end
+
+-- A leafcutter ant: a worker in rust red, and home bound (`laden`) the piece
+-- of thread it cut held up over its back like a sail.
+function M.leafcutter(h, leg, laden)
+    local hs = step(h, 16)
+    return kept("cutter" .. hs .. leg .. (laden and "l" or ""), function()
+        local parts = antParts(leg, R.cutter)
+        if laden then
+            parts[#parts + 1] = { id = 7, ramp = R.teal, at = A.mul(A.move(1.6, 6.2, 0), A.rotZ(0.5), A.scale(0.35, 3.2, 2.4)),
+                print = function(ux, uy, uz) if abs(uz) < 0.08 then return IDX.d end end }
+            parts[#parts + 1] = seg(3.6, 3, 0, 2.4, 4.6, 0, 0.25, R.ink, 6)
+        end
+        return place(parts, heading(hs / 16 * TAU), A.scale(1.4, 1.4, 1.4))
+    end)
+end
+
+-- Green Mold: a heaped cushion of fuzz, pale at the tips. It has no front; it
+-- breathes (`puff` 0/1).
+function M.mold(puff)
+    return kept("mold" .. puff, function()
+        local s = puff == 1 and 1.08 or 1
+        local parts = {}
+        for k = 0, 5 do
+            local a, r = k * 2.39996, k == 0 and 0 or 2.4
+            parts[#parts + 1] = { id = 1 + k % 2, ramp = R.mold,
+                at = ell(cos(a) * r, (k == 0 and 2.6 or 1.6) * s, sin(a) * r, 2.4 * s, (k == 0 and 2.4 or 1.7) * s, 2.4 * s),
+                print = spotted(0.975, IDX.w) }
+        end
+        return place(parts, A.scale(1.2, 1.2, 1.2))
+    end)
+end
+
+--- the new bosses -----------------------------------------------------------------------
+
+-- The Dragonfly Nymph: squat and mud-brown, wide-headed with great eyes, gill
+-- spikes at the tail. `strike`: the hinged mask of a jaw shot out ahead;
+-- `molt`: the back splits and the pale new skin shows through.
+local function naiadParts(leg, strike, molt)
+    local parts = {
+        { id = 1, ramp = R.nymph, at = ell(-2.6, 2.6, 0, 5, 1.9, 3.2),
+            print = function(ux, uy, uz)
+                if molt and uy > 0.5 and abs(uz) < 0.12 then return IDX.l end -- the split
+                if uy > 0 and abs((ux + 1) % 0.33 - 0.165) < 0.03 then return IDX.u end
+            end },
+        { id = 2, ramp = R.nymph, at = ell(2, 2.8, 0, 2.2, 1.8, 2.8),
+            print = function(ux, uy, uz) if molt and uy > 0.5 and abs(uz) < 0.15 then return IDX.l end end },
+        { id = 3, ramp = R.nymph, at = ell(4.8, 2.6, 0, 1.6, 1.5, 3.2),
+            print = function(ux, uy, uz) if abs(uz) > 0.55 and uy > -0.2 then return IDX.o end end }, -- the eyes
+    }
+    -- Three gill spikes at the tail.
+    for _, z in ipairs({ -1, 0, 1 }) do
+        parts[#parts + 1] = seg(-7.2, 2.6, z * 0.8, -10, 2.2 + abs(z) * 0.4, z * 2, 0.35, R.nymph, 4)
+    end
+    -- The mask: folded under the head, or shot out.
+    if strike then
+        parts[#parts + 1] = seg(5.4, 1.6, 0, 9.4, 1.8, 0, 0.6, R.jaw, 5)
+        parts[#parts + 1] = seg(9.4, 1.8, 0, 12.4, 2.2, 0, 0.5, R.jaw, 5)
+        for _, side in ipairs({ -1, 1 }) do parts[#parts + 1] = seg(12.4, 2.2, 0, 13.4, 2.4, side * 1.4, 0.35, R.jaw, 5) end
+    else
+        parts[#parts + 1] = seg(5.2, 1.4, 0, 3, 1.2, 0, 0.6, R.jaw, 5)
+    end
+    for n, x in ipairs({ 2.6, 0.6, -1.6 }) do
+        for _, side in ipairs({ -1, 1 }) do
+            local fwd = ((n + (side > 0 and 1 or 0) + leg) % 2 == 0) and 1.2 or -1.2
+            limb(parts, x, 2.2, side * 2, x + (n - 2) * 2.6 + fwd, side * 6.6, 2.2, 0.42, R.nymph, 6)
+        end
+    end
+    return parts
+end
+
+function M.naiad(h, leg, strike, molt)
+    local hs = step(h, 16)
+    return kept("naiad" .. hs .. leg .. (strike and "s" or "") .. (molt and "m" or ""), function()
+        return place(naiadParts(leg, strike, molt), heading(hs / 16 * TAU), A.scale(1.8, 1.8, 1.8))
+    end)
+end
+
+-- The Dragonfly: a long banded teal abdomen, a thick thorax, a head that is
+-- nearly all eye, and two pairs of long glassy wings, beating (`wing` 0/1).
+-- Its pivot is its body: it flies.
+local function dragonParts(wing)
+    local up = wing == 0 and 0.4 or -0.25
+    local parts = {
+        { id = 1, ramp = R.dragon, at = ell(1, 0, 0, 2, 1.5, 1.4) },
+        { id = 2, ramp = R.dragon, at = ell(3.6, 0.2, 0, 1.1, 1.3, 1.6),
+            print = function(ux, uy, uz) if abs(uz) > 0.25 then return IDX.c end end },
+        { id = 3, ramp = R.dragon, at = ell(-5, -0.2, 0, 5, 0.6, 0.6),
+            print = function(ux) if abs((ux + 1) % 0.2 - 0.1) < 0.025 then return IDX.o end end },
+    }
+    for _, side in ipairs({ -1, 1 }) do
+        for w = 0, 1 do
+            parts[#parts + 1] = { id = 4 + w, ramp = R.wing,
+                at = A.mul(A.move(1.6 - w * 1.4, 0.8, side * 0.5), A.rotX(side * (up + w * 0.1)), A.rotY(side * (w == 0 and 0.15 or -0.15)),
+                    A.move(0, 0, side * 4.4), A.scale(1.1, 0.1, 4.4)),
+                print = function(ux, uy, uz) if abs(uz * side - 0.75) < 0.05 and ux > 0 then return IDX.k end end }
+        end
+        parts[#parts + 1] = seg(1.4, -1, side * 0.5, 2.4, -2.6, side * 1.4, 0.2, R.ink, 6)
+    end
+    return parts
+end
+
+function M.dragonfly(h, wing)
+    local hs = step(h, 16)
+    return kept("dfly" .. hs .. wing, function() return place(dragonParts(wing), heading(hs / 16 * TAU), A.scale(1.7, 1.7, 1.7)) end)
+end
+
+-- The Rhinoceros Beetle: a great glossy dome of a body, a shield of a
+-- pronotum with a short horn of its own, and the long curved horn off its
+-- head. Tossing (`toss`), the head and its horn are flung up.
+local function rhinoParts(leg, toss)
+    local lift = toss and 0.6 or 0
+    local parts = {
+        { id = 1, ramp = R.rhino, at = ell(-2, 3.6, 0, 5, 3, 3.8),
+            print = function(ux, uy, uz)
+                if uy > 0 and abs(uz) < 0.04 then return IDX.o end
+                if uy > 0.55 and abs(uz) < 0.3 and ux < 0 then return IDX.w end -- the shine
+            end },
+        { id = 2, ramp = R.rhino, at = ell(3.4, 3.8, 0, 2.4, 2.6, 3.4),
+            print = function(ux, uy, uz) if uy > 0.6 and abs(uz) < 0.2 then return IDX.w end end },
+        { id = 3, ramp = R.rhino, at = A.mul(A.move(5.8, 2.6, 0), A.rotZ(lift * 0.5), A.scale(1.6, 1.3, 1.8)) },
+    }
+    -- The pronotum's horn, and the great one off the head, curving up.
+    parts[#parts + 1] = seg(4.4, 6, 0, 6.2, 7.4, 0, 0.6, R.jaw, 4)
+    local bx, by = 6.6, 2.8
+    local mx, my = bx + 3.6 * cos(lift), by + 1.6 + 3.6 * sin(lift)
+    local tx, ty = mx + 2.4 * cos(0.9 + lift), my + 2.4 * sin(0.9 + lift)
+    parts[#parts + 1] = seg(bx, by, 0, mx, my, 0, 0.8, R.rhino, 4)
+    parts[#parts + 1] = seg(mx, my, 0, tx, ty, 0, 0.55, R.rhino, 4)
+    for n, x in ipairs({ 3.2, 0.4, -2.6 }) do
+        for _, side in ipairs({ -1, 1 }) do
+            local fwd = ((n + (side > 0 and 1 or 0) + leg) % 2 == 0) and 1.4 or -1.4
+            limb(parts, x, 2.8, side * 2.6, x + (n - 2) * 2.2 + fwd, side * 6.6, 1.8, 0.6, R.black, 5)
+        end
+    end
+    return parts
+end
+
+function M.rhino(h, leg, toss)
+    local hs = step(h, 16)
+    return kept("rhino" .. hs .. leg .. (toss and "t" or ""), function()
+        return place(rhinoParts(leg, toss), heading(hs / 16 * TAU), A.scale(1.8, 1.8, 1.8))
+    end)
+end
+
+-- The Hornet: a banded yellow and black abdomen with its sting, a brown
+-- thorax, a broad head, wings beating (`wing` 0/1) and legs hanging. Its
+-- pivot is its body: it flies.
+local function hornetParts(wing)
+    local up = wing == 0 and 0.45 or -0.3
+    local parts = {
+        { id = 1, ramp = R.hornet, at = A.mul(A.move(-3, -0.6, 0), A.rotZ(0.25), A.scale(3.2, 1.8, 1.8)),
+            print = function(ux) if ux < 0.6 and (ux + 1) % 0.42 < 0.17 then return IDX.o end end },
+        { id = 2, ramp = R.jaw, at = ell(0.8, 0.3, 0, 1.8, 1.5, 1.5) },
+        { id = 3, ramp = R.hornet, at = ell(3.2, 0.4, 0, 1.2, 1.3, 1.6),
+            print = function(ux, uy, uz) if abs(uz) > 0.5 and uy > -0.2 then return IDX.u end end },
+    }
+    parts[#parts + 1] = seg(-6, -1.8, 0, -7.4, -2.4, 0, 0.2, R.ink, 4) -- the sting
+    for _, side in ipairs({ -1, 1 }) do
+        parts[#parts + 1] = { id = 5, ramp = R.wing,
+            at = A.mul(A.move(0.6, 1.4, side * 0.6), A.rotX(side * up), A.rotY(side * -0.3), A.move(-1, 0, side * 2.6), A.scale(2.8, 0.12, 2.2)) }
+        for k = 0, 2 do parts[#parts + 1] = seg(1.4 - k * 0.8, -0.8, side * 0.6, 0.8 - k * 1.2, -3.2, side * 1.4, 0.2, R.jaw, 6) end
+        parts[#parts + 1] = seg(4, 1.2, side * 0.4, 5.2, 2.6, side * 1.2, 0.18, R.ink, 7)
+    end
+    return parts
+end
+
+function M.hornet(h, wing)
+    local hs = step(h, 16)
+    return kept("hornet" .. hs .. wing, function() return place(hornetParts(wing), heading(hs / 16 * TAU), A.scale(1.9, 1.9, 1.9)) end)
+end
+
 local function fruit(parts, x, y)
     for k = 0, 2 do
         local a = k * 2.1
@@ -742,6 +965,27 @@ function M.corpse(kind, h, fruited)
             top = 3
         elseif kind == "centiseg" then
             parts = flip(centiSegParts(0), 2.2, 0.85)
+            top = 3
+        elseif kind == "diver" then
+            parts = flip(diverParts(0), 4.4, 1.2)
+            top = 4
+        elseif kind == "wireworm" then
+            parts = place(wormParts(0), A.scale(1.1, 1.1, 1.1))
+            top = 2
+        elseif kind == "leafcutter" then
+            parts = flip(antParts(0, R.cutter), 3.6, 1.4)
+        elseif kind == "naiad" then
+            -- The empty skin the Dragonfly left, split down the back.
+            parts = place(naiadParts(0, false, true), A.scale(1.8, 1.8, 1.8))
+            top = 8
+        elseif kind == "dragonfly" then
+            parts = place(dragonParts(1), A.scale(1.7, 1.7, 1.7), A.move(0, 1.4, 0), A.rotZ(0.1))
+            top = 2
+        elseif kind == "rhino" then
+            parts = flip(rhinoParts(0), 8.6, 1.8)
+            top = 12
+        elseif kind == "hornet" then
+            parts = place(hornetParts(1), A.scale(1.9, 1.9, 1.9), A.move(0, 2, 0), A.rotZ(0.3))
             top = 3
         elseif kind == "ball" then
             -- A broken ball is a heap.

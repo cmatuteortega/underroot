@@ -103,6 +103,9 @@ codex.POSE = {
     centi = function(h, leg) return M.centipede(h, leg, 0.9) end,
     -- It walks backwards, pushing its ball.
     dung = function(h, leg) return M.dung(h + math.pi, leg) end,
+    diver = M.diver, wireworm = M.wireworm, naiad = M.naiad, dragonfly = M.dragonfly, rhino = M.rhino, hornet = M.hornet,
+    leafcutter = function(h, leg) return M.leafcutter(h, leg, true) end,
+    mold = function(_, leg) return M.mold(leg) end,
 }
 
 -- An entry's model as layers { picture, i, j, depth } about its foot, painted
