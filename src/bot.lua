@@ -409,7 +409,7 @@ B.play = run
 function B.loadout(lv, grown)
     local list, set = {}, {}
     local function bring(id)
-        if #list < D.LOADOUT and not set[id] and N.has(grown, "species", id) then list[#list + 1], set[id] = id, true end
+        if #list < N.slots(grown) and not set[id] and N.has(grown, "species", id) then list[#list + 1], set[id] = id, true end
     end
     for _, s in ipairs(PLANS[lv.id] or {}) do
         if s[1] == "build" or s[1] == "lay" then bring(s[2]) end
@@ -429,6 +429,7 @@ local function want(row, lv, uses)
         return 3
     end
     if row.world or row.pulse then return 2.5 end
+    if row.slots then return 3 end
     if row.vs or row.loot then
         for _, k in ipairs(row.vs or row.loot) do
             for _, w in ipairs(lv.waves) do for _, grp in ipairs(w) do if grp[1] == k then return 2 end end end

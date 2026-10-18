@@ -136,7 +136,7 @@ return {
         C.eq(P.nodeState("notes.ants"), "open", "an ant met")
         local opens = {}
         for _, row in ipairs(P.opens("crack")) do opens[#opens + 1] = row.id end
-        C.list(opens, { "stink" }, "what the Crack's first win opens")
+        C.list(opens, { "stink", "slots.5" }, "what the Crack's first win opens")
     end },
 
     { "the whole network switched on grows it all, and off is as it was", function()

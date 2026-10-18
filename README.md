@@ -194,10 +194,13 @@ counts everything on the levels already won as met. The words and what they
 say are `D.GLOSSARY` in `src/defs.lua`, and each enemy's page text is its
 `about` there.
 
-Before a level starts you pick the species to bring: six of the eighteen. The rest
-stay home and stay off the toolbar. The picker shows every enemy the level sends,
+Before a level starts you pick the species to bring: four of the eighteen at
+first, and a line of nodes off the sprout on the network makes room for a fifth
+(once the Crack is won), a sixth (the Shed Floor), a seventh (the Pond Edge) and
+an eighth (the Lawn). The rest stay home and stay off the toolbar. The picker shows every enemy the level sends,
 with bosses in red. Point at one (tap it on a phone) and the species that answer
-it blink. The first time you play a level it suggests six; after that it starts
+it blink. The first time you play a level it suggests six, as many of them as
+there is room for; after that it starts
 from what you brought last time, which is kept in the save directory. Tap a
 species card to read all about it in a side panel: what it does, its network
 twist, its numbers and both upgrade branches. Tap it again (or the panel's button)
@@ -238,7 +241,7 @@ chew through any thread they cross.
 | `M` | the level picker (`Esc` or BACK there goes back to the run, or to the home screen) |
 | `1`–`6`, `C` in the picker | pick a level; challenge mode on or off |
 | `E` on the home screen | the encyclopedia: `1`–`4` or left / right for its tabs, a click for a page, left / right through the pages, wheel or up / down to scroll, `Esc` back |
-| click a species in the loadout | read it in the panel; click it again to bring it or leave it (six at most) |
+| click a species in the loadout | read it in the panel; click it again to bring it or leave it (as many as the network has made room for) |
 | a species' key in the loadout | bring it or leave it at once |
 | `Enter` / `Space`, `Esc` in the loadout | grow the level with that loadout; back to the levels |
 | mouse wheel, `+` / `-` | zoom in and out (whole steps) |

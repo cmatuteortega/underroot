@@ -815,8 +815,9 @@ D.CHALLENGE = { weather = "night", { "bombardier", 1, 1, 1, 0 }, { "knight", 4, 
 
 -- The loadout: how many species a run brings, picked before a level from all
 -- of them. The rest stay home, off the toolbar. Hyphae, prune and the pulse
--- always come.
-D.LOADOUT = 6
+-- always come. A new network brings LOADOUT_START; its `slots` nodes make
+-- room for more, up to LOADOUT on a full one.
+D.LOADOUT, D.LOADOUT_START = 8, 4
 
 -- The wave that has to be cleared on `level` before a species can be grown.
 -- `set`, the loadout brought ({ id = true }), makes sure a run starts with
@@ -898,6 +899,7 @@ D.MUTATIONS = {
 --   loot = { kinds }      what those enemies' bodies are worth drunk, `from` at none
 --   mutations = { ids }   a mutation can be offered: one a rank, in that order
 --   pulse = true          the Spore Pulse
+--   slots = n             n species can come on a run (one rank)
 --   won = level           shut until that level is won
 --   seen = { kinds }      hidden until one of them has been met
 --
@@ -1061,6 +1063,15 @@ add({ id = "pulse.power", at = "pulse", name = "STRONG PULSE", blurb = "THE PULS
     world = "pulse", from = 0.5, price = { 12, 22 } })
 add({ id = "lore.wild", at = "ring", name = "WILD MUTATIONS", blurb = "MORE MUTATIONS ON OFFER",
     mutations = { "rings", "reach", "pulse" }, price = { 8, 12, 16 } })
+
+-- Room in the loadout: a species more on a run for each, down a line of
+-- their own off the sprout, each waiting on a win further into the story.
+local SLOTS = { { 5, "FIVE", "crack", 15 }, { 6, "SIX", "shed", 35 }, { 7, "SEVEN", "pond", 60 }, { 8, "EIGHT", "lawn", 100 } }
+local slotAt = "sprout"
+for _, sl in ipairs(SLOTS) do
+    slotAt = add({ id = "slots." .. sl[1], at = slotAt, name = sl[2] .. " SPECIES", blurb = sl[2] .. " SPECIES CAN COME ON A RUN",
+        slots = sl[1], won = sl[3], price = { sl[4] } })
+end
 
 -- The sprout: its health and sugar, its seeds and their mutations.
 add({ id = "root", at = "sprout", name = "DEEP ROOT", blurb = "THE SPROUT HAS MORE HP", world = "heart", from = 0.8,

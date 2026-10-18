@@ -347,6 +347,7 @@ local function kindOf(row)
     if row.seed then return "SEED" end
     if row.vs or row.loot then return "FIELD NOTES" end
     if row.mutations then return "MUTATIONS" end
+    if row.slots then return "THE LOADOUT" end
     return "THE NETWORK"
 end
 
@@ -417,6 +418,11 @@ function net.lines(id, w)
                 end
             end
         end
+    end
+    if row.slots then
+        gap()
+        local now = N.slots(Profile.grown())
+        add("SPECIES ON A RUN " .. now .. (r < n and now < row.slots and (" > " .. row.slots) or ""), "l")
     end
     if row.pulse then gap(); add("THE PULSE ON THE TOOLBAR: A SURGE TO ANY FED NODE, EVERY TOWER ON THE WAY OVERCHARGED", "s") end
     return out

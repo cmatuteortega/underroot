@@ -105,6 +105,10 @@ local function layout()
         back = back, go = go, mid = mid }
 end
 
+-- How many can come: as many as the network has made room for.
+local function room() return N.slots(Profile.grown()) end
+local WORDS = { "ONE", "TWO", "THREE", "FOUR", "FIVE", "SIX", "SEVEN", "EIGHT" }
+
 local function picked()
     local list = {}
     for _, t in ipairs(D.TOWERS) do if S.pick.set[t.id] then list[#list + 1] = t.id end end
@@ -116,7 +120,7 @@ local function toggleSpecies(id)
     -- Not grown yet: its panel says where on the network it grows.
     if not Profile.owns(id) then S.pick.info = id; deny() return end
     if S.pick.set[id] then S.pick.set[id] = nil; sound("off")
-    elseif #picked() >= D.LOADOUT then S.pick.full = 1.5; sound("deny")
+    elseif #picked() >= room() then S.pick.full = 1.5; sound("deny")
     else S.pick.set[id] = true; sound("on") end
 end
 
@@ -146,12 +150,14 @@ local function open(n)
     local seed = Profile.sown[lv.id]
     S.pick = { n = n, set = {}, full = 0, seed = seed and Profile.ownsSeed(seed) and seed or D.SEEDS[1].id }
     local dropped = false
+    -- As many as there is room for: the suggestion is longer than a new network's.
     for _, id in ipairs(Profile.loadouts[lv.id] or lv.loadout or {}) do
+        if #picked() >= room() then break end
         if Profile.owns(id) then S.pick.set[id] = true else dropped = true end
     end
     -- A species not had yet stays home, and the next one had takes its place.
     for _, t in ipairs(D.TOWERS) do
-        if not dropped or #picked() >= D.LOADOUT then break end
+        if not dropped or #picked() >= room() then break end
         if Profile.owns(t.id) then S.pick.set[t.id] = true end
     end
 end
@@ -184,8 +190,8 @@ local function drawPanelButton(P)
         text(s, b.x + floor((b.w - Font.width(s)) / 2), b.y + 4, on and "w" or "g")
     elseif b then
         local inn = S.pick.set[P.kind]
-        local full = not inn and #picked() >= D.LOADOUT
-        local s = inn and "LEAVE IT AT HOME" or (full and "SIX ALREADY: DROP ONE" or "BRING IT")
+        local full = not inn and #picked() >= room()
+        local s = inn and "LEAVE IT AT HOME" or (full and (WORDS[room()] .. " ALREADY: DROP ONE") or "BRING IT")
         box(b.x, b.y, b.w, b.h, S.hover.bring and "n" or (inn and "u" or "d"), full and "k" or (inn and "t" or "g"))
         text(s, b.x + floor((b.w - Font.width(s)) / 2), b.y + 4, full and "k" or (inn and "w" or "g"))
     end
@@ -200,8 +206,8 @@ local function draw()
     local clock = flair.now()
     centred(lv.name .. (S.challenge and " (CHALLENGE)" or ""), L.top, "g", "o", L.mid)
     text("SPORES " .. Profile.spores .. say("   N: NETWORK", ""), L.back.x + L.back.w + 6, S.inset.t + 7, "t")
-    local count = #list .. "/" .. D.LOADOUT
-    centred("PICK A SEED AND THE SPECIES TO BRING  " .. count, L.top + 11, #list == D.LOADOUT and "l" or "t", "o", L.mid)
+    local count = #list .. "/" .. room()
+    centred("PICK A SEED AND THE SPECIES TO BRING  " .. count, L.top + 11, #list >= room() and "l" or "t", "o", L.mid)
     text("COMING", floor(L.mid - Font.width("COMING") / 2), L.chipsY - 9, "s")
     text("SEED", floor(L.mid - Font.width("SEED") / 2), L.seedsY - 7, "s")
     text("SPECIES", floor(L.mid - Font.width("SPECIES") / 2), L.cardsY - 7, "s")
@@ -273,14 +279,14 @@ local function draw()
     if P then
         Panel.draw(P)
         drawPanelButton(P)
-        if S.pick.full > 0 then centred("ONLY " .. D.LOADOUT .. " COME. DROP ONE FIRST", g.y + g.h + 6, "r", "o", L.mid) end
+        if S.pick.full > 0 then centred("ONLY " .. room() .. " COME. DROP ONE FIRST", g.y + g.h + 6, "r", "o", L.mid) end
         return
     end
 
     -- One line under it all: what is pointed at, or how it works.
     local tip, k
     if S.pick.full > 0 then
-        tip, k = "ONLY " .. D.LOADOUT .. " COME. DROP ONE FIRST", "r"
+        tip, k = "ONLY " .. room() .. " COME. DROP ONE FIRST", "r"
     elseif S.hover.seed then
         local sd = D.SEED[S.hover.seed]
         if Profile.ownsSeed(sd.id) then tip, k = sd.name .. ": " .. sd.blurb, "w"

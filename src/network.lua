@@ -4,7 +4,7 @@
 -- profile, the rules, the bot and the tests all read it.
 --
 -- What a run is given is `grown`: { species, seeds, ups, mutations, pulse,
--- tower, world, vs, loot }. Nothing given (nil) is the network fully grown, every
+-- slots, tower, world, vs, loot }. Nothing given (nil) is the network fully grown, every
 -- number as defs writes it: the bot, the shots and the tests play that.
 
 local D = require "src.defs"
@@ -102,12 +102,14 @@ end
 
 -- What `ranks` come to, for Game.new's `opts.net`.
 function N.grown(ranks)
-    local g = { species = {}, seeds = {}, ups = {}, mutations = {}, pulse = false, tower = {}, world = {}, vs = {}, loot = {} }
+    local g = { species = {}, seeds = {}, ups = {}, mutations = {}, pulse = false, slots = D.LOADOUT_START, tower = {}, world = {},
+        vs = {}, loot = {} }
     for _, row in ipairs(D.NETWORK) do
         local r = N.rank(ranks, row.id)
         if row.species and r > 0 then g.species[row.species] = true end
         if row.seed and r > 0 then g.seeds[row.seed] = true end
         if row.pulse and r > 0 then g.pulse = true end
+        if row.slots and r > 0 then g.slots = math.max(g.slots, row.slots) end
         if row.up then g.ups[row.up[1] .. ":" .. row.up[2]] = r end
         -- A mutation a rank; a free node brings all it names.
         for k = 1, row.free and #(row.mutations or {}) or r do
@@ -163,6 +165,9 @@ function N.tier(g, kind, branch)
     if not g then return 2 end
     return g.ups[kind .. ":" .. branch] or 0
 end
+
+-- How many species a run can bring.
+function N.slots(g) return g and g.slots or D.LOADOUT end
 
 function N.has(g, what, id)
     if not g then return true end

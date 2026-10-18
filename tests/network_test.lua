@@ -73,6 +73,20 @@ return {
         C.eq(#g:upgrades(t), 0, "and no upgrades")
     end },
 
+    { "the loadout starts at four and the network makes room for eight, a win at a time", function()
+        C.eq(N.slots(N.grown({})), D.LOADOUT_START, "an empty network")
+        C.eq(N.slots(N.grown(N.everything())), D.LOADOUT, "a full one")
+        C.eq(N.slots(nil), D.LOADOUT, "none given is fully grown")
+        local p = { net = {}, won = {}, seen = {}, spores = 1000 }
+        for n = D.LOADOUT_START + 1, D.LOADOUT do
+            local id = "slots." .. n
+            C.eq(N.state(p, id), "locked", id .. " waits on a win")
+            p.won[D.NET[id].won] = true
+            C.yes(N.buy(p, id), id .. " grown once won")
+            C.eq(N.slots(N.grown(p.net)), n, n .. " come")
+        end
+    end },
+
     { "each rank brings a number nearer, and the last brings it all the way", function()
         local row = D.NET["puffer.power"]
         local last
