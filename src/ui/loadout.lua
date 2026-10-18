@@ -23,7 +23,8 @@ local info = Panel.info
 local sound, deny = flair.sound, flair.deny
 
 -- The loadout picker: what the level sends (a chip an enemy, bosses last),
--- a card a species under it, and GROW under those, all centred down the
+-- a card a species under it, and GROW under those (top right, across from
+-- BACK, when the screen is too short for it there), all centred down the
 -- screen; BACK top left, as on every screen, the spores beside it. A narrow
 -- screen takes fewer cards a row.
 local SW, SH = 62, 26
@@ -73,7 +74,12 @@ local function layout()
         x = x + w + 3
     end
 
-    local height = 22 + 10 + lines * 12 + 6 + 8 + seedRows * 14 + 8 + rows * (SH + 4) + 6 + 16
+    -- GROW goes under the cards when it fits there with a line of tip under
+    -- it; on a short screen (a phone or tablet on its side) it goes top right,
+    -- across from BACK, so it is never off the bottom.
+    local height = 22 + 10 + lines * 12 + 6 + 8 + seedRows * 14 + 8 + rows * (SH + 4)
+    local corner = S.inset.t + 20 + height + 6 + 16 + 6 + 8 > S.vh - S.inset.b
+    if not corner then height = height + 6 + 16 end
     local y = max(S.inset.t + 20, floor((S.vh - S.inset.b - 12 - height) / 2))
     if open and not wide() then y = S.inset.t + 20 end
     local top = y
@@ -100,11 +106,18 @@ local function layout()
         local col, row = (k - 1) % cols, floor((k - 1) / cols)
         cards[k] = { x = x0 + col * (SW + 4), y = y + row * (SH + 4), w = SW, h = SH, t = t }
     end
-    y = y + rows * (SH + 4) + 6
+    y = y + rows * (SH + 4)
     local back = { x = S.inset.l + 4, y = S.inset.t + 4, w = 34, h = 12 }
-    local go = { x = mid - 25, y = y, w = 50, h = 16 }
+    local go
+    if corner then
+        go = { x = right - 4 - 50, y = S.inset.t + 4, w = 50, h = 12 }
+        y = y + 2
+    else
+        go = { x = mid - 25, y = y + 6, w = 50, h = 16 }
+        y = go.y + go.h + 6
+    end
     return { top = top, chips = chips, chipsY = top + 32, seeds = seeds, seedsY = seedsY, cards = cards, cardsY = cardsY,
-        back = back, go = go, mid = mid }
+        back = back, go = go, mid = mid, tipY = y }
 end
 
 -- How many can come: as many as the network has made room for.
@@ -275,13 +288,13 @@ local function draw()
     text("BACK", b.x + floor((b.w - Font.width("BACK")) / 2), b.y + 4, "w")
     local ready = #list > 0
     box(g.x, g.y, g.w, g.h, ready and (S.hover.go and "m" or "d") or "u", ready and "g" or "k")
-    text("GROW", g.x + floor((g.w - Font.width("GROW")) / 2), g.y + 5, ready and "g" or "k")
+    text("GROW", g.x + floor((g.w - Font.width("GROW")) / 2), g.y + (g.h > 12 and 5 or 4), ready and "g" or "k")
 
     local P = info()
     if P then
         Panel.draw(P)
         drawPanelButton(P)
-        if S.pick.full > 0 then centred("ONLY " .. room() .. " COME. DROP ONE FIRST", g.y + g.h + 6, "r", "o", L.mid) end
+        if S.pick.full > 0 then centred("ONLY " .. room() .. " COME. DROP ONE FIRST", L.tipY, "r", "o", L.mid) end
         return
     end
 
@@ -312,7 +325,7 @@ local function draw()
             "TAP A SEED TO PLANT IT. TAP A SPECIES TO READ IT, AGAIN TO BRING OR LEAVE IT. TAP AN ENEMY FOR ITS ANSWER"), "s"
     end
     local room = S.vw - S.inset.l - S.inset.r - 8
-    local y = g.y + g.h + 6
+    local y = L.tipY
     -- Too long for one line: broken at words, as many lines as it takes.
     local line = ""
     for word in tip:gmatch("%S+") do
