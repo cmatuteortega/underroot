@@ -681,7 +681,9 @@ What is new for Underfoot:
 | `src/ui/run.lua` | starting a run and each frame of it: the rules stepped, and what the profile keeps |
 | `src/ui/guide.lua` | the tutorial, the lessons, the first-meeting cards and the network's first visit |
 | `src/ui/flair.lua`, `audio.lua` | the HUD's flourishes and the weather's coming and going; the sound's glue to the screen |
-| `src/profile.lua` | what is kept between runs (`save.txt`): wins, records, loadouts, the spores and the network's ranks, enemies met, what the guide has taught |
+| `src/profile.lua` | what is kept between runs (`save.txt`): wins, records, loadouts, the spores and the network's ranks, enemies met, what the guide has taught; written so a crash mid-write never loses it (`save.bak`, `save.tmp`), with a step per save version |
+| `src/resume.lua` | the run in the middle of being played, kept in `run.txt` (each build phase, and on going to the background) for CONTINUE on the home screen |
+| `src/crash.lua` | when something breaks: `crash.txt` in the save directory, and a screen to copy the report from |
 | `src/network.lua` | the network (`D.NETWORK`) worked out: prices, what can be bought, what a profile's ranks grow for a run, where each node sits on its screen |
 | `src/game.lua` | the rules: the graph, flow, cuts, pruning, regrowth, rings, the pulse, upgrades, towers firing, enemies and bosses moving, corpses, waves, mutations |
 | `src/defs.lua` | every tuning number: link costs, towers, enemies, weather, the levels and their waves |

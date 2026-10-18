@@ -27,7 +27,8 @@ return {
         P.loadouts.crack, P.sown.crack = { "puffer", "needle" }, "oak"
         P.net.needle, P.net["puffer.power"], P.seen.ant, P.sound = 1, 2, true, 0.5
         P.save()
-        C.yes(Love.files["save.txt"]:find("^version 3\n"), "the file starts with its version")
+        C.yes(Love.files["save.txt"]:find("^version 4\n"), "the file starts with its version")
+        C.yes(Love.files["save.txt"]:find("\nend\n$"), "and ends on end")
         P.load()
         C.yes(P.won.crack, "won")
         C.eq(P.records.crack, 21, "endless record")
@@ -73,6 +74,50 @@ return {
         C.eq(P.spores, (900 + 20 + 15) * 3, "save.txt wins over the old files, paid back only the once")
     end },
 
+    { "a save cut short is not read: the one before it is", function()
+        fresh()
+        P.won.crack, P.spores = true, 40
+        P.save()
+        P.spores = 50
+        P.save()
+        local f = Love.files
+        C.eq(f["save.tmp"], nil, "nothing left half way")
+        C.yes(f["save.bak"]:find("spores 40\n"), "the last good save kept")
+        -- Stopped writing save.txt: save.tmp has the new save whole.
+        f["save.tmp"], f["save.txt"] = f["save.txt"], "version 3\nwon crack\nspo"
+        P.load()
+        C.eq(P.spores, 50, "the save being written")
+        C.eq(f["save.txt"]:find("\nend\n$") ~= nil, true, "and save.txt whole again")
+        -- Stopped writing save.tmp: save.txt is the last whole one.
+        f["save.tmp"] = "version 3\nwon"
+        P.load()
+        C.eq(P.spores, 50, "save.txt, untouched")
+        -- Both cut short (or emptied): save.bak.
+        f["save.txt"], f["save.tmp"], f["save.bak"] = "", "version 3\n", "version 3\nwon crack\nspores 40\nend\n"
+        P.load()
+        C.eq(P.spores, 40, "the one before")
+        C.yes(P.won.crack, "all of it")
+    end },
+
+    { "a version 2 save, from before the end line, still reads", function()
+        fresh()
+        Love.files["save.txt"] = "version 2\nwon crack\nspores 40\n"
+        P.load()
+        C.eq(P.spores, 40, "spores, not paid back again")
+        C.yes(Love.files["save.txt"]:find("^version 4\n.*\nend\n$"), "brought up to this version")
+    end },
+
+    { "a save from a newer version is read, and kept as it was", function()
+        fresh()
+        local newer = "version 99\nwon crack\nspores 40\nhats red\nend\n"
+        Love.files["save.txt"] = newer
+        P.load()
+        C.eq(P.spores, 40, "what this version knows of it")
+        P.spores = 41
+        P.save()
+        C.eq(Love.files["save.v99.txt"], newer, "a copy of it as it was")
+    end },
+
     { "a loadout brings no more than its share", function()
         fresh()
         local all = {}
@@ -88,7 +133,7 @@ return {
         Love.files["save.txt"] = "version 1\nwon crack\nspores 40\nowned stink giant\nseeds oak dandelion\n"
         P.load()
         C.eq(P.spores, (40 + 20 + 50 + 15 + 25) * 3, "the bank and the purchases, at today's rate")
-        C.yes(Love.files["save.txt"]:find("^version 3\n"), "saved at once as version 3")
+        C.yes(Love.files["save.txt"]:find("^version 4\n"), "saved at once as this version")
         P.load()
         C.eq(P.spores, (40 + 20 + 50 + 15 + 25) * 3, "and not paid twice")
         C.yes(P.won.crack, "the rest is kept")
@@ -197,14 +242,14 @@ return {
 
     { "a save from before the guide has nothing taught again", function()
         Love.clearFiles()
-        Love.files["save.txt"] = "version 2\nwon crack\nspores 5\nseen ant pillbug\n"
+        Love.files["save.txt"] = "version 3\nwon crack\nspores 5\nseen ant pillbug\nend\n"
         P.load()
         C.yes(P.taught.tutorial, "no tutorial for one who has played")
         C.yes(P.taught.network, "nor the network's first visit")
         C.yes(P.taught.ant and P.taught.pillbug, "what was met")
         C.yes(P.taught.rain, "the weather of a level won")
         C.no(P.taught.night, "not one still to come")
-        C.yes(Love.files["save.txt"]:find("^version 3\n"), "saved at once as version 3")
-        C.eq(P.spores, 5, "a version 2 save's spores are not paid back again")
+        C.yes(Love.files["save.txt"]:find("^version 4\n"), "saved at once as this version")
+        C.eq(P.spores, 5, "a version 3 save's spores are not paid back again")
     end },
 }

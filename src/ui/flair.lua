@@ -21,8 +21,9 @@ local TOP = S.TOP
 --   hurt     seconds of red edge left
 --   banner   { text, sub, k, t, max }
 --   note     seconds left of the word saying how loud the sound is now
+--   quit     seconds left to press back (Esc) again and leave the game
 --   beat     the sprout's heartbeat, when it is low
-local flair = { nut = { t = 0, k = "l" }, hurt = 0, note = 0, lastNut = 0 }
+local flair = { nut = { t = 0, k = "l" }, hurt = 0, note = 0, quit = 0, lastNut = 0 }
 -- The screen's own dice (a shake, a cloud's flicker), apart from the rules'
 -- and the sound's, so a scripted run draws the same pictures every time.
 flair.dice = love.math.newRandomGenerator(5)
@@ -70,6 +71,7 @@ function flair.update(dt)
     flair.nut.t = max(0, flair.nut.t - dt)
     flair.hurt = max(0, flair.hurt - dt)
     flair.note = max(0, flair.note - dt)
+    flair.quit = max(0, flair.quit - dt)
     if flair.banner then
         flair.banner.t = flair.banner.t - dt
         if flair.banner.t <= 0 then flair.banner = nil end
@@ -83,6 +85,14 @@ local function sound(name, pitch) Sfx.play(name, 0, 1, pitch) end
 local function deny()
     sound("deny")
     flair.nut = { t = 0.4, k = "r" }
+end
+
+-- Back (Esc on a computer, the back button on Android) from the screen the
+-- others go back to: the first press asks, the second, soon after, leaves.
+function flair.askQuit()
+    if flair.quit > 0 then love.event.quit() return end
+    flair.quit = 2
+    sound("back")
 end
 
 -- The clock the screen's own animations run on: the script's, when there is one.
@@ -183,6 +193,9 @@ function flair.draw()
     if flair.note > 0 then
         local lv = Sfx.level >= 1 and "LOUD" or (Sfx.level > 0 and "QUIET" or "OFF")
         centred("SOUND " .. lv .. "  (V)", S.inset.t + TOP + 46, Sfx.level > 0 and "l" or "k", "o")
+    end
+    if flair.quit > 0 and S.menu then
+        centred(Draw.say("ESC AGAIN TO QUIT", "BACK AGAIN TO QUIT"), S.vh - S.inset.b - 22, "w", "o")
     end
     if flair.pressed and flair.pressed.t > 0 then
         local ok, x, y, w, h = pcall(flair.pressed.rect)

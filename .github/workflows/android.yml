@@ -3,8 +3,9 @@
 # Packages the game into game.love and embeds it in a LÖVE for Android build.
 # Commits that only touch docs don't trigger a build. Same shape as Survive
 # School's, without what that one adds for its shop (purchases, rewarded ads)
-# and its music (the audio patch): this game has neither, and conf.lua turns
-# the audio modules off.
+# and its music (the audio patch): this game has neither. Its sounds are made
+# at load (src/sfx.lua) and play through the stock audio modules, which
+# conf.lua turns on.
 #
 # Outputs:
 #   - every run: the signed APK as a workflow artifact, "Mycelio TD"

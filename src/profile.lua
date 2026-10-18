@@ -6,7 +6,7 @@
 -- It all lives in one file in the save directory, `save.txt`, a line a thing:
 -- a word saying what, then its words.
 --
---   version 2
+--   version 4
 --   won crack pond
 --   endless crack 21
 --   loadout crack puffer needle mat seed=oak
@@ -17,17 +17,32 @@
 --   sound 0.5
 --   taught tutorial network ant rain ring
 --   tips 0
+--   end
+--
+-- The `end` says the file was written to the last line: one cut short (a
+-- crash, a dead battery, the OS killing the app mid-write) has none, and is
+-- not read. Nothing is written over the only good copy: the last good save is
+-- kept as save.bak, the new one written to save.tmp, then to save.txt, then
+-- save.tmp let go. Whatever moment the writing stops at, one of the three
+-- reads whole, and P.load takes the first that does: save.txt, save.tmp (newer
+-- than save.bak, and whole only once it was all written), save.bak.
+--
+-- Each change to the file bumps VERSION, with a step in MIGRATE that brings a
+-- save of the version before up to it, so a save from any version reads.
+-- A save from a newer version than this one (a player gone back a version)
+-- is read for what this version knows of it, and a copy of it kept as it was,
+-- save.v<N>.txt, before anything is written over it.
 --
 -- A version 1 save bought species and seeds outright (`owned`, `seeds`):
 -- what it spent comes back as spores, at the network's rate, to grow them
 -- again. A save from before save.txt is the six files it replaced
 -- (progress.txt, endless.txt, loadout.txt, bank.txt, seen.txt, sound.txt):
--- read once, and written out as save.txt the next time anything is saved.
+-- read once, and written out as save.txt at once.
 -- They are left where they are, read no more.
 --
 -- `taught` is what the guide (src/ui/guide.lua) has shown once and will not
 -- show again: the tutorial, each lesson, each enemy's and weather's first
--- meeting. A save from before version 3 played before there was a guide: it
+-- meeting. A save from before version 4 played before there was a guide: it
 -- starts with the tutorial and the network's lesson behind it, and every
 -- enemy met and weather passed on a level won already taught.
 
@@ -37,7 +52,7 @@ local N = require "src.network"
 local P = {}
 
 local FILE = "save.txt"
-local VERSION = 3
+local VERSION = 4
 
 -- What a version 1 save paid for what it bought, and how many of today's
 -- spores each of its spores is worth: given back to grow the network with.
@@ -65,6 +80,45 @@ end
 
 local function read(name)
     return love.filesystem.getInfo(name) and love.filesystem.read(name)
+end
+
+-- Does the file read whole? From version 3 on it ends on `end`; one from
+-- before has no end to check, and is taken as it is.
+local function whole(data)
+    if not data then return false end
+    local v = tonumber(data:match("^version%s+(%d+)"))
+    if not v then return data:match("%S") ~= nil and not data:match("^%s*end") end
+    if v < 3 then return true end
+    return data:match("\nend%s*$") ~= nil
+end
+
+-- A file written so that a whole copy of it is there at every moment (see
+-- the top of the file): `name` and, beside it, name.tmp and name.bak.
+-- `isWhole(data)` says whether a copy reads whole. src/resume.lua keeps the
+-- run it is in the middle of the same way.
+local function beside(name, ext) return (name:gsub("%.%w+$", "")) .. "." .. ext end
+function P.writeWhole(name, data, isWhole)
+    local last = read(name)
+    if last == data then return end
+    if isWhole(last) then love.filesystem.write(beside(name, "bak"), last) end
+    local tmp = beside(name, "tmp")
+    love.filesystem.write(tmp, data)
+    love.filesystem.write(name, data)
+    if read(name) == data and love.filesystem.remove then love.filesystem.remove(tmp) end
+end
+
+-- The copy last written whole, and which file it is in: `name`, or what was
+-- being written over it when it stopped, or the one before.
+function P.readWhole(name, isWhole)
+    for _, file in ipairs({ name, beside(name, "tmp"), beside(name, "bak") }) do
+        local data = read(file)
+        if isWhole(data) then return data, file end
+    end
+end
+
+-- Gone, and every copy beside it.
+function P.removeWhole(name)
+    for _, file in ipairs({ name, beside(name, "tmp"), beside(name, "bak") }) do love.filesystem.remove(file) end
 end
 
 local function words(line)
@@ -109,8 +163,11 @@ local LINE = {
     tips = function(w) P.tips = w[2] ~= "0" end,
 }
 
--- The six files a save from before save.txt kept.
+-- The six files a save from before save.txt kept; true if there were any.
+local OLD = { "progress.txt", "endless.txt", "loadout.txt", "bank.txt", "seen.txt", "sound.txt" }
 local function readOld()
+    local found = false
+    for _, name in ipairs(OLD) do found = found or love.filesystem.getInfo(name) ~= nil end
     local data = read("progress.txt")
     if data then for id in data:gmatch("%S+") do P.won[id] = true end end
     data = read("endless.txt")
@@ -128,40 +185,64 @@ local function readOld()
     if data then for id in data:gmatch("%S+") do if D.ENEMIES[id] then P.seen[id] = true end end end
     data = read("sound.txt")
     P.sound = data and tonumber(data:match("[%d%.]+"))
+    return found
 end
+
+-- The steps between versions: MIGRATE[n] brings a save read as version n
+-- up to version n + 1.
+local MIGRATE = {
+    -- From before the network: the old bank's spores, and what it spent, at
+    -- today's rate.
+    [1] = function()
+        P.spores, P.bought = (P.spores + P.bought) * OLD_RATE, 0
+    end,
+    -- Version 3 only added the `end` line.
+    [2] = function() end,
+    -- From before the guide: one who has played already knows the start,
+    -- whatever they met and the weather of every level they won.
+    [3] = function(data)
+        if not data then return end
+        P.taught.tutorial, P.taught.network = true, true
+        for k in pairs(P.seen) do P.taught[k] = true end
+        for _, l in ipairs(D.LEVELS) do
+            if P.won[l.id] then
+                for _, w in ipairs(l.waves) do
+                    if w.weather then P.taught[w.weather] = true end
+                    for _, g in ipairs(w) do P.taught[g[1]] = true end
+                end
+            end
+        end
+    end,
+}
 
 function P.load()
     clear()
-    local data = read(FILE)
-    local played = data ~= nil or read("progress.txt") ~= nil
+    local data, from = P.readWhole(FILE, whole)
     if data then
         for line in data:gmatch("[^\n]+") do
             local w = words(line)
             if LINE[w[1]] then LINE[w[1]](w) end
         end
     else
-        readOld()
+        data = readOld()
     end
-    -- From before the network: the old bank's spores, and what it spent, at
-    -- today's rate. Saved at once, so it is paid only the once.
-    if (P.version or 1) < 2 then
-        local old = P.spores + P.bought
-        P.spores, P.bought = old * OLD_RATE, 0
-        if old > 0 then P.save() end
+    -- An older save brought up to this version, a step at a time, and saved
+    -- at once, so each step is taken only the once.
+    local v = P.version or 1
+    if v > VERSION then
+        local copy = "save.v" .. v .. ".txt"
+        if not read(copy) then love.filesystem.write(copy, data) end
+    end
+    if v < VERSION then
+        for n = v, VERSION - 1 do MIGRATE[n](data) end
+        if data then P.save() end
+    elseif data and from ~= FILE then
+        -- Saved over something cut short: save.txt whole again.
+        P.save()
     end
     -- A save from before the encyclopedia: whatever comes on a level won was met there.
     for _, l in ipairs(D.LEVELS) do
         if P.won[l.id] then for _, w in ipairs(l.waves) do for _, g in ipairs(w) do P.seen[g[1]] = true end end end
-    end
-    -- A save from before the guide has been played without it: nothing it
-    -- already knows is taught again.
-    if played and (P.version or 1) < 3 then
-        P.taught.tutorial, P.taught.network = true, true
-        for k in pairs(P.seen) do P.taught[k] = true end
-        for _, l in ipairs(D.LEVELS) do
-            if P.won[l.id] then for _, w in ipairs(l.waves) do if w.weather then P.taught[w.weather] = true end end end
-        end
-        P.save()
     end
 end
 
@@ -200,7 +281,8 @@ function P.save()
     table.sort(taught)
     if #taught > 0 then lines[#lines + 1] = "taught " .. table.concat(taught, " ") end
     if not P.tips then lines[#lines + 1] = "tips 0" end
-    love.filesystem.write(FILE, table.concat(lines, "\n") .. "\n")
+    lines[#lines + 1] = "end"
+    P.writeWhole(FILE, table.concat(lines, "\n") .. "\n", whole)
 end
 
 --- the Spore Bank's network -----------------------------------------------------------------

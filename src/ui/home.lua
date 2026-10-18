@@ -11,6 +11,7 @@ local Title = require "src.ui.title"
 local codex = require "src.ui.codex"
 local Network = require "src.ui.network"
 local Settings = require "src.ui.settings"
+local Run = require "src.ui.run"
 
 local floor, max = math.floor, math.max
 local box, text, centred, inside = Draw.box, Draw.text, Draw.centred, Draw.inside
@@ -18,13 +19,18 @@ local sound = flair.sound
 
 local home = {}
 
--- The choices, top to bottom, each with its key.
+-- The choices, top to bottom, each with its key; CONTINUE first while
+-- there is a run to go on with (src/ui/run.lua).
 home.CHOICES = {
     { id = "levels", name = "LEVELS", key = "l" },
     { id = "network", name = "NETWORK", key = "n" },
     { id = "codex", name = "ENCYCLOPEDIA", key = "e" },
     { id = "settings", name = "SETTINGS", key = "s" },
 }
+local CONTINUE = { id = "continue", name = "CONTINUE", key = "c" }
+local WITH = { CONTINUE }
+for _, c in ipairs(home.CHOICES) do WITH[#WITH + 1] = c end
+function home.choices() return Run.canContinue() and WITH or home.CHOICES end
 home.STAGGER = 0.08 -- seconds between one choice coming up and the next
 
 -- Seconds since the ground started down; the choices come up once it is
@@ -37,7 +43,7 @@ local function shown(k) return Title.f.drop >= 1 and age() >= Title.DROP_TIME + 
 function home.layout()
     local _, _, _, top, bottom = Title.marks()
     local W, H, gap = 96, 16, 4
-    local n = #home.CHOICES
+    local n = #home.choices()
     local cols = (bottom - top - 8) >= n * H + (n - 1) * gap and 1 or 2
     local rows = math.ceil(n / cols)
     local y0 = floor(top + max(0, (bottom - top) - (rows * H + (rows - 1) * gap)) / 2)
@@ -51,9 +57,10 @@ function home.layout()
 end
 
 function home.choose(k)
-    local c = home.CHOICES[k]
-    if not c or not shown(#home.CHOICES) then return end
-    if c.id == "levels" then sound("select"); S.openMenu()
+    local c = home.choices()[k]
+    if not c or not shown(#home.choices()) then return end
+    if c.id == "continue" then sound("go"); Run.continue()
+    elseif c.id == "levels" then sound("select"); S.openMenu()
     elseif c.id == "network" then Network.open()
     elseif c.id == "codex" then codex.open()
     elseif c.id == "settings" then Settings.open() end
@@ -64,7 +71,7 @@ home.backdrop = Title.backdrop
 function home.draw()
     for k, c in ipairs(home.layout()) do
         if shown(k) then
-            local ch = home.CHOICES[k]
+            local ch = home.choices()[k]
             local on = S.hover.home == k
             local s, edge, ink = ch.name, on and "t" or "c", "w"
             -- The network's lit while there are spores for something on it.
@@ -76,13 +83,13 @@ function home.draw()
             text(s, c.x + floor((c.w - Font.width(s)) / 2), c.y + 6, ink)
         end
     end
-    if shown(#home.CHOICES) and not S.touch then
-        centred("L N E S OR CLICK ONE", S.vh - S.inset.b - 12, "s", "o")
+    if shown(#home.choices()) and not S.touch then
+        centred((Run.canContinue() and "C " or "") .. "L N E S OR CLICK ONE", S.vh - S.inset.b - 12, "s", "o")
     end
 end
 
 function home.hover(mx, my)
-    if not shown(#home.CHOICES) then return end
+    if not shown(#home.choices()) then return end
     for k, c in ipairs(home.layout()) do
         if inside(mx, my, c.x, c.y, c.w, c.h) then S.hover.home = k return end
     end
@@ -98,10 +105,10 @@ function home.click(b)
 end
 
 function home.key(key)
-    for k, c in ipairs(home.CHOICES) do
+    for k, c in ipairs(home.choices()) do
         if key == c.key or key == tostring(k) then home.choose(k) return end
     end
-    if key == "escape" then sound("back"); Title.open() end
+    if key == "escape" then flair.askQuit() end
 end
 
 return home

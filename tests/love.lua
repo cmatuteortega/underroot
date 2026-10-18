@@ -29,6 +29,10 @@ local function newRandomGenerator(seed)
         if u == nil then return math.floor(r * l) + 1 end
         return math.floor(r * (u - l + 1)) + l
     end
+    -- As LÖVE keeps it: a string, to set it back to later.
+    function g:getState() return tostring(s) end
+    function g:setState(state) s = ffi.new("uint64_t", assert(loadstring("return " .. state))()) end
+    function g:typeOf(name) return name == "RandomGenerator" end
     return g
 end
 
@@ -46,6 +50,7 @@ love = {
         getInfo = function(name) return files[name] and { type = "file", size = #files[name] } or nil end,
         read = function(name) return files[name] end,
         write = function(name, data) files[name] = data; return true end,
+        remove = function(name) local had = files[name] ~= nil; files[name] = nil; return had end,
     },
     timer = { getTime = os.clock },
     system = { getOS = function() return "Linux" end },
