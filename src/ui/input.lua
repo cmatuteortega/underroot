@@ -17,17 +17,20 @@ local Settings = require "src.ui.settings"
 local Menu = require "src.ui.menu"
 local Hud = require "src.ui.hud"
 local Slide = require "src.ui.slide"
+local Credits = require "src.ui.credits"
+local Ending = require "src.ui.ending"
 
 local floor, max, min, abs, sqrt = math.floor, math.max, math.min, math.abs, math.sqrt
-local padBoard, fit, centre, point, stepRange, zoomTo, zoomBy =
-    View.padBoard, View.fit, View.centre, View.point, View.stepRange, View.zoomTo, View.zoomBy
+local padBoard, centre, point, stepRange, zoomTo, zoomBy =
+    View.padBoard, View.centre, View.point, View.stepRange, View.zoomTo, View.zoomBy
 local sound, deny = flair.sound, flair.deny
 
 local input = {}
 
 -- The screen up, the one the pointer and the keys go to: the run's own (the
 -- HUD over the board) when no other is.
-local SCREENS = { title = Title, home = Home, settings = Settings, loadout = Loadout, network = Network, codex = codex }
+local SCREENS = { title = Title, home = Home, settings = Settings, loadout = Loadout, network = Network, codex = codex,
+    credits = Credits, ending = Ending }
 local function screen()
     if not S.menu then return Hud end
     return SCREENS[S.menu] or Menu
@@ -217,8 +220,7 @@ end
 
 function input.keypressed(key)
     if key == "f11" or (key == "return" and love.keyboard.isDown("lalt", "ralt")) then
-        love.window.setFullscreen(not love.window.getFullscreen())
-        fit()
+        Settings.toggleFullscreen()
         return
     end
     if key == "v" then

@@ -44,8 +44,9 @@ can be checked by comparing them.
 
 It opens on the title; a key, click or tap sends the sprout and the ground
 down and brings up the home screen's four ways on: LEVELS (`L`, the level
-picker), NETWORK (`N`), ENCYCLOPEDIA (`E`) and SETTINGS (`S`: the sound, the
-tips on or off, and the tutorial played again).
+picker), NETWORK (`N`), ENCYCLOPEDIA (`E`) and SETTINGS (`S`, see **Settings**
+below). CREDITS sits in the bottom left corner (`R`), the version in the
+bottom right, as on the title.
 The very first time, the tap goes straight into the tutorial instead (see
 **The guide** below). The network, the encyclopedia and the settings go back to it, and so
 does BACK on the level picker, which keeps the sprout at the bottom under the
@@ -61,6 +62,55 @@ Crack is open; winning a level opens the next
 mode, which adds a last wave with the Bombardier Beetle to any level; winning
 the Compost Heap opens a second challenge, the Hornet. The switch under the
 level cards goes OFF, BOMBARDIER, HORNET (once open) and back.
+
+The Compost Heap is the last level, and its first win (not in challenge mode)
+has **an ending** (`src/ui/ending.lua`): a moment after THE SPROUT LIVES the
+screen goes to the night, the sprout grows to twice its size, and the
+mycelium runs out from under it to a node for each of the nine levels, each
+lighting up with its name and a plant coming up over it, until it is under
+the whole garden. Then the garden goes down out of sight, the credits roll
+up, and last it says what is open now: challenge mode's Hornet. A tap goes on
+to the next part, `Esc` leaves it; either way it ends on the run's won screen.
+CREDITS on the home screen rolls the same credits, with THE ENDING to see it
+again once the Compost Heap is won.
+
+**The pause menu** (`src/ui/pause.lua`). `P` or `Esc` in a run (the top bar or
+the back button on a phone), or the game going to the background, holds the
+run under a veil with RESUME, RESTART, SETTINGS, ENCYCLOPEDIA and QUIT TO
+MENU. RESTART asks first; QUIT TO MENU keeps the run for CONTINUE, paused
+where it was. The settings and the encyclopedia opened from it come back to it.
+
+**Settings** (`src/options.lua` says what each is, `src/ui/settings.lua`
+shows and applies them; kept in the save as `settings` and `keys` lines, only
+what differs from where it starts). A tab a section, `1`-`5` or `Tab` between
+them, the arrows along and across the rows:
+
+- AUDIO: the sound loud / quiet / off (as `V`), the effects and the ambience
+  each a slider of five steps, and whether to mute in the background (out of
+  focus; a hidden window is always quiet). There is no music yet (see
+  `ROADMAP.md`, Phase 3), so no music slider.
+- GAMEPLAY: the speed a wave starts at (x1, x2, x3), the next wave by itself
+  (twelve seconds of build phase after the first, counted down on START),
+  asking before clearing a tower or lifting a mat (a first click marks it, a
+  second clears it), range circles for what is pointed at or every tower,
+  the tips, and the tutorial played again (not from a run's pause).
+- COMFORT: screen shake, reduce motion (no screen slides, a still red line
+  instead of the pulsing edge, banners that do not blink or drop in), a
+  colour-blind mode (a thread with no flow in it dashed, a cut one's ends
+  barred, a hurt one notched; BOSS: before a boss's name, SEED on a seed's own
+  mutation) and large text (the HUD a zoom step up, while the screen keeps at
+  least 170 of its pixels on the short edge).
+- DISPLAY, on a computer: fullscreen or a window (`F11` switches it too), the
+  window's size, vsync and a frame cap (30, 60, 120). On a phone: haptics (a
+  short buzz for a tower grown, a link cut, a boss, the sprout hit, a win or a
+  loss), a battery saver (30 frames a second, half the sparks and motes) and
+  the toolbar's hand (left mirrors it: START on the left, the panel down the
+  left side).
+- KEYS, on a computer: thirteen of a run's keys can be moved (start, speed,
+  pause, turn, prune, regrow all, the pulse, the two upgrades and the four
+  pans). Click one and press its new key; one already in use swaps with it,
+  and the species' keys, `Esc`, `V`, `M`, `N`, `R`, the zoom and `F11` cannot
+  be taken. The buttons and the tips name the key as it is now.
 
 A level won offers four ways on: the next level (`N`), endless (`E`), the same
 level again (`R`) or the levels (`M`). Endless keeps the run going past the last
@@ -266,12 +316,12 @@ chew through any thread they cross.
 | `Space` | start the next wave |
 | `E` (`Shift`+`E` back), or the button at the bottom right | turn the camera a quarter turn round the board, to see it from each of its four sides |
 | `F` | game speed ×1 / ×2 / ×3 |
-| `P` / `Esc` | pause (`Esc` cancels a tool first) |
+| `P` / `Esc` | the pause menu (`Esc` cancels a tool first; after a win or a loss it goes to the levels) |
 | right click | cancel, back to growing |
 | drag on open ground, middle drag, arrows / WASD | pan |
 | `R` | restart after a win or loss (`Shift+R` any time) |
 | `N` | after a win: on to the next level's loadout |
-| `L` `N` `E` `S` (or `1`–`4`) on the home screen | the levels, the network, the encyclopedia, the settings (`Esc` back to the title) |
+| `L` `N` `E` `S` (or `1`–`4`) on the home screen | the levels, the network, the encyclopedia, the settings (`Esc` back to the title); `R` the credits |
 | `M` | the level picker (`Esc` or BACK there goes back to the run, or to the home screen) |
 | `1`–`9`, `C` in the picker | pick a level; the challenge switch (off, then each challenge open) |
 | `E` on the home screen | the encyclopedia: `1`–`4` or left / right for its tabs, a click for a page, left / right through the pages, wheel or up / down to scroll, `Esc` back |
@@ -280,7 +330,7 @@ chew through any thread they cross.
 | `Enter` / `Space`, `Esc` in the loadout | grow the level with that loadout; back to the levels |
 | mouse wheel, `+` / `-` | zoom in and out (whole steps) |
 | `V` | sound loud / quiet / off (kept between runs; SETTINGS on the home screen has it too, left / right there) |
-| `F11` / `Alt+Enter` | back to a window (it opens fullscreen) |
+| `F11` / `Alt+Enter` | back to a window (it opens fullscreen; SETTINGS, DISPLAY keeps the choice) |
 
 On a phone or tablet it plays with one finger, fullscreen, either way up (a
 screen too narrow for the toolbar narrows its buttons and lifts START onto a row
@@ -296,9 +346,9 @@ keeps clear of the notch and home bar:
 | pinch | zoom: the board follows the fingers, with the whole board drawn so nothing is cut off at the edges, then settles on the nearest sharp (whole-pixel) zoom when they lift; it starts one step in, and the toolbar keeps its size at any zoom |
 | tap START / SPEED | start the next wave / game speed |
 | tap the weather's name in the top bar | what the weather does, in a tip under it; tap it again (or anywhere) to shut it |
-| tap the top bar | pause and resume (the game also pauses when it is sent to the background) |
+| tap the top bar | the pause menu (it also opens when the game is sent to the background) |
 | tap a level card, or the challenge switch | play it / challenge on or off |
-| tap LEVELS, NETWORK, ENCYCLOPEDIA or SETTINGS on the home screen | the level picker, the network, the encyclopedia, the sound's three levels; BACK to come back |
+| tap LEVELS, NETWORK, ENCYCLOPEDIA or SETTINGS on the home screen | the level picker, the network, the encyclopedia, the settings; BACK to come back |
 | tap ENCYCLOPEDIA on the home screen, then a tile | read about it; drag to scroll, `<` `>` for the next, BACK to go back |
 | tap anywhere after a win or loss | back to the level picker |
 
@@ -676,7 +726,11 @@ What is new for Underfoot:
 | `src/ui/toolbar.lua` | the toolbar's buttons and where they sit |
 | `src/ui/panel.lua` | the info panel for a species, a fruiting body or a seed |
 | `src/ui/input.lua` | mouse, fingers and keys: taps, drags, pans, pinches, the wheel, handed to the screen that is up |
-| `src/ui/title.lua`, `home.lua`, `settings.lua`, `menu.lua`, `loadout.lua`, `network.lua`, `codex.lua` | the title (and the night the home screen, the settings and the level picker share), the home screen after it, the settings, the level picker, the loadout, the Spore Bank's network, the encyclopedia |
+| `src/ui/title.lua`, `home.lua`, `settings.lua`, `menu.lua`, `loadout.lua`, `network.lua`, `codex.lua`, `credits.lua` | the title (and the night the home screen, the settings, the credits and the level picker share), the home screen after it, the settings, the level picker, the loadout, the Spore Bank's network, the encyclopedia, the credits |
+| `src/ui/pause.lua` | the pause menu over a run |
+| `src/ui/ending.lua` | the ending, on the last level's first win |
+| `src/options.lua` | the settings: each one's choices and where it starts, by section; the keys that can be moved and what a pressed key means once they are |
+| `src/version.lua` | the version on the title: the number, and the commit the build stamps into `build.txt` |
 | `src/ui/slide.lua` | the way from one screen to the next: the old one sliding out, the new one in |
 | `src/ui/run.lua` | starting a run and each frame of it: the rules stepped, and what the profile keeps |
 | `src/ui/guide.lua` | the tutorial, the lessons, the first-meeting cards and the network's first visit |

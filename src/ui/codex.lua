@@ -434,7 +434,7 @@ end
 
 function codex.back()
     sound("back")
-    if codex.page then codex.page = nil else S.openHome() end
+    if codex.page then codex.page = nil else S.back() end
 end
 
 -- To the entry `d` along from the one open, round the ends.

@@ -158,7 +158,9 @@ jobs:
         working-directory: game
         run: |
           mkdir -p ../love-android/app/src/embed/assets
-          zip -9 -r ../love-android/app/src/embed/assets/game.love main.lua conf.lua src assets -x '*.DS_Store'
+          # The commit it is built from, for the version on the title (src/version.lua).
+          git describe --tags --always > build.txt
+          zip -9 -r ../love-android/app/src/embed/assets/game.love main.lua conf.lua build.txt src assets -x '*.DS_Store'
           unzip -l ../love-android/app/src/embed/assets/game.love | grep -E ' (main|conf)\.lua$'
           ls -lh ../love-android/app/src/embed/assets/game.love
 

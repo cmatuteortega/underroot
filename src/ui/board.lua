@@ -12,6 +12,7 @@ local M = require "src.models"
 local S = require "src.ui.state"
 local Pixels = require "src.ui.pixels"
 local flair = require "src.ui.flair"
+local O = require "src.options"
 
 local floor, ceil, max, min, abs, sqrt = math.floor, math.ceil, math.max, math.min, math.abs, math.sqrt
 local IDX = T.IDX
@@ -46,6 +47,10 @@ local function drawLink(l, highlight)
     local buried = l.buried and l.state == "alive" and not highlight and not surge
     if buried then core, under = IDX.t, IDX.n end
     local hurt = l.state == "alive" and l.hp < S.game:linkHp() * 0.5
+    -- The colour-blind mode adds a shape to what only a colour says: a thread
+    -- with no flow in it is dashed, a cut one's ends have bars across them,
+    -- a hurt one has notches standing up off it.
+    local shapes = O.get("colour")
     local gap0, gap1 = 2, -1 -- the part of a cut link that is not there
     -- A salted link never regrows, so it has no gap: it lies there whole, crusted.
     if l.state == "cut" and not l.salted then
@@ -57,6 +62,7 @@ local function drawLink(l, highlight)
         local draw = true
         if l.state == "grow" then draw = f <= l.grow end
         if f > gap0 and f < gap1 then draw = false end
+        if shapes and l.state == "alive" and not fed and not highlight and s % 4 == 3 then draw = false end
         if draw then
             local x, z = a.x + (b.x - a.x) * f, a.z + (b.z - a.z) * f
             local i, j, d = S.world:toImage(x, linkY(l, f, x, z), z)
@@ -77,7 +83,10 @@ local function drawLink(l, highlight)
                     end
                 elseif l.state == "cut" then
                     k = (l.hand or l.regrow > 0) and IDX.c or IDX.n
-                    if abs(f - gap0) < 0.03 or abs(f - gap1) < 0.03 then k = IDX.r end
+                    if abs(f - gap0) < 0.03 or abs(f - gap1) < 0.03 then
+                        k = IDX.r
+                        if shapes then put(IDX.r, i, j - 1); put(IDX.r, i, j - 2); put(IDX.r, i, j + 2) end
+                    end
                 elseif l.state == "grow" and abs(f - l.grow) < 0.04 then
                     k = IDX.l
                 elseif fed and not highlight then
@@ -94,6 +103,7 @@ local function drawLink(l, highlight)
                     if floor(t * 2 + s * 0.2) % 3 == 0 then put(IDX.r, i + 1, j - 1) end
                 end
                 if hurt and s % 5 == 0 and floor(t * 6) % 2 == 0 then k = IDX.r end
+                if shapes and hurt and s % 5 == 0 then put(IDX.r, i, j - 1) end
                 -- Just cut, it flashes white then rust; just grown or regrown,
                 -- white then glow, running out from the middle.
                 if l.flash and not highlight then
@@ -476,7 +486,7 @@ local function draw()
     local cx0, cy0, cw0, ch0 = S.camx, S.camy, S.cw, S.ch
     S.camx, S.camy = floor(S.camx) - S.pad.l, floor(S.camy) - S.pad.t
     S.cw, S.ch = S.cw + S.pad.l + S.pad.r, S.ch + S.pad.t + S.pad.b
-    if S.shake > 0 then
+    if S.shake > 0 and O.get("shake") then
         S.camx = S.camx + flair.dice:random(-2, 2)
         S.camy = S.camy + flair.dice:random(-1, 1)
     end
@@ -614,6 +624,16 @@ local function draw()
     -- Reach: whatever is hovered or selected, or what is about to be grown.
     local towerMode = D.TOWER[S.mode] and not trailMode
     local shown = S.hover.node and S.hover.node.tower or S.selected
+    -- Every tower's reach at once, if the settings say so: dim, under the one pointed at.
+    if O.get("ranges") == "all" then
+        for _, n in ipairs(S.game.nodes) do
+            local t = n.tower
+            if t and t ~= shown and S.game:stat(t, "range") then
+                local r = S.game:towerRange(t)
+                if r > 0 then ring(n.x, n.z, r, IDX.c) end
+            end
+        end
+    end
     -- The rules that work through the network show the nodes they work on.
     local touched = shown and shown.node and S.game:touches(shown)
     if touched then

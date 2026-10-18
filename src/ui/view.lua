@@ -5,6 +5,7 @@
 
 local ffi = require "ffi"
 local World = require "src.world"
+local O = require "src.options"
 local S = require "src.ui.state"
 local Draw = require "src.ui.draw"
 local Toolbar = require "src.ui.toolbar"
@@ -34,7 +35,12 @@ end
 local function fit()
     local w, h = love.graphics.getDimensions()
     local base = max(1, floor(min(w, h) / SHORT))
-    S.uz = base + UI_STEP
+    -- Large text is a step up for the whole HUD, while the short edge keeps
+    -- at least 170 of its pixels: under that the screens no longer fit.
+    local step = UI_STEP + (O.get("text") == "large" and 1 or 0)
+    if min(w, h) / (base + step) < 170 then step = UI_STEP end
+    S.textStep = step - UI_STEP
+    S.uz = base + step
     S.vw, S.vh = ceil(w / S.uz), ceil(h / S.uz)
     S.ui = love.graphics.newCanvas(S.vw, S.vh)
     S.ui:setFilter("nearest", "nearest")
@@ -174,7 +180,9 @@ local function focusOn(s)
     local hx, hy = (i - S.camx) * S.zoom / S.uz, (j - S.camy) * S.zoom / S.uz
     local wx, wy
     if wide() then
+        -- The panel on the left for a left hand: the tower a third in from the right.
         wx, wy = floor(S.vw / 3), floor(S.vh / 2)
+        if O.left() then wx = S.vw - wx end
     else
         local P = Panel.info()
         wx = floor(S.vw / 2)
@@ -194,13 +202,15 @@ local function update(dt)
         end
     end
 
-    local k = love.keyboard.isDown
+    -- The arrows, and the keys the settings have the pans on (WASD at first).
+    local k, on = love.keyboard.isDown, O.down
     local pan = 120 * dt
-    if k("left", "a", "right", "d", "up", "w", "down", "s") then S.focus = nil end
-    if k("left", "a") then S.panx = S.panx - pan end
-    if k("right", "d") then S.panx = S.panx + pan end
-    if k("up", "w") then S.pany = S.pany - pan end
-    if k("down", "s") then S.pany = S.pany + pan end
+    local west, east, up, down = k("left") or on("west"), k("right") or on("east"), k("up") or on("up"), k("down") or on("down")
+    if west or east or up or down then S.focus = nil end
+    if west then S.panx = S.panx - pan end
+    if east then S.panx = S.panx + pan end
+    if up then S.pany = S.pany - pan end
+    if down then S.pany = S.pany + pan end
     -- Something newly selected: ease the camera to put it beside its panel.
     if S.selected ~= S.focused then
         S.focused = S.selected

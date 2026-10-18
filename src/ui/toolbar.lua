@@ -3,6 +3,7 @@
 
 local D = require "src.defs"
 local S = require "src.ui.state"
+local O = require "src.options"
 
 local floor, ceil, min = math.floor, math.ceil, math.min
 
@@ -34,9 +35,11 @@ layTools()
 -- its end. A screen too narrow for both (a phone held upright) narrows the
 -- buttons first and then lifts the wave button onto a row of its own, at the
 -- right, where a thumb is.
--- Too narrow even for that, the tools go onto two rows.
+-- Too narrow even for that, the tools go onto two rows. For a left hand
+-- (the settings) it is all mirrored: the wave button first, or on the left.
 local BH, WW = 27, 44
 local function bar()
+    local left = O.left()
     local avail = S.vw - S.inset.l - S.inset.r - 4
     local n = #BUTTONS
     local y = S.vh - S.inset.b - BH - 3
@@ -44,20 +47,24 @@ local function bar()
     if bw >= 22 then
         local tools = n * (bw + 2) - 2
         local x0 = S.inset.l + 2 + floor((avail - tools - 8 - WW) / 2)
+        if left then
+            return { rows = { { x0 = x0 + WW + 8, y = y, from = 1, to = n } }, bw = bw, wx = x0, wy = y, top = y }
+        end
         return { rows = { { x0 = x0, y = y, from = 1, to = n } }, bw = bw, wx = x0 + tools + 8, wy = y, top = y }
     end
     bw = min(30, floor((avail + 2) / n) - 2)
     if bw >= 22 then
         local tools = n * (bw + 2) - 2
         local x0 = S.inset.l + 2 + floor((avail - tools) / 2)
-        return { rows = { { x0 = x0, y = y, from = 1, to = n } }, bw = bw, wx = S.vw - S.inset.r - 2 - WW, wy = y - BH - 4, top = y - BH - 4 }
+        return { rows = { { x0 = x0, y = y, from = 1, to = n } }, bw = bw, wx = left and S.inset.l + 2 or S.vw - S.inset.r - 2 - WW,
+            wy = y - BH - 4, top = y - BH - 4 }
     end
     local per = ceil(n / 2)
     bw = min(30, floor((avail + 2) / per) - 2)
     local x0 = S.inset.l + 2 + floor((avail - (per * (bw + 2) - 2)) / 2)
     local y1 = y - BH - 3
     return { rows = { { x0 = x0, y = y1, from = 1, to = per }, { x0 = x0, y = y, from = per + 1, to = n } },
-        bw = bw, wx = S.vw - S.inset.r - 2 - WW, wy = y1 - BH - 4, top = y1 - BH - 4 }
+        bw = bw, wx = left and S.inset.l + 2 or S.vw - S.inset.r - 2 - WW, wy = y1 - BH - 4, top = y1 - BH - 4 }
 end
 local function buttonRect(n)
     local b = bar()

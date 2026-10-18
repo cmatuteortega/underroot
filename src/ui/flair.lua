@@ -6,6 +6,7 @@ local Font = require "src.font"
 local Sfx = require "src.sfx"
 local S = require "src.ui.state"
 local Draw = require "src.ui.draw"
+local O = require "src.options"
 
 local floor, max, min = math.floor, math.max, math.min
 local IDX = T.IDX
@@ -168,7 +169,13 @@ end
 function flair.draw()
     if S.painter then return end
     local function px(x, y, w, h) love.graphics.rectangle("fill", x, y, w or 1, h or 1) end
-    if not S.menu and S.game and (flair.hurt > 0 or flair.beat) then
+    -- With less motion asked for (the settings), the edge holds still: a
+    -- thin red line while the sprout is hit, no pulse.
+    local calm = O.get("motion")
+    if calm and not S.menu and S.game and flair.hurt > 0 then
+        color("r")
+        px(0, 0, S.vw, 1); px(0, S.vh - 1, S.vw, 1); px(0, 0, 1, S.vh); px(S.vw - 1, 0, 1, S.vh)
+    elseif not S.menu and S.game and (flair.hurt > 0 or flair.beat) then
         local deep = flair.hurt > 0.2 and 4 or 2
         color("r")
         for d = 0, deep - 1 do
@@ -179,8 +186,8 @@ function flair.draw()
     end
     if flair.banner and not S.menu then
         local age = flair.banner.max - flair.banner.t
-        if flair.banner.t > 0.3 or floor(flair.banner.t * 12) % 2 == 0 then
-            local y = floor(S.vh * 0.28) - floor(max(0, 0.15 - age) / 0.15 * 8)
+        if calm or flair.banner.t > 0.3 or floor(flair.banner.t * 12) % 2 == 0 then
+            local y = floor(S.vh * 0.28) - (calm and 0 or floor(max(0, 0.15 - age) / 0.15 * 8))
             centred(flair.banner.text, y, flair.banner.k, "o")
             local w = floor(min(1, age / 0.3) * (Font.width(flair.banner.text) + 4))
             color(flair.banner.k)

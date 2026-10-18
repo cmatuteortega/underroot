@@ -36,6 +36,10 @@ local Loadout = require "src.ui.loadout"
 local Hud = require "src.ui.hud"
 local Input = require "src.ui.input"
 local Slide = require "src.ui.slide"
+local Settings = require "src.ui.settings"
+local Pause = require "src.ui.pause"
+local O = require "src.options"
+local Game = require "src.game"
 
 -- Something broken: a report in crash.txt and a screen saying so (src/crash.lua).
 love.errorhandler = require("src.crash").handler
@@ -71,16 +75,23 @@ function love.displayrotated() fit() end
 -- the clock rather than let a wave run on unwatched, and the sound with it,
 -- until the game is back in front. And keep the run as it stands: the OS may
 -- not let the game come back to it (src/resume.lua).
+-- The pause menu opens over a run that was going (src/ui/pause.lua). Out of
+-- focus but still on the screen (a window behind another), the sound only
+-- stops if the settings say to mute in the background.
+local function hideSound()
+    local away = not audio.shown.visible or (not audio.shown.focus and O.get("bgmute"))
+    Sfx.hide(away)
+end
 function love.focus(f)
-    if not f and not S.script and S.game then S.paused = true end
+    if not f and not S.script and S.game and not S.menu then Pause.open() end
     if not f then Run.keep() end
     audio.shown.focus = f
-    Sfx.hide(not (audio.shown.focus and audio.shown.visible))
+    hideSound()
 end
 function love.visible(v)
     if not v then Run.keep() end
     audio.shown.visible = v
-    Sfx.hide(not (audio.shown.focus and audio.shown.visible))
+    hideSound()
 end
 -- Closed in the middle of a run: CONTINUE picks it up next time.
 function love.quit() Run.keep() end
@@ -114,6 +125,7 @@ function love.load(args)
         end
     end
     if Profile.sound then Sfx.level = Profile.sound end
+    if not S.script then Settings.applyAll() end
     Sfx.init()
     for _, a in ipairs(args or {}) do
         if a == "--sounds" then
@@ -141,7 +153,20 @@ function love.load(args)
     end
 end
 
+-- The frame cap the settings ask for (the battery saver's is 30): what is
+-- left of the frame's share of the second, slept.
+local frameAt = 0
+local function cap()
+    local fps = O.MOBILE and (O.get("battery") and 30 or 0) or O.get("cap")
+    Game.fewer = O.MOBILE and O.get("battery") or false
+    if S.script or fps <= 0 then return end
+    local wait = frameAt + 1 / fps - love.timer.getTime()
+    if wait > 0 then love.timer.sleep(wait) end
+    frameAt = love.timer.getTime()
+end
+
 function love.update(dt)
+    cap()
     -- The script runs on its own clock, the HUD's flourishes too.
     if S.script then dt = 1 / 30 end
     Sfx.warm(0.004)

@@ -90,7 +90,9 @@ function title.ease()
     local dt = min(0.1, now - (title.last or now))
     title.last = now
     local f = title.f
-    local drop, name = S.menu == "title" and 0 or 1, S.menu == true and 1 or 0
+    -- The level picker, the settings and the credits want the sky the name is in.
+    local up = S.menu == true or S.menu == "settings" or S.menu == "credits"
+    local drop, name = S.menu == "title" and 0 or 1, up and 1 or 0
     local sink = (title.sinkTo or S.menu == "loadout") and 1 or 0
     -- The shots photograph where it is going, not on the way.
     if S.script then f.drop, f.name, f.sink = drop, name, sink end
@@ -205,6 +207,8 @@ function title.draw()
     if age % 1.2 < 0.8 then
         centred(say("PRESS ANY KEY", "TAP TO BEGIN"), S.vh - S.inset.b - 14, "w", "o")
     end
+    local v = require("src.version").text
+    text(v, S.vw - S.inset.r - Font.width(v) - 3, S.vh - S.inset.b - 8, "k")
 end
 
 -- The title's own sounds: a patter as the network reaches out under the

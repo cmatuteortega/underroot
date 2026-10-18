@@ -1092,8 +1092,12 @@ function Game:burst(x, y, z, n, keys, speed)
 end
 
 -- The same, for looks alone: thrown off a hit, not rolled by the rules.
+-- Half as many, for the battery saver (set by main.lua): looks only.
+Game.fewer = false
+
 function Game:sparks(x, y, z, n, keys, speed)
     if #self.fx > 500 then return end
+    if Game.fewer then n = math.ceil(n / 2) end
     for _ = 1, n do
         local a, u = fr() * 2 * math.pi, fr()
         self.fx[#self.fx + 1] = {
@@ -1108,6 +1112,7 @@ end
 -- off a footfall, glow off a mended thread.
 function Game:motes(x, y, z, n, keys, spread, speed, life)
     if #self.fx > 500 then return end
+    if Game.fewer then n = math.ceil(n / 2) end
     for _ = 1, n do
         local a, u = fr() * 2 * math.pi, fr() * spread
         self.fx[#self.fx + 1] = { x = x + cos(a) * u, y = y + fr() * 3, z = z + sin(a) * u, vx = 0, vz = 0,

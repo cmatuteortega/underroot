@@ -12,6 +12,8 @@ local codex = require "src.ui.codex"
 local Network = require "src.ui.network"
 local Settings = require "src.ui.settings"
 local Run = require "src.ui.run"
+local Credits = require "src.ui.credits"
+local V = require "src.version"
 
 local floor, max = math.floor, math.max
 local box, text, centred, inside = Draw.box, Draw.text, Draw.centred, Draw.inside
@@ -83,9 +85,21 @@ function home.draw()
             text(s, c.x + floor((c.w - Font.width(s)) / 2), c.y + 6, ink)
         end
     end
-    if shown(#home.choices()) and not S.touch then
-        centred((Run.canContinue() and "C " or "") .. "L N E S OR CLICK ONE", S.vh - S.inset.b - 12, "s", "o")
+    if shown(#home.choices()) then
+        if not S.touch then
+            centred((Run.canContinue() and "C " or "") .. "L N E S OR CLICK ONE", S.vh - S.inset.b - 12, "s", "o")
+        end
+        -- The credits in the corner, the version in the other.
+        local c = home.creditsRect()
+        local on = S.hover.credits == "open"
+        box(c.x, c.y, c.w, c.h, on and "n" or "u", on and "t" or "k")
+        text("CREDITS", c.x + 4, c.y + 4, "w")
+        text(V.text, S.vw - S.inset.r - Font.width(V.text) - 3, S.vh - S.inset.b - 8, "k")
     end
+end
+
+function home.creditsRect()
+    return { x = S.inset.l + 4, y = S.vh - S.inset.b - 16, w = Font.width("CREDITS") + 8, h = 12 }
 end
 
 function home.hover(mx, my)
@@ -93,21 +107,26 @@ function home.hover(mx, my)
     for k, c in ipairs(home.layout()) do
         if inside(mx, my, c.x, c.y, c.w, c.h) then S.hover.home = k return end
     end
+    local c = home.creditsRect()
+    if inside(mx, my, c.x, c.y, c.w, c.h) then S.hover.credits = "open" end
 end
 
 function home.under()
     local k = S.hover.home
     if k then return function() local c = home.layout()[k] return c.x, c.y, c.w, c.h end end
+    if S.hover.credits then return function() local c = home.creditsRect() return c.x, c.y, c.w, c.h end end
 end
 
 function home.click(b)
-    if S.hover.home then home.choose(S.hover.home) end
+    if S.hover.home then home.choose(S.hover.home)
+    elseif S.hover.credits and shown(#home.choices()) then Credits.open() end
 end
 
 function home.key(key)
     for k, c in ipairs(home.choices()) do
         if key == c.key or key == tostring(k) then home.choose(k) return end
     end
+    if key == "r" and shown(#home.choices()) then Credits.open() return end
     if key == "escape" then flair.askQuit() end
 end
 

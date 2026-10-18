@@ -17,8 +17,11 @@ local audio = require "src.ui.audio"
 local codex = require "src.ui.codex"
 local Resume = require "src.resume"
 local Guide = require "src.ui.guide"
+local O = require "src.options"
 
 local max = math.max
+-- Seconds of build phase before the next wave starts by itself.
+local AUTO_WAIT = 12
 local layTools = Toolbar.layTools
 
 -- The run going on kept, if it is one to keep: not the shots', not one
@@ -49,6 +52,7 @@ local function start()
         best = Profile.records[S.level.id], dice = S.script and 1, net = not S.script and Profile.grown() or nil,
         firstWin = not S.script and not Profile.won[S.level.id] })
     lastPhase = S.game.phase
+    S.endingAt = nil
     keep()
     layTools(S.game)
     S.mode, S.drag, S.panx, S.pany, S.selected = "grow", nil, 0, 0, nil
@@ -137,18 +141,38 @@ local function update(dt)
         S.game.banked = S.game.spores
         Profile.save()
     end
-    -- Kept as each build phase starts; let go once the run is over.
+    -- Kept as each build phase starts; let go once the run is over. A wave
+    -- starts at the speed the settings say.
     local phase = S.game.phase
     if phase ~= lastPhase then
+        S.autoWait = 0
+        if phase == "wave" and not S.script then S.speed = O.get("speed") end
         if phase == "build" then keep()
         elseif (phase == "won" or phase == "lost") and not S.script then Resume.clear() end
         lastPhase = phase
+    end
+    -- The next wave by itself, if the settings say so: after the first, once
+    -- the build phase has had its time, unless the run is held.
+    if O.get("auto") and not S.script and not S.tutorial and phase == "build" and S.game.wave > 0
+        and S.game:nextWave() and not S.paused and not Guide.holding() then
+        S.autoWait = (S.autoWait or 0) + dt
+        if S.autoWait >= AUTO_WAIT then S.game:startWave() end
+    end
+    if S.endingAt and flair.now() >= S.endingAt then
+        S.endingAt = nil
+        require("src.ui.ending").open()
+        return
     end
     if S.game.phase == "won" and not S.game.recorded then
         S.game.recorded = true
         if not S.script then
             -- The first win opens what on the network waited on it, named on the way out.
-            if not Profile.won[S.level.id] then S.game.opened = Profile.opens(S.level.id) end
+            if not Profile.won[S.level.id] then
+                S.game.opened = Profile.opens(S.level.id)
+                -- The last level, won the first time: the ending, once the
+                -- win has had a moment (src/ui/ending.lua).
+                if S.level == D.LEVELS[#D.LEVELS] and not S.game.challenge then S.endingAt = flair.now() + 2.5 end
+            end
             Profile.won[S.level.id] = true
             Profile.save()
         end
@@ -171,5 +195,6 @@ return {
     update = update,
     keep = keep,
     canContinue = canContinue,
+    AUTO_WAIT = AUTO_WAIT,
     continue = continue,
 }

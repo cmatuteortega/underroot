@@ -27,7 +27,7 @@ return {
         P.loadouts.crack, P.sown.crack = { "puffer", "needle" }, "oak"
         P.net.needle, P.net["puffer.power"], P.seen.ant, P.sound = 1, 2, true, 0.5
         P.save()
-        C.yes(Love.files["save.txt"]:find("^version 4\n"), "the file starts with its version")
+        C.yes(Love.files["save.txt"]:find("^version 5\n"), "the file starts with its version")
         C.yes(Love.files["save.txt"]:find("\nend\n$"), "and ends on end")
         P.load()
         C.yes(P.won.crack, "won")
@@ -104,7 +104,7 @@ return {
         Love.files["save.txt"] = "version 2\nwon crack\nspores 40\n"
         P.load()
         C.eq(P.spores, 40, "spores, not paid back again")
-        C.yes(Love.files["save.txt"]:find("^version 4\n.*\nend\n$"), "brought up to this version")
+        C.yes(Love.files["save.txt"]:find("^version 5\n.*\nend\n$"), "brought up to this version")
     end },
 
     { "a save from a newer version is read, and kept as it was", function()
@@ -133,7 +133,7 @@ return {
         Love.files["save.txt"] = "version 1\nwon crack\nspores 40\nowned stink giant\nseeds oak dandelion\n"
         P.load()
         C.eq(P.spores, (40 + 20 + 50 + 15 + 25) * 3, "the bank and the purchases, at today's rate")
-        C.yes(Love.files["save.txt"]:find("^version 4\n"), "saved at once as this version")
+        C.yes(Love.files["save.txt"]:find("^version 5\n"), "saved at once as this version")
         P.load()
         C.eq(P.spores, (40 + 20 + 50 + 15 + 25) * 3, "and not paid twice")
         C.yes(P.won.crack, "the rest is kept")
@@ -249,7 +249,7 @@ return {
         C.yes(P.taught.ant and P.taught.pillbug, "what was met")
         C.yes(P.taught.rain, "the weather of a level won")
         C.no(P.taught.night, "not one still to come")
-        C.yes(Love.files["save.txt"]:find("^version 4\n"), "saved at once as this version")
+        C.yes(Love.files["save.txt"]:find("^version 5\n"), "saved at once as this version")
         C.eq(P.spores, 5, "a version 3 save's spores are not paid back again")
     end },
 }

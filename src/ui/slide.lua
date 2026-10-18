@@ -15,6 +15,7 @@
 
 local S = require "src.ui.state"
 local flair = require "src.ui.flair"
+local O = require "src.options"
 
 local floor = math.floor
 
@@ -22,7 +23,7 @@ local slide = {}
 
 slide.TIME = 0.35
 -- The screens under the night sky.
-slide.NIGHT = { title = true, home = true, settings = true, levels = true }
+slide.NIGHT = { title = true, home = true, settings = true, levels = true, credits = true }
 -- Ways that are not a slide: the screen's own animation does it.
 slide.OWN = { ["title>home"] = true, ["home>network"] = true, ["network>home"] = true }
 
@@ -77,7 +78,8 @@ function slide.check()
         end
     end
     if not back then slide.stack[#slide.stack + 1] = k end
-    if not from or S.script or slide.OWN[from .. ">" .. k] then slide.t0 = nil return end
+    -- With less motion asked for (the settings), the new screen is just there.
+    if not from or S.script or slide.OWN[from .. ">" .. k] or O.get("motion") then slide.t0 = nil return end
     slide.dir = back and -1 or 1
     slide.shared = slide.NIGHT[from] and slide.NIGHT[k] or false
     slide.board = from == "game"

@@ -17,6 +17,8 @@
 --   sound 0.5
 --   taught tutorial network ant rain ring
 --   tips 0
+--   settings effects=0.5 auto=1
+--   keys start=return
 --   end
 --
 -- The `end` says the file was written to the last line: one cut short (a
@@ -45,14 +47,18 @@
 -- meeting. A save from before version 4 played before there was a guide: it
 -- starts with the tutorial and the network's lesson behind it, and every
 -- enemy met and weather passed on a level won already taught.
+--
+-- `settings` and `keys` are the settings screen's (src/options.lua), only
+-- what differs from where each starts.
 
 local D = require "src.defs"
 local N = require "src.network"
+local O = require "src.options"
 
 local P = {}
 
 local FILE = "save.txt"
-local VERSION = 4
+local VERSION = 5
 
 -- What a version 1 save paid for what it bought, and how many of today's
 -- spores each of its spores is worth: given back to grow the network with.
@@ -76,6 +82,7 @@ local function clear()
     P.taught = {} -- what the guide has shown: { tutorial = true, ant = true, rain = true }
     P.tips = true -- the guide's lessons and first-meeting cards, on or off
     P.cache = nil
+    O.reset()
 end
 
 local function read(name)
@@ -161,6 +168,8 @@ local LINE = {
     sound = function(w) P.sound = tonumber(w[2]) end,
     taught = function(w) for k = 2, #w do P.taught[w[k]] = true end end,
     tips = function(w) P.tips = w[2] ~= "0" end,
+    settings = O.read,
+    keys = O.readKeys,
 }
 
 -- The six files a save from before save.txt kept; true if there were any.
@@ -213,6 +222,8 @@ local MIGRATE = {
             end
         end
     end,
+    -- Version 5 only added the settings and keys lines.
+    [4] = function() end,
 }
 
 function P.load()
@@ -281,6 +292,8 @@ function P.save()
     table.sort(taught)
     if #taught > 0 then lines[#lines + 1] = "taught " .. table.concat(taught, " ") end
     if not P.tips then lines[#lines + 1] = "tips 0" end
+    lines[#lines + 1] = O.line()
+    lines[#lines + 1] = O.keysLine()
     lines[#lines + 1] = "end"
     P.writeWhole(FILE, table.concat(lines, "\n") .. "\n", whole)
 end

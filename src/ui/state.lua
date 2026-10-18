@@ -29,7 +29,7 @@ S.level = D.LEVELS[1]
 S.worlds = {}
 S.menu = nil -- the level picker is up (true), a level's loadout ("loadout"), the network ("network"),
 -- the encyclopedia ("codex"), the title ("title"), the home screen after it ("home")
--- or the settings ("settings")
+-- the settings ("settings"), the credits ("credits") or the ending ("ending")
 S.pick = nil -- the loadout being picked: { n = level, set = { id = true }, enemy = kind }
 S.chosen = nil -- the species the run brings, a list; nil brings them all (the shots)
 S.challenge = false -- challenge mode chosen in the picker
@@ -51,6 +51,9 @@ S.press = nil -- a press on open ground: a tap if it is let go where it was, a p
 -- the board is a hand's width there, and a pocket wants to be a fingertip.
 S.UI_STEP = S.touch and 1 or 0 -- the HUD's step, which stays put
 S.zoomStep = S.UI_STEP
+-- A step more for the HUD when the settings ask for large text (and the
+-- screen has room for it: see View.fit).
+S.textStep = 0
 S.fingers, S.pinch = {}, nil -- the touches down, and the two being pinched
 S.speed, S.paused = 1, false
 -- The weather's word in the top strip, where the last HUD drawn put it:
@@ -80,6 +83,16 @@ end
 function S.openHome()
     S.menu = "home"
     S.mode, S.drag, S.selected = "grow", nil, nil
+end
+
+-- The settings and the encyclopedia opened from a run's pause menu go back
+-- to it, not to the home screen.
+S.fromRun = nil
+S.endingAt = nil -- when the ending opens over a last level just won (src/ui/run.lua)
+function S.back()
+    local run = S.fromRun and S.game
+    S.fromRun = nil
+    if run then S.menu = nil else S.openHome() end
 end
 
 -- A tap on nothing (no pocket, no plant, no thread, off the board) puts

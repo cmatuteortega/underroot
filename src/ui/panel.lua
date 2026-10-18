@@ -8,6 +8,7 @@ local N = require "src.network"
 local M = require "src.models"
 local Font = require "src.font"
 local Profile = require "src.profile"
+local O = require "src.options"
 local S = require "src.ui.state"
 local Draw = require "src.ui.draw"
 local Pixels = require "src.ui.pixels"
@@ -205,6 +206,8 @@ local function info()
         if wide() then
             local _, ty = turnRect(1)
             P.x, P.y, P.h = S.vw - S.inset.r - w - 3, top, ty - 4 - top
+            -- For a left hand, down the left side.
+            if O.left() then P.x = S.inset.l + 3 end
         else
             P.x, P.y, P.h = S.inset.l + 3, top, min(h + 8, floor((barTop() - top) * 0.6))
         end
@@ -223,7 +226,10 @@ end
 -- What the panel leaves free across the screen, as left and right edges.
 local function freeSpan()
     local P = info()
-    if P and wide() then return S.inset.l, P.x - 3 end
+    if P and wide() then
+        if P.x < S.vw / 2 then return P.x + P.w + 3, S.vw - S.inset.r end
+        return S.inset.l, P.x - 3
+    end
     return S.inset.l, S.vw - S.inset.r
 end
 

@@ -8,6 +8,7 @@ local Profile = require "src.profile"
 local S = require "src.ui.state"
 local flair = require "src.ui.flair"
 local Title = require "src.ui.title"
+local O = require "src.options"
 
 local floor, min = math.floor, math.min
 local sound = flair.sound
@@ -26,10 +27,16 @@ function audio.hover()
     local k = S.hover.button or S.hover.wave or S.hover.turn or (S.hover.up and S.hover.up.branch + 100) or S.hover.mutation
         or S.hover.level or S.hover.challenge or S.hover.sound or S.hover.species or S.hover.back or S.hover.go or S.hover.enemy
         or S.hover.bring or S.hover.weather or S.hover.won or (S.hover.buy and "buy") or (S.hover.on and "on") or S.hover.home
+        or S.hover.pause or (S.hover.tab and "tab" .. S.hover.tab) or (S.hover.opt and S.hover.opt.key) or S.hover.bind or S.hover.btn
+        or S.hover.credits
     if k ~= nil then k = tostring(k) .. (S.hover.up and "u" or S.hover.mutation and "m" or S.hover.level and "l" or S.hover.home and "h" or S.hover.sound and "s" or "") end
     if k and k ~= flair.lastHover and not S.touch then sound("hover") end
     flair.lastHover = k
 end
+
+-- A short buzz on a phone for what is felt as well as heard, if the
+-- settings leave haptics on: seconds of it, by cue.
+local BUZZ = { build = 0.02, cut = 0.04, boss = 0.15, heart = 0.06, lost = 0.25, won = 0.12 }
 
 -- What the game cued this frame, played from where on the screen it happened:
 -- panned across, and quieter off the edge.
@@ -43,6 +50,7 @@ function audio.hear()
             if sx < -0.05 or sx > 1.05 or sy < -0.05 or sy > 1.05 then vol = vol * 0.35 end
         end
         Sfx.play(c.name, pan, vol)
+        if BUZZ[c.name] and O.MOBILE and O.get("haptics") and love.system.vibrate then love.system.vibrate(BUZZ[c.name]) end
         -- Some say so in words too.
         local n = c.name
         if n == "wave" then
@@ -64,7 +72,7 @@ end
 function audio.ambience(dt)
     local want = { soil = 0.35 }
     local pitch
-    if S.menu == "title" or S.menu == "home" or S.menu == "settings" then
+    if S.menu == "title" or S.menu == "home" or S.menu == "settings" or S.menu == "credits" or S.menu == "ending" then
         -- The night over the title, and the network's hum swelling as it grows.
         local age = flair.now() - (Title.t0 or 0)
         want.night, want.hum = 0.3, 0.35 * min(1, age / 4)

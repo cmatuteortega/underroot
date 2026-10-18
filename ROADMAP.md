@@ -28,7 +28,7 @@ Each item says which platforms it is for: **[M]** mobile, **[D]** desktop,
   a run's tables wants `R.VERSION` bumped: a run kept before is then let go
   rather than misread.
 - [x] **[M] The Android back button** (Esc to LÖVE) goes back a screen
-  everywhere, pauses a run (the pause menu is Phase 2's), and from the home or
+  everywhere, opens the pause menu in a run, and from the home or
   title screen asks first: back again within two seconds leaves the game.
 - [x] **[M/D] Crash reporting.** `src/crash.lua`: the error, the stack and the
   device to `crash.txt` in the save directory, and a screen in the game's
@@ -67,28 +67,34 @@ teaches it, a thing at a time; what is left is to watch new players with it.
 
 ## Phase 2: menus and settings players expect
 
-- [ ] **[M/D] A pause menu.** Today a pause shows only "PAUSED"
-  (`src/ui/hud.lua`). RESUME, RESTART, SETTINGS, ENCYCLOPEDIA, QUIT TO MENU,
-  with a confirm on anything that loses the run. On mobile, opening it is the
-  top bar (as now) and the back button; it also opens by itself when the app
-  goes to the background.
-- [ ] **[M/D] Settings, in sections.**
-  - Audio: music, effects and ambience as three separate sliders (today one
-    LOUD / QUIET / OFF), and mute when in the background.
+- [x] **[M/D] A pause menu** (`src/ui/pause.lua`): RESUME, RESTART (asks
+  first), SETTINGS, ENCYCLOPEDIA, QUIT TO MENU (the run kept for CONTINUE),
+  over the run under a veil. Opened by `P` / `Esc`, the top bar and the back
+  button on mobile, and by itself when the app goes to the background. The
+  settings and the encyclopedia opened from it come back to it.
+- [x] **[M/D] Settings, in sections** (`src/options.lua`, `src/ui/settings.lua`).
+  - Audio: effects and ambience as sliders under the overall LOUD / QUIET /
+    OFF, and mute in the background. The music slider comes with the music
+    (Phase 3): there is nothing for it to turn down yet.
   - Gameplay: the speed a wave starts at, auto-start the next wave, confirm
-    before selling, show the damage numbers / range circles.
-  - Comfort: screen shake on / off, reduce motion (the screen slides, the
-    flashes), a colour-blind mode (bosses red, seed mutations green, lit and
-    cut links: add a shape or a pattern, not just a colour), text size.
-  - **[D]** Display: fullscreen / window / borderless, resolution, vsync, frame
-    cap; key remapping.
-  - **[M]** Display: haptics on / off, battery saver (30 fps, fewer particles),
-    left-handed layout (the toolbar and panel mirrored).
-  - Language (see Phase 5).
-- [ ] **[M/D] Credits** and a version number on the title.
-- [ ] **[M/D] An ending.** Winning the Lawn deserves its own moment (the
-  sprout grown, the mycelium under the whole garden, the credits), before
-  challenge mode opens.
+    before clearing a tower or lifting a mat, range circles for every tower.
+    Damage numbers come with them (Phase 4).
+  - Comfort: screen shake on / off, reduce motion, a colour-blind mode (shapes
+    on dead, cut and hurt links, BOSS and SEED in words), text size (the HUD a
+    zoom step up).
+  - **[D]** Display: fullscreen / window, the window's size, vsync, frame cap;
+    key remapping for thirteen of a run's keys.
+  - **[M]** Display: haptics on / off (and the first buzzes, see Phase 3),
+    battery saver (30 fps, half the sparks and motes), left-handed layout.
+  - Language: still to come with the translations (Phase 5).
+- [x] **[M/D] Credits** (CREDITS on the home screen) and a version number on
+  the title and the home screen (`src/version.lua`; the build workflows stamp
+  the commit into `build.txt`). The credits still want the tileset's artist
+  named.
+- [x] **[M/D] An ending.** The Compost Heap, the last level now, won the first
+  time: the sprout grows, the mycelium runs out under the whole garden to a
+  node for every level, the credits roll, and then challenge mode's Hornet is
+  named as open (`src/ui/ending.lua`). Seen again from the credits.
 
 ## Phase 3: sound and music
 
@@ -105,8 +111,9 @@ missing is music.
   clips or turns to mush, ducking under banners and bosses.
 - [ ] **[M] Phone speakers.** Check the mix on a phone speaker (little bass,
   everything comes through the mids) as well as on headphones.
-- [ ] **[M] Haptics.** Short buzzes for a tower planted, a link cut, a boss
-  arriving, the sprout hit (`love.system.vibrate`), behind the setting.
+- [ ] **[M] Haptics.** The first are in, behind the setting (a tower grown, a
+  link cut, a boss, the sprout hit, a win, a loss: `BUZZ` in
+  `src/ui/audio.lua`); tune their lengths on a real phone.
 
 ## Phase 4: feel and presentation
 
@@ -233,6 +240,6 @@ bundle (`.github/workflows/`).
 
 1. Phase 0 (saves and resuming a run): small, and the worst thing that can
    happen to a player is losing their progress.
-2. The pause menu: what every new player sees (the guided first level is in).
-3. Music and the settings: what reviews mention first.
-4. Performance on a low-end phone, then iOS and the stores.
+2. Music: what reviews mention first (the pause menu, the settings and the
+   ending are in).
+3. Performance on a low-end phone, then iOS and the stores.

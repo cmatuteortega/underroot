@@ -18,6 +18,8 @@ local flair = require "src.ui.flair"
 local Run = require "src.ui.run"
 local Loadout = require "src.ui.loadout"
 local Guide = require "src.ui.guide"
+local Pause = require "src.ui.pause"
+local O = require "src.options"
 
 local floor, ceil, max, min, abs, sqrt = math.floor, math.ceil, math.max, math.min, math.abs, math.sqrt
 local color, box, text, label, centred, wrapLines, say, inside =
@@ -120,7 +122,7 @@ local function hint()
     if S.game.phase ~= "build" then
         local brine = false
         for _, e in ipairs(S.game.enemies) do if e.kind == "brine" and e.slide then brine = true end end
-        if brine then return say("BRINE IN THE NETWORK! PRUNE (X) THE LINK IT IS ON", "BRINE IN THE NETWORK! PRUNE THE LINK IT IS ON"), "r" end
+        if brine then return say("BRINE IN THE NETWORK! PRUNE (" .. O.label("x") .. ") THE LINK IT IS ON", "BRINE IN THE NETWORK! PRUNE THE LINK IT IS ON"), "r" end
         return nil
     end
     local living = 0
@@ -153,9 +155,9 @@ local function hint()
         end
     end
     if S.selected and S.game:upgrades(S.selected)[1] and S.game.wave <= 2 then
-        return say("UPGRADES: CLICK ONE IN THE PANEL, OR Z / C", "UPGRADES: TAP ONE IN THE PANEL"), "l"
+        return say("UPGRADES: CLICK ONE IN THE PANEL, OR " .. O.label("z") .. " / " .. O.label("c"), "UPGRADES: TAP ONE IN THE PANEL"), "l"
     end
-    if S.game.wave == 0 then return say("SPACE TO START THE FIRST WAVE", "TAP START FOR THE FIRST WAVE"), "g" end
+    if S.game.wave == 0 then return say(O.label("space") .. " TO START THE FIRST WAVE", "TAP START FOR THE FIRST WAVE"), "g" end
 end
 
 local function tooltip()
@@ -183,10 +185,11 @@ local function tooltip()
         if b.tower and b.mode == S.mode then return say(b.name .. ": CLICK AGAIN TO READ IT", b.name .. ": TAP AGAIN TO READ IT"), "w" end
         return b.name .. (b.cost and (" (" .. b.cost .. ")") or "") .. ": " .. b.blurb, "w"
     end
-    if S.hover.turn == 1 then return say("TURN THE BOARD (E)", "TURN THE BOARD"), "w" end
+    if S.hover.turn == 1 then return say("TURN THE BOARD (" .. O.label("e") .. ")", "TURN THE BOARD"), "w" end
     if S.hover.turn == -1 then return say("TURN THE BOARD BACK (Q)", "TURN THE BOARD BACK"), "w" end
     if S.hover.wave then
-        return S.game.phase == "build" and say("START THE NEXT WAVE (SPACE)", "START THE NEXT WAVE") or say("GAME SPEED (F)", "GAME SPEED"), "w"
+        return S.game.phase == "build" and say("START THE NEXT WAVE (" .. O.label("space") .. ")", "START THE NEXT WAVE")
+            or say("GAME SPEED (" .. O.label("f") .. ")", "GAME SPEED"), "w"
     end
     if S.mode == "grow" and S.drag and S.hover.node and S.hover.node ~= S.drag then
         local ok, cost, why = S.game:canLink(S.drag, S.hover.node)
@@ -201,7 +204,10 @@ local function tooltip()
     if S.hover.node and S.hover.node.tower then
         local t = S.hover.node.tower
         local s = towerName(t)
-        if S.mode == "prune" then return "CLEAR " .. s .. ": +" .. floor(t.spent * D.SELL), "r" end
+        if S.mode == "prune" then
+            local ask = S.clearAsk == t and say(". CLICK AGAIN TO CLEAR IT", ". TAP AGAIN TO CLEAR IT") or ""
+            return "CLEAR " .. s .. ": +" .. floor(t.spent * D.SELL) .. ask, "r"
+        end
         if t.webbed > 0 then s = s .. ": WEBBED SHUT"
         elseif t.stun > 0 then s = s .. ": STUNNED"
         elseif t.hunger == "dormant" then s = s .. ": DORMANT, NO NUTRIENTS"
@@ -284,7 +290,10 @@ local function tooltip()
         if not S.world:distAt(S.hover.c, S.hover.r) then return d.name .. " GOES ON THE TRAIL", "r" end
         return why or "", "r"
     end
-    if S.mode == "prune" and S.hover.mat then return "LIFT " .. D.TOWER[S.hover.mat.kind].name .. ": +" .. S.game:liftValue(S.hover.mat), "r" end
+    if S.mode == "prune" and S.hover.mat then
+        local ask = S.clearAsk == S.hover.mat and say(". CLICK AGAIN TO LIFT IT", ". TAP AGAIN TO LIFT IT") or ""
+        return "LIFT " .. D.TOWER[S.hover.mat.kind].name .. ": +" .. S.game:liftValue(S.hover.mat) .. ask, "r"
+    end
     if S.hover.mat and S.mode == "grow" then
         local m = S.hover.mat
         local s = towerName(m)
@@ -335,10 +344,15 @@ local function drawTurnButton(d)
         color(q == S.world.turn and "l" or "k")
         love.graphics.rectangle("fill", x + 3 + q * 2, y + 2, 1, 1)
     end
-    if not S.touch then text(d == 1 and "E" or "Q", x + w - 4, y + 1, "s") end
+    if not S.touch then
+        local k = d == 1 and O.label("e") or O.label("q")
+        text(k, x + w - Font.width(k), y + 1, "s")
+    end
 end
 
 local function draw()
+    -- A clear asked about is forgotten once prune is put down.
+    if S.mode ~= "prune" then S.clearAsk = nil end
     -- The top strip.
     color("o")
     love.graphics.rectangle("fill", 0, 0, S.vw, S.inset.t + TOP - 1)
@@ -391,10 +405,6 @@ local function draw()
         local wb = S.weatherBox
         local nm = D.WEATHER[wb.kind].name
         text(nm, wb.x + 3, ty, "t")
-    end
-    if S.paused then
-        if S.touch then centred("PAUSED. TAP THE TOP BAR TO GO ON", floor(S.vh / 2) - 40, "r")
-        else text("PAUSED", floor((S.vw - Font.width("PAUSED")) / 2), ty, "r") end
     end
 
     -- Gates: where the next wave comes in.
@@ -472,7 +482,7 @@ local function draw()
             local afford = S.game.nutrients >= (b.cost or 0)
             blit(pic, cx, b.mode == "mat" and by + 14 or by + 21, (not afford or not open) and T.DARKER2 or nil)
         end
-        if not S.touch then text(b.key, bx + 1, by + 1, "s") end
+        if not S.touch then text(O.label(b.key:lower()), bx + 1, by + 1, "s") end
         if b.tower and not S.game:unlocked(b.mode) then
             local c = "W" .. S.game:unlockAt(b.mode)
             text(c, bx + bw - Font.width(c) - 1, by + bh - 6, "k")
@@ -484,15 +494,22 @@ local function draw()
     local wx, wy, ww, wh = waveRect()
     if S.game.phase == "build" then
         box(wx, wy, ww, wh, S.hover.wave and "m" or "d", "g")
-        text("START", wx + floor((ww - Font.width("START")) / 2), wy + 5, "g")
+        -- Starting by itself (the settings): how long until it does.
+        local go = "START"
+        if O.get("auto") and S.game.wave > 0 and S.autoWait and not S.tutorial then
+            go = "START " .. math.ceil(math.max(0, Run.AUTO_WAIT - S.autoWait))
+        end
+        text(go, wx + floor((ww - Font.width(go)) / 2), wy + 5, "g")
         local s2 = "WAVE " .. (S.game.wave + 1)
         text(s2, wx + floor((ww - Font.width(s2)) / 2), wy + 13, "w")
-        if not S.touch then text("SPACE", wx + floor((ww - Font.width("SPACE")) / 2), wy + 20, "s") end
+        local k = O.label("space")
+        if not S.touch then text(k, wx + floor((ww - Font.width(k)) / 2), wy + 20, "s") end
     else
         box(wx, wy, ww, wh, "u", S.hover.wave and "t" or "o")
         local s2 = "SPEED X" .. S.speed
         text(s2, wx + floor((ww - Font.width(s2)) / 2), wy + 9, "w")
-        if not S.touch then text("F", wx + floor((ww - 3) / 2), wy + 18, "s") end
+        local k = O.label("f")
+        if not S.touch then text(k, wx + floor((ww - Font.width(k)) / 2), wy + 18, "s") end
     end
     drawTurnButton(1)
     drawTurnButton(-1)
@@ -522,12 +539,14 @@ local function draw()
             love.graphics.rectangle("fill", bx, by + 6, floor(w * boss.ballHp / boss.ballMax), 2)
         end
         local name = d.name .. (boss.under and (boss.kind == "mole" and " (UNDERGROUND)" or " (UNDER WATER)") or "")
+        -- Red says boss; the colour-blind mode says it in words too.
+        if O.get("colour") then name = "BOSS: " .. name end
         text(name, floor(bx + (w - Font.width(name)) / 2), by + (boss.ballHp and boss.ballHp > 0 and 11 or 7), "w")
     end
     if S.game.bossIntro then
         local d = D.ENEMIES[S.game.bossIntro.kind]
         if floor(S.game.bossIntro.t * 4) % 4 ~= 0 or S.game.bossIntro.t < 2.5 then
-            centred(d.name, S.inset.t + TOP + 22, "r", "o")
+            centred((O.get("colour") and "BOSS: " or "") .. d.name, S.inset.t + TOP + 22, "r", "o")
         end
         centred(d.blurb, S.inset.t + TOP + 33, "w", "o")
     end
@@ -583,6 +602,8 @@ local function draw()
             box(c.x, c.y, c.w, c.h, S.hover.mutation == k and "n" or "u", S.hover.mutation == k and "l" or (own and "g" or "c"))
             text(c.m.name, c.x + 4, c.y + 4, own and "g" or "l")
             if not S.touch then text(tostring(k), c.x + c.w - 6, c.y + 4, "s") end
+            -- Green says the seed's own; the colour-blind mode says it in words too.
+            if own and O.get("colour") then text("SEED", c.x + c.w - 24, c.y + 4, "g") end
             -- The blurb, broken into lines that fit the card.
             local line, y = "", c.y + 14
             for word in c.m.blurb:gmatch("%S+") do
@@ -630,12 +651,14 @@ local function draw()
         centred("SPORES GROW THE NETWORK, FROM THE HOME SCREEN", floor(S.vh / 2) + 34, "s")
     end
     Guide.draw("run")
+    if Pause.shown() then Pause.draw() end
 end
 
 -- What is pointed at: a won level's button, a mutation card, the panel and its
 -- upgrades, a tool, the wave button, a turn button, the weather's word, the
 -- top strip; else on the board, the node, link and ground under it.
 local function hover(mx, my)
+    if Pause.shown() then Pause.hover(mx, my) return end
     if Guide.hover(mx, my, "run") then return end
     if S.game.phase == "won" then
         for _, b in ipairs(wonButtons()) do
@@ -692,6 +715,7 @@ end
 
 -- The box of whatever is pointed at, to light up when it is pressed.
 local function under()
+    if S.hover.pause then return Pause.under() end
     if S.hover.guide then return Guide.under("run") end
     if S.hover.mutation then
         local c = mutationCards()[S.hover.mutation]
@@ -728,6 +752,7 @@ local function afterWin(id)
 end
 
 local function click(b)
+    if Pause.shown() then Pause.click(b) return end
     if b == 1 and Guide.click("run") then return end
     if Guide.holding() then return end
     if S.weatherTip and not S.hover.weather then S.weatherTip = nil end
@@ -793,7 +818,7 @@ local function click(b)
     end
     if S.hover.strip then
         -- No P key on a phone: the top strip is the pause button.
-        if S.touch then S.paused = not S.paused; sound(S.paused and "pause" or "unpause") end
+        if S.touch then Pause.open() end
         return
     end
     if S.mode == "grow" then
@@ -817,6 +842,15 @@ local function click(b)
             S.drag, S.selected = nil, nil
         end
     elseif S.mode == "prune" then
+        -- Asked first, if the settings say so: a first click marks it, a
+        -- second on the same one clears it.
+        local what = S.hover.node and S.hover.node.tower or (not S.hover.link and S.hover.mat)
+        if what and O.get("confirm") and S.clearAsk ~= what then
+            S.clearAsk = what
+            sound("select")
+            return
+        end
+        S.clearAsk = nil
         if S.hover.node and S.hover.node.tower then
             S.game:sell(S.hover.node)
         elseif S.hover.link then
@@ -853,11 +887,18 @@ local function click(b)
     end
 end
 
-local function key(key)
+local function key(pressed)
+    -- What the key does now, if the settings have moved it (src/options.lua).
+    local key = O.translate(pressed)
+    if Pause.shown() then Pause.key(pressed, key) return end
+    if not key then return end
+    -- Pause opens over a guide's card too.
+    if key == "p" and S.game.phase ~= "won" and S.game.phase ~= "lost" then Pause.open() return end
     if Guide.key(key, "run") then return end
     if key == "=" or key == "+" or key == "kp+" then zoomBy(1) end
     if key == "-" or key == "kp-" then zoomBy(-1) end
     if S.game.phase == "mutate" then
+        if key == "escape" or key == "p" then Pause.open() return end
         local n = tonumber(key)
         if n then S.game:mutate(n) end
         return
@@ -867,9 +908,12 @@ local function key(key)
         if S.drag or S.mode ~= "grow" or S.selected then
             S.mode, S.drag, S.selected = "grow", nil, nil
             sound("back")
+        elseif S.game.phase == "won" or S.game.phase == "lost" then
+            sound("back")
+            S.openMenu()
+            return
         else
-            S.paused = not S.paused
-            sound(S.paused and "pause" or "unpause")
+            Pause.open()
         end
     end
     for n, b in ipairs(BUTTONS) do
@@ -902,7 +946,6 @@ local function key(key)
     if key == "e" and S.game.phase == "won" then afterWin("endless") return end
     if key == "e" then turnCamera(love.keyboard.isDown("lshift", "rshift") and -1 or 1) end
     if key == "q" then turnCamera(-1) end
-    if key == "p" then S.paused = not S.paused; sound(S.paused and "pause" or "unpause") end
     if key == "r" and S.game.phase == "won" then afterWin("again")
     elseif key == "r" and (S.game.phase == "lost" or love.keyboard.isDown("lshift")) then sound("go"); Run.start() end
     if key == "m" then

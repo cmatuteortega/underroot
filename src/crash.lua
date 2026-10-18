@@ -26,6 +26,8 @@ local RUST = { 0xcf / 255, 0x57 / 255, 0x3c / 255 }
 -- What is worth knowing to put it right: the error, where, and on what.
 function crash.report(msg, trace)
     local lines = { "Mycelio TD crash report", os.date("!%Y-%m-%d %H:%M:%S UTC") }
+    local okV, V = pcall(require, "src.version")
+    if okV then lines[#lines + 1] = "Game " .. V.number .. (V.build and (" (" .. V.build .. ")") or "") end
     local ok, major, minor, rev = pcall(love.getVersion)
     if ok then lines[#lines + 1] = ("LOVE %s.%s.%s"):format(major, minor, rev) end
     if love.system then

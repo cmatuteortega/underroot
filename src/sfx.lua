@@ -20,7 +20,9 @@ local floor, min, max, abs, sin, exp, sqrt = math.floor, math.min, math.max, mat
 local TAU = 2 * math.pi
 local RATE = 22050
 
-local Sfx = { on = false, level = 1, away = false }
+-- `level` is how loud it all is (V goes round it), `effects` and `ambience`
+-- each part's own share of that, from the settings.
+local Sfx = { on = false, level = 1, effects = 1, ambience = 1, away = false }
 
 -- Notes, by name, for the chimes.
 local N = {}
@@ -513,7 +515,7 @@ end
 
 -- Plays `name`: `pan` from -1 (left) to 1 (right), `vol` 0..1, `pitch` a factor.
 function Sfx.play(name, pan, vol, pitch)
-    if not Sfx.on or Sfx.away or Sfx.level <= 0 then return end
+    if not Sfx.on or Sfx.away or Sfx.level * Sfx.effects <= 0 then return end
     if not pools[name] then return end
     local p = pool(name)
     local def = p.def
@@ -536,7 +538,7 @@ function Sfx.play(name, pan, vol, pitch)
     end
     local wob = def.wob or 0.03
     src:setPitch((pitch or 1) * (1 + (love.math.random() * 2 - 1) * wob))
-    src:setVolume(max(0, min(1, (def.vol or 0.5) * (vol or 1) * Sfx.level)))
+    src:setVolume(max(0, min(1, (def.vol or 0.5) * (vol or 1) * Sfx.level * Sfx.effects)))
     pan = max(-1, min(1, pan or 0)) * 0.7
     src:setPosition(pan, 0, -sqrt(1 - pan * pan))
     src:play()
@@ -548,7 +550,7 @@ function Sfx.update(dt, want, hum)
     clock = clock + dt
     if not Sfx.on or Sfx.away then return end
     for name, l in pairs(loops) do
-        local target = (want and want[name] or 0) * Sfx.level
+        local target = (want and want[name] or 0) * Sfx.level * Sfx.ambience
         l.vol = l.vol + (target - l.vol) * min(1, dt * 1.5)
         if l.vol < 0.002 and target == 0 then
             if l.src and l.src:isPlaying() then l.src:stop() end
