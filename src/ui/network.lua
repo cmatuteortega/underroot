@@ -32,8 +32,8 @@ local Pixels = require "src.ui.pixels"
 local flair = require "src.ui.flair"
 
 local floor, max, min, sqrt = math.floor, math.max, math.min, math.sqrt
-local color, box, text, wrapLines, number, say, inside, wide =
-    Draw.color, Draw.box, Draw.text, Draw.wrapLines, Draw.number, Draw.say, Draw.inside, Draw.wide
+local color, box, text, wrapLines, say, inside, wide =
+    Draw.color, Draw.box, Draw.text, Draw.wrapLines, Draw.say, Draw.inside, Draw.wide
 local sound, deny = flair.sound, flair.deny
 local blit, CUT = Pixels.blit, Pixels.CUT
 
@@ -228,12 +228,44 @@ local WORLD = {
     bonus = { "FIRST WAVE CLEARED PAYS", D.WAVE_BONUS + 4 },
 }
 
--- "4.5 > 5.1 OF 6": now, at the next rank, and fully grown.
+-- "4.5 > 5.1": now, and at the next rank (nil when it is full), with as
+-- many places as it takes for a rank to be seen to move them, up to two.
+-- Never how far it goes in the end: that is for growing it to find out.
+-- `pct` shows them as a part of a hundred.
+local function pair(now, nxt, pct)
+    local m = pct and 100 or 1
+    local function show(v, places)
+        local s = string.format("%." .. places .. "f", v * m)
+        if places > 0 then s = s:gsub("0+$", ""):gsub("%.$", "") end
+        return s .. (pct and "%" or "")
+    end
+    for places = 0, 2 do
+        local a = show(now, places)
+        if not nxt then
+            if places == 2 or now * m * 10 ^ places == floor(now * m * 10 ^ places) then return a end
+        else
+            local b = show(nxt, places)
+            if a ~= b or places == 2 then return a .. " > " .. b end
+        end
+    end
+end
+
 local function nowNext(mode, full, row, r)
-    local now = N.scale(mode, full, N.factor(row, r))
-    local s = number(floor(now * 100 + 0.5) / 100)
-    if r < N.ranks(row) then s = s .. " > " .. number(floor(N.scale(mode, full, N.factor(row, r + 1)) * 100 + 0.5) / 100) end
-    return s .. " OF " .. number(full)
+    local nxt = r < N.ranks(row) and N.scale(mode, full, N.factor(row, r + 1)) or nil
+    return pair(N.scale(mode, full, N.factor(row, r)), nxt)
+end
+
+-- The same for what the field notes grow, read off the whole network: two
+-- of its nodes multiply into one number, `get` (N.vs or N.loot) for a kind.
+local function nowNextNotes(get, kind, row, r)
+    local ranks = {}
+    for k, v in pairs(Profile.ranks()) do ranks[k] = v end
+    local now, nxt = get(N.grown(ranks), kind)
+    if r < N.ranks(row) then
+        ranks[row.id] = r + 1
+        nxt = get(N.grown(ranks), kind)
+    end
+    return pair(now, nxt, true)
 end
 
 local function kindOf(row)
@@ -242,7 +274,7 @@ local function kindOf(row)
     if row.tower then return D.TOWER[row.tower].name end
     if row.up then return "UPGRADES: " .. D.TOWER[row.up[1]].name end
     if row.seed then return "SEED" end
-    if row.vs then return "FIELD NOTES" end
+    if row.vs or row.loot then return "FIELD NOTES" end
     if row.mutations then return "MUTATIONS" end
     return "THE NETWORK"
 end
@@ -256,7 +288,11 @@ function net.lines(id, w)
     local function gap() out[#out + 1] = { gap = 3 } end
     add(row.name, "w")
     add(kindOf(row), "t")
-    if not row.free then add(n > 1 and ("RANK " .. r .. " OF " .. n) or (r > 0 and "GROWN" or "NOT GROWN"), r >= n and "g" or "l") end
+    if not row.free then
+        local s = r > 0 and "GROWN" or "NOT GROWN"
+        if n > 1 then s = r >= n and ("RANK " .. r .. ", FULLY GROWN") or ("RANK " .. r .. " > " .. (r + 1)) end
+        add(s, r >= n and "g" or "l")
+    end
     gap()
     add(row.blurb, "s")
     if row.species then gap(); add(D.TOWER[row.species].about, "s") end
@@ -269,7 +305,8 @@ function net.lines(id, w)
             if type(d[k]) == "number" then
                 add(name .. " " .. nowNext(N.MODE[k] or "more", d[k], row, r), "l")
             else
-                add(name .. ", FROM ITS UPGRADES: " .. floor(N.factor(row, r) * 100 + 0.5) .. "%", "l")
+                local nxt = r < n and N.factor(row, r + 1) or nil
+                add(name .. ", FROM ITS UPGRADES: " .. pair(N.factor(row, r), nxt, true), "l")
             end
         end
     end
@@ -278,15 +315,17 @@ function net.lines(id, w)
         local w2 = WORLD[row.world]
         add(w2[1] .. " " .. nowNext(N.WORLD[row.world], w2[2], row, r), "l")
         if row.world == "pulse" then
-            add("COMES BACK IN " .. floor(N.scale("less", D.PULSE.cooldown, N.factor(row, r)) + 0.5) .. "S, FULLY "
-                .. D.PULSE.cooldown .. "S", "l")
+            local function back(rr) return floor(N.scale("less", D.PULSE.cooldown, N.factor(row, rr)) + 0.5) .. "S" end
+            add("COMES BACK IN " .. back(r) .. (r < n and (" > " .. back(r + 1)) or ""), "l")
         end
     end
-    if row.vs then
+    local kinds = row.vs or row.loot
+    if kinds then
         gap()
-        add("DAMAGE TO THEM X" .. nowNext("more", 1, row, r), "l")
+        if row.vs then add("DAMAGE TO THEM " .. nowNextNotes(N.vs, kinds[1], row, r), "l") end
+        if row.loot then add("THEIR BODIES WORTH " .. nowNextNotes(N.loot, kinds[1], row, r), "l") end
         local met = {}
-        for _, k in ipairs(row.vs) do
+        for _, k in ipairs(kinds) do
             if Profile.seen[k] and not D.ENEMIES[k].segment then met[#met + 1] = D.ENEMIES[k].name end
         end
         if #met > 0 then add("MET: " .. table.concat(met, ", "), "s") end
@@ -294,13 +333,14 @@ function net.lines(id, w)
     if row.up then
         gap()
         local up = D.TOWER[row.up[1]].up[row.up[2]]
-        for tier = 1, 2 do add((tier == 1 and "I  " or "II ") .. up[tier].name, tier <= r and "g" or "k") end
+        -- What is grown, and the next; not what lies past it.
+        for tier = 1, min(2, r + 1) do add((tier == 1 and "I  " or "II ") .. up[tier].name, tier <= r and "g" or "k") end
     end
     if row.mutations then
         gap()
         for k, m in ipairs(row.mutations) do
             for _, mm in ipairs(D.MUTATIONS) do
-                if mm.id == m then
+                if mm.id == m and (row.free or k <= r + 1) then
                     add(mm.name, k <= r and "g" or "k")
                     add(mm.blurb, k <= r and "s" or "k")
                 end
@@ -381,6 +421,11 @@ local NOTE = {
     ["notes.diggers"] = function() return M.springtail, { FACE, 0, 0 } end,
     ["notes.soft"] = function() return M.slug, { FACE, 0 } end,
 }
+-- Each kind's bodies are one of its own, on its back.
+for group, kind in pairs({ ants = "ant", shells = "pillbug", crawlers = "centi", fliers = "gnat", diggers = "springtail",
+    soft = "slug" }) do
+    NOTE["notes." .. group .. ".bodies"] = function() return M.corpse, { kind, FACE } end
+end
 
 -- The model a node shows, and what to ask it for; nil for a glyph. An
 -- upgrade shows the tier its next rank grows.
@@ -489,6 +534,17 @@ local GLYPH = {
 }
 GLYPH["pulse.power"] = GLYPH.pulse
 GLYPH["lore.wild"], GLYPH["lore.soil"] = GLYPH.spores, GLYPH.spores
+-- A weak spot: a mark on it.
+for _, row in ipairs(D.NETWORK) do
+    if row.id:match("^notes%.%w+%.weak$") then
+        GLYPH[row.id] = function(x, y, r, a, b)
+            color(a); love.graphics.circle("line", floor(x) + 0.5, floor(y) + 0.5, r * 0.55)
+            line(x, y - r * 0.8, x, y - r * 0.3); line(x, y + r * 0.3, x, y + r * 0.8)
+            line(x - r * 0.8, y, x - r * 0.3, y); line(x + r * 0.3, y, x + r * 0.8, y)
+            color(b); love.graphics.rectangle("fill", floor(x) - 1, floor(y) - 1, 2, 2)
+        end
+    end
+end
 
 -- How a node's picture looks by where it stands: dimmed while it waits on
 -- what it grows from, a silhouette behind a win.
@@ -666,10 +722,12 @@ function net.draw()
                 color("r")
                 love.graphics.rectangle("fill", x - 1, y - 1, 3, 3)
             end
-            -- A pip a rank, under it: lit for those grown.
+            -- A pip a rank grown, under it, and a dark one for the next while
+            -- there is one: never how many there are in all.
             if n > 1 then
-                local w = n * 2 - 1
-                for k2 = 1, n do
+                local shown = min(n, r + 1)
+                local w = shown * 2 - 1
+                for k2 = 1, shown do
                     color(k2 <= r and "w" or "k")
                     love.graphics.rectangle("fill", x - floor(w / 2) + (k2 - 1) * 2, y + rad + 3, 1, 1)
                 end

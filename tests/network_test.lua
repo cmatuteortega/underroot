@@ -41,7 +41,10 @@ return {
             end
         end
         for key in pairs(N.WORLD) do C.eq(N.world(g, key, 7), 7, key) end
-        for kind in pairs(D.ENEMIES) do C.eq(N.vs(g, kind), 1, "against " .. kind) end
+        for kind in pairs(D.ENEMIES) do
+            C.eq(N.vs(g, kind), 1, "against " .. kind)
+            C.eq(N.loot(g, kind), 1, kind .. "'s body")
+        end
     end },
 
     { "a run on a full network is the same run as one given none", function()
@@ -79,6 +82,79 @@ return {
             last = v
         end
         C.eq(last, D.TOWER.puffer.damage, "all the way")
+    end },
+
+    { "every rank of a species' node moves a number the game reads", function()
+        local lv = D.LEVEL.crack
+        for _, row in ipairs(D.NETWORK) do
+            if row.tower then
+                local d = D.TOWER[row.tower]
+                -- The species as it stands and at every tier of every branch.
+                local looks = { { kind = row.tower, tier = 0 } }
+                for b = 1, 2 do for tier = 1, 2 do looks[#looks + 1] = { kind = row.tower, branch = b, tier = tier } end end
+                local last
+                for r = 0, #row.price do
+                    local g = Game.new(World.new(lv.map), lv, { dice = 3, net = N.grown({ [row.id] = r }) })
+                    local now = {}
+                    for _, k in ipairs(row.stats) do
+                        for _, t in ipairs(looks) do
+                            local v = k == "cost" and g:towerCost(row.tower) or g:stat(t, k)
+                            if type(v) == "number" then now[#now + 1] = v end
+                        end
+                    end
+                    if last then
+                        local moved = false
+                        for n, v in ipairs(now) do if v ~= last[n] then moved = true end end
+                        C.yes(moved, row.id .. " rank " .. r .. " changes something")
+                    end
+                    last = now
+                end
+                for _, k in ipairs(row.stats) do
+                    local any = type(d[k]) == "number"
+                    for b = 1, 2 do for tier = 1, 2 do any = any or type(d.up[b][tier][k]) == "number" end end
+                    C.yes(any, row.id .. ": " .. k .. " is a number the species has")
+                end
+            end
+        end
+    end },
+
+    { "a shelf's shade and a needle's dead end grow with the network", function()
+        local lv = D.LEVEL.crack
+        local function shade(ranks)
+            local g = Game.new(World.new(lv.map), lv, { dice = 3, net = N.grown(ranks) })
+            g.mats = { { kind = "shelf", tier = 0, x = 0, z = 0 } }
+            return g:shield({ a = { x = -5, z = 0 }, b = { x = 5, z = 0 } })
+        end
+        C.yes(shade({}) > shade({ ["shelf.guard"] = 1 }), "a rank of wide shade shields more")
+        C.eq(shade(N.everything()), D.TOWER.shelf.shieldMul, "fully grown, as defs writes")
+        local t = { kind = "needle", tier = 0 }
+        local function deadEnd(ranks)
+            return Game.new(World.new(lv.map), lv, { dice = 3, net = N.grown(ranks) }):stat(t, "deadEnd")
+        end
+        C.yes(deadEnd({}) < deadEnd({ ["needle.power"] = 1 }), "a rank of harder needles")
+    end },
+
+    { "field notes: every rank hits or feeds more, the whole branch all the way", function()
+        local ranks = {}
+        for _, row in ipairs(D.NETWORK) do
+            if row.vs or row.loot then
+                local kind = (row.vs or row.loot)[1]
+                local get = row.vs and N.vs or N.loot
+                for r = 1, #row.price do
+                    local before = get(N.grown(ranks), kind)
+                    ranks[row.id] = r
+                    C.yes(get(N.grown(ranks), kind) > before, row.id .. " rank " .. r)
+                end
+            end
+        end
+        for kind in pairs(D.ENEMIES) do
+            C.eq(N.vs(N.grown(ranks), kind), 1, "against " .. kind)
+            C.eq(N.loot(N.grown(ranks), kind), 1, kind .. "'s body")
+            C.yes(N.vs(N.grown({}), kind) < 1, kind .. " is hit softer knowing nothing")
+        end
+        local lv = D.LEVEL.crack
+        local g = Game.new(World.new(lv.map), lv, { dice = 3, net = N.grown({}) })
+        C.yes(g:corpseValue("ant") < D.ENEMIES.ant.corpse, "an ant's body is worth less knowing nothing")
     end },
 
     { "every node has a place on the screen", function()

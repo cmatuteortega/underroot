@@ -429,8 +429,8 @@ local function want(row, lv, uses)
         return 3
     end
     if row.world or row.pulse then return 2.5 end
-    if row.vs then
-        for _, k in ipairs(row.vs) do
+    if row.vs or row.loot then
+        for _, k in ipairs(row.vs or row.loot) do
             for _, w in ipairs(lv.waves) do for _, grp in ipairs(w) do if grp[1] == k then return 2 end end end
         end
         return 0.5

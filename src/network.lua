@@ -4,7 +4,7 @@
 -- profile, the rules, the bot and the tests all read it.
 --
 -- What a run is given is `grown`: { species, seeds, ups, mutations, pulse,
--- tower, world, vs }. Nothing given (nil) is the network fully grown, every
+-- tower, world, vs, loot }. Nothing given (nil) is the network fully grown, every
 -- number as defs writes it: the bot, the shots and the tests play that.
 
 local D = require "src.defs"
@@ -102,7 +102,7 @@ end
 
 -- What `ranks` come to, for Game.new's `opts.net`.
 function N.grown(ranks)
-    local g = { species = {}, seeds = {}, ups = {}, mutations = {}, pulse = false, tower = {}, world = {}, vs = {} }
+    local g = { species = {}, seeds = {}, ups = {}, mutations = {}, pulse = false, tower = {}, world = {}, vs = {}, loot = {} }
     for _, row in ipairs(D.NETWORK) do
         local r = N.rank(ranks, row.id)
         if row.species and r > 0 then g.species[row.species] = true end
@@ -121,7 +121,8 @@ function N.grown(ranks)
                 g.tower[row.tower] = t
             end
             if row.world then g.world[row.world] = f end
-            for _, k in ipairs(row.vs or {}) do g.vs[k] = f end
+            for _, k in ipairs(row.vs or {}) do g.vs[k] = (g.vs[k] or 1) * f end
+            for _, k in ipairs(row.loot or {}) do g.loot[k] = (g.loot[k] or 1) * f end
         end
     end
     return g
@@ -152,6 +153,10 @@ end
 
 -- How hard what is grown hits an enemy of this kind: 1 when fully known.
 function N.vs(g, kind) return g and g.vs[kind] or 1 end
+
+-- What an enemy of this kind's body is worth drunk, as a part of what defs
+-- writes: 1 when fully known.
+function N.loot(g, kind) return g and g.loot and g.loot[kind] or 1 end
 
 -- The highest tier of a species' upgrade branch that can be grown.
 function N.tier(g, kind, branch)

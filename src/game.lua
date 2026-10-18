@@ -378,7 +378,7 @@ function Game:shield(l)
     for _, m in ipairs(self.mats) do
         if m.kind == "shelf" then
             local d = D.TOWER.shelf
-            if segDist(m.x, m.z, l.a.x, l.a.z, l.b.x, l.b.z) <= d.shield then best = min(best, d.shieldMul) end
+            if segDist(m.x, m.z, l.a.x, l.a.z, l.b.x, l.b.z) <= d.shield then best = min(best, self:stat(m, "shieldMul")) end
         end
     end
     return best
@@ -602,8 +602,10 @@ end
 
 function Game:maxHp(t) return self:stat(t, "hp") or 30 end
 
--- What the network learned of an enemy's kind: how hard it is hit.
+-- What the network learned of an enemy's kind: how hard it is hit, and
+-- what its body is worth drunk.
 function Game:vs(kind) return N.vs(self.net, kind) end
+function Game:corpseValue(kind) return D.ENEMIES[kind].corpse * N.loot(self.net, kind) end
 
 -- The wave that has to be cleared before a species can be grown, on this level.
 function Game:unlockAt(kind) return D.unlockAt(self.level, kind, self.loadout) end
@@ -1054,7 +1056,7 @@ function Game:breakBall(e)
     self:shock(bx, bz, 26, 0.6, "t", "n")
     self:splat(bx, bz, 12, "n", 6)
     self:cue("ball", bx, bz)
-    self.corpses[#self.corpses + 1] = { kind = "ball", x = bx, z = bz, h = e.h, value = d.ballCorpse, life = 40 }
+    self.corpses[#self.corpses + 1] = { kind = "ball", x = bx, z = bz, h = e.h, value = d.ballCorpse * N.loot(self.net, e.kind), life = 40 }
     self.events.shake = 0.4
 end
 
@@ -1109,7 +1111,7 @@ function Game:kill(e)
         end
     end
     if d.corpse > 0 then
-        self.corpses[#self.corpses + 1] = { kind = e.kind, x = e.x, z = e.z, h = e.h, value = d.corpse, life = 25,
+        self.corpses[#self.corpses + 1] = { kind = e.kind, x = e.x, z = e.z, h = e.h, value = self:corpseValue(e.kind), life = 25,
             fruit = e.infected and e.infected > 0 }
     end
 end
@@ -1409,8 +1411,9 @@ function Game:snap(e, trap)
         self:kill(e)
         self.heartHp = min(self.heartMax, self.heartHp + trap.heal)
         if self.mods.digest and d.corpse > 0 then
-            self.nutrients = self.nutrients + d.corpse
-            self:say("+" .. d.corpse, e.x, 10, e.z, "g")
+            local v = self:corpseValue(e.kind)
+            self.nutrients = self.nutrients + v
+            self:say("+" .. floor(v + 0.5), e.x, 10, e.z, "g")
         end
         self:burst(e.x, 4, e.z, 6, { "g", "r" }, 16)
     else
@@ -1652,7 +1655,7 @@ function Game:skewer(n, t, d, S, power, range, list)
     self.fx[#self.fx + 1] = { star = true, x = n.x, y = n.y + 12, z = n.z, k = big and "l" or "w", life = 0.08, max = 0.08 }
     self:cue(big and "lance" or "zip", n.x, n.z)
     local deadEnd = self:degree(n) == 1
-    local dmg = S("damage") * power * (deadEnd and d.deadEnd or 1)
+    local dmg = S("damage") * power * (deadEnd and S("deadEnd") or 1)
     -- Down the line through its target, as far as its reach, for a skewer.
     local hits = { e }
     local pierce = S("pierce") or 1

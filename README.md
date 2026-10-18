@@ -81,7 +81,7 @@ mutations, and everything held back; a fully grown network is the game as
 | defence | Shelf Fungus (win the Flowerpot) | Ghost Lamp (win the Rotting Log) |
 | hyphae | link HP, flow, cost, growing speed | Fairy Rings, the Spore Pulse and its power, more shared mutations |
 | sprout | the sprout's HP, sugar, starting nutrients, wave bonus | the seeds and each seed's own mutations, more shared mutations |
-| field notes | free | one a kind of enemy, open once one is met: damage against them |
+| field notes | free | one a kind of enemy, open once one is met, three deep: damage against them, what their bodies are worth drunk, their weak spots (more damage) |
 
 Each species grows its own nodes: its damage (three ranks), its rate of
 fire, its body (HP and cost), and each upgrade branch (rank 1 its first
@@ -96,7 +96,7 @@ board, and mutations not grown are not offered at all.
 
 The network's screen: every node shows what it grows in a round socket --
 the species (an upgrade node at the tier its next rank brings), the seed, the
-enemy a field note is on, or a glyph for the hyphae, the ring, the pulse,
+enemy a field note is on (its body for what bodies are worth), or a glyph for the hyphae, the ring, the pulse,
 sugar and mutations -- dimmed while what it grows from is not grown yet, a
 silhouette with a padlock while a win is needed, a blinking green rim when
 there are the spores for it. It opens looking from the sprout towards the
@@ -105,7 +105,9 @@ wheel or `+`/`-` to zoom a step; on a phone a pinch zooms as the fingers
 spread or close, about the point between them, and both fingers moving drag
 it (all the way out the nodes are dots, to see the whole network at once); a
 node clicked shows its panel (what it does, now and at
-its next rank, and its price), clicked again (or its button, or `G`) grows a
+its next rank, and its price; never how many ranks it has or what it comes
+to fully grown, and the pips under a node are the ranks grown and one dark
+one for the next), clicked again (or its button, or `G`) grows a
 rank, and the thread to it grows out lit. `TAB` picks the next node there are
 spores for. REGROW, pressed twice, sells the whole network back for every
 spore it cost. The won screen names what a first win opened on the network,

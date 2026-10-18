@@ -802,7 +802,8 @@ D.MUTATIONS = {
 --   tower = id, stats     those numbers of the species, `from` at none
 --   up = { id, branch }   an upgrade branch: rank 1 its first tier, rank 2 both
 --   world = key           one of the network's own numbers (src/network.lua's WORLD)
---   vs = { kinds }        damage to those enemies, `from` at none
+--   vs = { kinds }        damage to those enemies, `from` at none (two such nodes multiply)
+--   loot = { kinds }      what those enemies' bodies are worth drunk, `from` at none
 --   mutations = { ids }   a mutation can be offered: one a rank, in that order
 --   pulse = true          the Spore Pulse
 --   won = level           shut until that level is won
@@ -847,7 +848,7 @@ local function species(kind, at, price, m, groups, extra)
     for b = 1, 2 do
         local up = t.up[b]
         add({ id = kind .. ".up" .. b, at = kind .. "." .. groups[math.min(b, #groups)].id, name = up[1].name,
-            blurb = "UPGRADE: " .. up[1].name .. ", THEN " .. up[2].name, up = { kind, b }, price = cost(PU) })
+            blurb = "A BRANCH OF " .. t.name .. " UPGRADES, " .. up[1].name .. " FIRST", up = { kind, b }, price = cost(PU) })
     end
     return first
 end
@@ -971,7 +972,9 @@ for _, sd in ipairs(D.SEEDS) do
 end
 
 -- Field notes: what the network learns of each kind of enemy once it has met
--- one, and hits harder for.
+-- one. Three deep for each kind: it hits them harder, then drinks more of
+-- their bodies, then finds where they are weak and hits them harder again
+-- (the two damage nodes multiply, the full branch to the numbers defs writes).
 local NOTES = {
     { id = "ants", name = "ANTS", kinds = { "ant", "queen" } },
     { id = "shells", name = "SHELLS", kinds = { "pillbug", "knight", "stag", "dung", "click", "bombardier" } },
@@ -983,8 +986,12 @@ local NOTES = {
 add({ id = "notes", at = "sprout", name = "FIELD NOTES", blurb = "WHAT THE NETWORK KNOWS OF WHAT EATS IT. EACH OPENS ONCE ONE IS MET",
     free = true })
 for _, n in ipairs(NOTES) do
-    add({ id = "notes." .. n.id, at = "notes", name = n.name, blurb = "HIT " .. n.name .. " HARDER", vs = n.kinds,
-        seen = n.kinds, from = 0.92, price = { 4, 8 } })
+    local id = add({ id = "notes." .. n.id, at = "notes", name = n.name, blurb = "HIT " .. n.name .. " HARDER", vs = n.kinds,
+        seen = n.kinds, from = 0.95, price = { 4, 8 } })
+    id = add({ id = id .. ".bodies", at = id, name = n.name .. ": BODIES", blurb = "THEIR BODIES FEED THE NETWORK MORE",
+        loot = n.kinds, seen = n.kinds, from = 0.8, price = { 5, 9 } })
+    add({ id = "notes." .. n.id .. ".weak", at = id, name = n.name .. ": WEAK SPOTS", blurb = "WHERE THEY ARE WEAK: HIT " .. n.name .. " HARDER STILL",
+        vs = n.kinds, seen = n.kinds, from = 0.96, price = { 7, 12 } })
 end
 
 D.NETWORK = NET
