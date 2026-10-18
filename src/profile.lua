@@ -43,7 +43,7 @@ local N = require "src.network"
 
 local P = {}
 
-local FILE, TMP, BAK = "save.txt", "save.tmp", "save.bak"
+local FILE = "save.txt"
 local VERSION = 3
 
 -- What a version 1 save paid for what it bought, and how many of today's
@@ -82,13 +82,33 @@ local function whole(data)
     return data:match("\nend%s*$") ~= nil
 end
 
--- The save as last written: save.txt, or what was being written over it
--- when it stopped, or the one before.
-local function readSave()
-    for _, name in ipairs({ FILE, TMP, BAK }) do
-        local data = read(name)
-        if whole(data) then return data, name end
+-- A file written so that a whole copy of it is there at every moment (see
+-- the top of the file): `name` and, beside it, name.tmp and name.bak.
+-- `isWhole(data)` says whether a copy reads whole. src/resume.lua keeps the
+-- run it is in the middle of the same way.
+local function beside(name, ext) return (name:gsub("%.%w+$", "")) .. "." .. ext end
+function P.writeWhole(name, data, isWhole)
+    local last = read(name)
+    if last == data then return end
+    if isWhole(last) then love.filesystem.write(beside(name, "bak"), last) end
+    local tmp = beside(name, "tmp")
+    love.filesystem.write(tmp, data)
+    love.filesystem.write(name, data)
+    if read(name) == data and love.filesystem.remove then love.filesystem.remove(tmp) end
+end
+
+-- The copy last written whole, and which file it is in: `name`, or what was
+-- being written over it when it stopped, or the one before.
+function P.readWhole(name, isWhole)
+    for _, file in ipairs({ name, beside(name, "tmp"), beside(name, "bak") }) do
+        local data = read(file)
+        if isWhole(data) then return data, file end
     end
+end
+
+-- Gone, and every copy beside it.
+function P.removeWhole(name)
+    for _, file in ipairs({ name, beside(name, "tmp"), beside(name, "bak") }) do love.filesystem.remove(file) end
 end
 
 local function words(line)
@@ -170,7 +190,7 @@ local MIGRATE = {
 
 function P.load()
     clear()
-    local data, from = readSave()
+    local data, from = P.readWhole(FILE, whole)
     if data then
         for line in data:gmatch("[^\n]+") do
             local w = words(line)
@@ -230,15 +250,7 @@ function P.save()
     lines[#lines + 1] = "seen " .. ids(D.ENEMY_ORDER, P.seen)
     if P.sound then lines[#lines + 1] = "sound " .. P.sound end
     lines[#lines + 1] = "end"
-    local data = table.concat(lines, "\n") .. "\n"
-    -- The last good save kept, then the new one written beside it and only
-    -- then over it (see the top of the file).
-    local last = read(FILE)
-    if last == data then return end
-    if whole(last) then love.filesystem.write(BAK, last) end
-    love.filesystem.write(TMP, data)
-    love.filesystem.write(FILE, data)
-    if read(FILE) == data and love.filesystem.remove then love.filesystem.remove(TMP) end
+    P.writeWhole(FILE, table.concat(lines, "\n") .. "\n", whole)
 end
 
 --- the Spore Bank's network -----------------------------------------------------------------

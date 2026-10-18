@@ -20,11 +20,13 @@ Each item says which platforms it is for: **[M]** mobile, **[D]** desktop,
 - [x] **[M/D] A save version.** `version 3`, and a step in `MIGRATE`
   (`src/profile.lua`) per bump, saved at once. A save from a newer version is
   read for what this one knows, and kept as `save.v<N>.txt` first.
-- [ ] **[M] Resume a run.** On a phone the OS kills a backgrounded app freely: a
-  call or a message in the middle of wave 12 now loses the run. Save the run's
-  state on `love.visible(false)` / `love.focus(false)` and between waves, and
-  offer CONTINUE on the home screen. (On desktop it is a nicety: quitting mid-run
-  then picks up where it was.)
+- [x] **[M] Resume a run.** `src/resume.lua` keeps the whole run in `run.txt`
+  at each build phase, on `love.focus(false)` / `love.visible(false)` and on
+  quitting, and lets it go on a win or a loss; CONTINUE on the home screen
+  picks it up (paused, if in the middle of a wave). A run read back plays on
+  exactly as it would have (`tests/resume_test.lua`). A change to the shape of
+  a run's tables wants `R.VERSION` bumped: a run kept before is then let go
+  rather than misread.
 - [x] **[M] The Android back button** (Esc to LÖVE) goes back a screen
   everywhere, pauses a run (the pause menu is Phase 2's), and from the home or
   title screen asks first: back again within two seconds leaves the game.

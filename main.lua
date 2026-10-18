@@ -69,16 +69,21 @@ function love.displayrotated() fit() end
 
 -- Sent to the background (a call, the home button, the phone locked): stop
 -- the clock rather than let a wave run on unwatched, and the sound with it,
--- until the game is back in front.
+-- until the game is back in front. And keep the run as it stands: the OS may
+-- not let the game come back to it (src/resume.lua).
 function love.focus(f)
     if not f and not S.script and S.game then S.paused = true end
+    if not f then Run.keep() end
     audio.shown.focus = f
     Sfx.hide(not (audio.shown.focus and audio.shown.visible))
 end
 function love.visible(v)
+    if not v then Run.keep() end
     audio.shown.visible = v
     Sfx.hide(not (audio.shown.focus and audio.shown.visible))
 end
+-- Closed in the middle of a run: CONTINUE picks it up next time.
+function love.quit() Run.keep() end
 
 function love.load(args)
     love.graphics.setDefaultFilter("nearest", "nearest")

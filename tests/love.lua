@@ -28,6 +28,10 @@ local function newRandomGenerator(seed)
         if u == nil then return math.floor(r * l) + 1 end
         return math.floor(r * (u - l + 1)) + l
     end
+    -- As LÖVE keeps it: a string, to set it back to later.
+    function g:getState() return tostring(s) end
+    function g:setState(state) s = ffi.new("uint64_t", assert(loadstring("return " .. state))()) end
+    function g:typeOf(name) return name == "RandomGenerator" end
     return g
 end
 

@@ -2,6 +2,8 @@
 -- and each frame of it -- the rules stepped at the game's speed, the sound
 -- of what they cued, and what the profile keeps of it: records, spores, wins.
 -- A run is played on the network the Spore Bank has grown (Profile.grown).
+-- The run going on is kept as it goes (src/resume.lua): at each build phase,
+-- and when the game goes to the background; and picked up again from there.
 
 local World = require "src.world"
 local Game = require "src.game"
@@ -13,20 +15,44 @@ local Toolbar = require "src.ui.toolbar"
 local flair = require "src.ui.flair"
 local audio = require "src.ui.audio"
 local codex = require "src.ui.codex"
+local Resume = require "src.resume"
 
 local max = math.max
 local layTools = Toolbar.layTools
 
--- A new run of the level on its board, everything put down and the camera home.
+-- The run going on kept, if it is one to keep: not the shots', not one
+-- over. With what it is, to start it again from (the level, the challenge, the
+-- species brought), off the run itself: the screens may be on to the next.
+local lastPhase
+local function keep()
+    local g = S.game
+    if S.script or not g or g.phase == "won" or g.phase == "lost" then return end
+    local brought = false
+    if g.loadout then
+        local list = {}
+        for _, t in ipairs(D.TOWERS) do if g.loadout[t.id] then list[#list + 1] = t.id end end
+        brought = table.concat(list, " ")
+    end
+    Resume.save(g, { level = g.level.id, challenge = g.challenge or false, loadout = brought })
+end
+
+-- A new run of the level on its board, everything put down and the camera home;
+-- or the run kept, picked up again (`resume`, the text of it).
+local resuming
 local function start()
+    local back = resuming and Resume.decode(resuming, S.world)
+    resuming = nil
     -- The shots play the whole network; a player, what theirs has grown.
-    S.game = Game.new(S.world, S.level, { challenge = S.challenge, loadout = S.chosen, seed = not S.script and Profile.sown[S.level.id] or nil,
+    S.game = back or Game.new(S.world, S.level, { challenge = S.challenge, loadout = S.chosen, seed = not S.script and Profile.sown[S.level.id] or nil,
         best = Profile.records[S.level.id], dice = S.script and 1, net = not S.script and Profile.grown() or nil,
         firstWin = not S.script and not Profile.won[S.level.id] })
+    lastPhase = S.game.phase
+    keep()
     layTools(S.game)
     S.mode, S.drag, S.panx, S.pany, S.selected = "grow", nil, 0, 0, nil
     S.focus, S.focused = nil, nil
-    S.paused, S.speed = false, 1
+    -- Picked up in the middle of a wave: paused, to see where things are first.
+    S.paused, S.speed = back and back.phase == "wave" or false, 1
     S.menu = nil
     flair.sky.change(S.game.weather or false)
     flair.sky.t = flair.sky.time
@@ -46,6 +72,34 @@ local function play(n)
     S.worlds[S.level.id] = S.world
     S.progress = 0
     S.painter = coroutine.create(function() S.world:paint() end)
+end
+
+-- Is there a run to go on with: one left to go back to, or one kept?
+local function canContinue()
+    if S.game and not S.script and S.game.phase ~= "won" and S.game.phase ~= "lost" then return true end
+    return Resume.kept()
+end
+
+-- Back to the run left, or the one kept picked up again on its board.
+local function continue()
+    if S.game and S.game.phase ~= "won" and S.game.phase ~= "lost" then
+        S.menu = nil
+        return true
+    end
+    local text, head = Resume.load()
+    if not text then return false end
+    local n
+    for k, l in ipairs(D.LEVELS) do if l.id == head.level then n = k end end
+    if not n then Resume.clear() return false end
+    S.challenge = head.challenge or false
+    S.chosen = nil
+    if head.loadout then
+        S.chosen = {}
+        for id in head.loadout:gmatch("%S+") do S.chosen[#S.chosen + 1] = id end
+    end
+    resuming = text
+    play(n)
+    return true
 end
 
 -- A frame of the run, dt on.
@@ -79,6 +133,13 @@ local function update(dt)
         S.game.banked = S.game.spores
         Profile.save()
     end
+    -- Kept as each build phase starts; let go once the run is over.
+    local phase = S.game.phase
+    if phase ~= lastPhase then
+        if phase == "build" then keep()
+        elseif (phase == "won" or phase == "lost") and not S.script then Resume.clear() end
+        lastPhase = phase
+    end
     if S.game.phase == "won" and not S.game.recorded then
         S.game.recorded = true
         if not S.script then
@@ -104,4 +165,7 @@ return {
     start = start,
     play = play,
     update = update,
+    keep = keep,
+    canContinue = canContinue,
+    continue = continue,
 }
