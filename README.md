@@ -636,8 +636,8 @@ head and named in the forecast:
 | Waxed | Its wax turns aside one hit, then regrows 2s after | Slow, heavy single shots: many small hits, Mortar bomblets, Mat |
 | Fungicidal | Chews and crushes links twice as hard | A bare network: Lion's Mane, Shelf, Bleeding Tooth |
 
-They come in the first five levels, from the Crack's eleventh wave on, and
-endless carries them over from the waves it copies.
+They come on every level, from the Crack's eleventh wave on, and endless
+carries them over from the waves it copies.
 
 ### Not in yet
 
