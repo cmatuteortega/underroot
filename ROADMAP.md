@@ -176,7 +176,8 @@ The board is painted by the CPU, pixel by pixel.
   (levels 7-9), with the Diving Beetle, Wireworm, Leafcutter Ant, the Dragonfly
   Nymph / Dragonfly, the Rhinoceros Beetle and the Hornet challenge.
 - [ ] Balance the last three by hand: they are tuned only against the bot so far.
-- [ ] Elite modifiers (Fungicidal, Scent-masked, Armored shell, Hive-minded).
+- [x] Elite modifiers: Fungicidal, Armored shell and Waxed, in the first five levels; and crowding.
+- [ ] Scent-masked and Hive-minded elites, and elites in the last four levels.
 - [ ] Colony traits.
 - [ ] Props and new pocket kinds, if the tileset gets tiles for them.
 - [ ] **Balance by hand**, again: the last figures (over 20 runs the bot won

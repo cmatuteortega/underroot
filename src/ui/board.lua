@@ -786,6 +786,13 @@ local function draw()
                 local i, j = S.world:toImage(e.x, e.y + 9 * size + 3, e.z)
                 put(IDX.l, i, j - 1); put(IDX.l, i - 1, j); put(IDX.l, i + 1, j); put(IDX.w, i, j)
             end
+            -- An elite: a bar of its colour over its head (a waxed one's dull
+            -- while its wax grows back).
+            if e.elite then
+                local i, j = S.world:toImage(e.x, e.y + 9 * size + (e.mark > 0 and 7 or 3), e.z)
+                local k = (e.wax or 0) > 0 and IDX.k or IDX[D.ELITE[e.elite].k]
+                for di = -1, 1 do put(k, i + di, j); put(IDX.o, i + di, j + 1) end
+            end
             if e.hp < e.maxHp and e.kind ~= "mite" and not e.boss then
                 bar(e.x, e.y + (e.kind == "brine" and 12 or 10), e.z, e.hp / e.maxHp, IDX.r)
             end

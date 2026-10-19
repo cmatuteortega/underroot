@@ -55,10 +55,10 @@ D.PULSE = { cooldown = 45, duration = 6, rate = 2, damage = 1.5 }
 -- tier that sets it, then the tower's base row (see Game:stat).
 D.TOWERS = {
     { id = "puffer", name = "SPORE PUFFER", cost = 30, key = "2", hp = 30, air = true,
-        range = 46, every = 1.3, damage = 6, splash = 12, shot = 0.5, reserve = 8,
+        range = 46, every = 1.3, damage = 6, splash = 12, shot = 0.5, reserve = 8, puffs = 3, flier = 0.5,
         blurb = "LOBS SPORE CLOUDS AT GROUPS. +1 PUFF PER LINK",
         role = "STARTER DAMAGE",
-        about = "CLOUDS HIT ALL INSIDE, FLIERS TOO. +1 PUFF PER LINK IT TOUCHES, UP TO 4.",
+        about = "CLOUDS HIT ALL INSIDE, FLIERS AT HALF. +1 PUFF PER LINK IT TOUCHES, UP TO 3.",
         up = {
             { { name = "LINGERING TOXIN", cost = 35, linger = 2, toxin = 4, blurb = "CLOUDS HANG FOR 2S AND POISON" },
               { name = "MIASMA", cost = 65, linger = 3.5, toxin = 8, splash = 16, blurb = "BIGGER, LONGER, NASTIER CLOUDS" } },
@@ -66,13 +66,14 @@ D.TOWERS = {
               { name = "SPORE GATLING", cost = 65, every = 0.55, extraPuff = 1, blurb = "FASTER STILL, AND ONE MORE PUFF" } },
         } },
     { id = "needle", name = "ENOKI NEEDLE", cost = 45, key = "3", hp = 25, air = true,
-        range = 100, every = 1.8, damage = 26, shot = 1.5, reserve = 9, deadEnd = 1.8,
-        blurb = "LONG RANGE, PIERCES ARMOR. X1.8 ON A DEAD END",
+        range = 100, every = 1.8, damage = 26, shot = 1.5, reserve = 9, deadEnd = 1.8, bore = 0.75,
+        blurb = "LONG RANGE, PIERCES MOST ARMOR. X1.8 ON A DEAD END",
         role = "SNIPER",
-        about = "SHOOTS THE ONE NEAREST THE SPROUT, THROUGH ARMOR, FLIERS TOO. X1.8 ON A DEAD END.",
+        about = "SHOOTS THE ONE NEAREST THE SPROUT, THROUGH 3/4 OF ITS ARMOR, FLIERS TOO. X1.8 ON A DEAD END.",
         up = {
             { { name = "SKEWER", cost = 40, pierce = 2, damage = 32, blurb = "RUNS THROUGH TWO IN A LINE" },
-              { name = "LANCE", cost = 75, pierce = 3, damage = 44, range = 118, blurb = "THREE IN A LINE, FURTHER, HARDER" } },
+              { name = "LANCE", cost = 75, pierce = 3, damage = 44, range = 118, bore = 1,
+                blurb = "THREE IN A LINE, FURTHER, THROUGH ALL ARMOR" } },
             { { name = "MARK TARGET", cost = 40, mark = 1.25, markFor = 4, blurb = "MARKED PREY TAKES +25%" },
               { name = "HUNTER'S MARK", cost = 75, mark = 1.45, markFor = 5, every = 1.4, markSplash = 16,
                 blurb = "+45%, FASTER, MARKS THE PACK" } },
@@ -320,6 +321,10 @@ D.SEED = {}
 for _, s in ipairs(D.SEEDS) do D.SEED[s.id] = s end
 D.SELL = 0.6
 
+-- Crowding: past the first `free` of a species, every one of it already
+-- growing makes the next this much dearer, so a run of one species pays for it.
+D.CROWD = { free = 2, each = 0.2 }
+
 -- Enemies. `chew` is damage a second to a link it stops on; `bite` is damage a
 -- second to a shelf in its way; `heart` is what it does to the sprout if it gets
 -- there; `corpse` is what its body is worth. `size` scales its shadow and where
@@ -550,6 +555,25 @@ for kind, about in pairs({
         .. "DEADLIEST TOWER WITHIN 90 AND STINGS IT FOR 45 AND A STUN OF 4S, THEN GOES ON FOR THE SPROUT.",
 }) do D.ENEMIES[kind].about = about end
 
+-- Elites: a modifier a wave's row can put on any normal enemy (`elite = id`
+-- on the row), each to break one habit. `tag` goes before its name in the
+-- forecast. `spores` is what a spore cloud and its poison do to a shelled
+-- one; `regrow` the seconds a waxed one's wax takes to grow back once a hit
+-- has broken it; `chew` what a fungicidal one does to links.
+D.ELITES = {
+    { id = "shelled", name = "ARMORED SHELL", tag = "SHELLED", spores = 0.35, k = "s",
+        blurb = "SPORE CLOUDS AND POISON DO A THIRD TO IT",
+        answer = { "needle", "mortar", "mat" } },
+    { id = "waxed", name = "WAXY COAT", tag = "WAXED", regrow = 2, k = "w",
+        blurb = "ITS WAX TURNS ASIDE A HIT, THEN REGROWS IN 2S: MANY SMALL HITS BEAT IT",
+        answer = { "puffer", "mortar", "mat" } },
+    { id = "fungicidal", name = "FUNGICIDAL", tag = "FUNGICIDAL", chew = 2, k = "m",
+        blurb = "IT CHEWS AND CUTS LINKS TWICE AS HARD",
+        answer = { "mane", "shelf", "tooth" } },
+}
+D.ELITE = {}
+for _, e in ipairs(D.ELITES) do D.ELITE[e.id] = e end
+
 -- What answers each enemy: the species the loadout picker lights up when the
 -- player points at one coming in the level (the design doc's counterplay).
 D.COUNTERS = {
@@ -631,12 +655,18 @@ D.GLOSSARY = {
             .. "IGNORES EVERY SLOW BUT FROST." },
     { name = "ARMOR", forms = { "ARMOR", "ARMORED" },
         about = "TAKEN OFF EVERY HIT, BUT AT LEAST 15% OF A HIT ALWAYS GETS THROUGH: MANY SMALL HITS ARE WASTED "
-            .. "ON IT. A NEEDLE PIERCES IT." },
+            .. "ON IT. A NEEDLE PIERCES MOST OF IT." },
     { name = "PIERCE", forms = { "PIERCE", "PIERCES" },
-        about = "AN ENOKI NEEDLE'S SHOT IGNORES ARMOR." },
+        about = "AN ENOKI NEEDLE'S SHOT IGNORES 3/4 OF ARMOR, A LANCE'S ALL OF IT." },
+    { name = "ELITE", forms = { "ELITE", "ELITES", "SHELLED", "WAXED", "FUNGICIDAL" },
+        about = "A NORMAL ENEMY WITH A TRICK, MARKED OVER ITS HEAD. SHELLED: SPORES AND POISON DO A THIRD. "
+            .. "WAXED: ITS WAX TURNS ASIDE A HIT AND REGROWS IN 2S. FUNGICIDAL: IT CHEWS LINKS TWICE AS HARD." },
+    { name = "CROWDING", forms = { "CROWDING", "CROWDED" },
+        about = "PAST THE FIRST TWO OF A SPECIES, EVERY ONE OF IT ALREADY GROWING MAKES THE NEXT 20% DEARER. "
+            .. "A MIXED NETWORK IS A CHEAPER ONE." },
     { name = "FLIER", forms = { "FLIER", "FLIERS" },
         about = "FLIES OVER THE BOARD STRAIGHT FOR THE SPROUT: NO TRAIL, NO MATS, NO SHELVES. ONLY SPORE PUFFERS "
-            .. "AND ENOKI NEEDLES CAN HIT IT." },
+            .. "(AT HALF), ENOKI NEEDLES AND FLY AGARICS CAN HIT IT." },
     { name = "BOSS", forms = { "BOSS", "BOSSES" },
         about = "A BIG BUG, THREE ON EVERY LEVEL. IT DOES NOT GET TOUGHER WAVE BY WAVE, AND IT CANNOT BE TRIPPED, "
             .. "PANICKED, LURED OR INFECTED." },
@@ -732,6 +762,7 @@ end
 -- Waves: { kind, how many, seconds between, gate, start[, health] }, health
 -- a fraction of the usual (a boss met part way through a level comes weaker), gates counted down
 -- the map's left edge from the top. A mite row counts swarms, not mites.
+-- `elite = id` on a row makes every one of it that elite (D.ELITES).
 local CRACK = {
     { { "ant", 6, 1.6, 1, 0 } },
     { { "ant", 6, 1.4, 1, 0 }, { "ant", 6, 1.4, 2, 4 } },
@@ -743,12 +774,12 @@ local CRACK = {
     { { "spider", 3, 5, 2, 0 }, { "ant", 10, 1, 1, 2 }, { "pillbug", 2, 5, 1, 8 }, { "gnat", 5, 1.2, 2, 10 } },
     { weather = "rain", { "knight", 3, 4, 1, 0 }, { "brine", 2, 8, 2, 3 }, { "gnat", 6, 1, 1, 6 }, { "ant", 10, 0.9, 2, 8 } },
     { { "knight", 2, 6, 1, 0 }, { "stag", 1, 1, 2, 3 }, { "ant", 12, 1, 1, 6 } },
-    { { "slug", 3, 7, 2, 0 }, { "spider", 4, 4, 1, 2 }, { "mite", 3, 6, 2, 6 }, { "ant", 12, 0.9, 1, 10 } },
-    { weather = "rain", { "knight", 5, 3, 1, 0 }, { "pillbug", 4, 4, 2, 0 }, { "gnat", 8, 0.8, 2, 4 }, { "brine", 2, 9, 1, 6 } },
+    { { "slug", 3, 7, 2, 0 }, { "spider", 4, 4, 1, 2 }, { "mite", 3, 6, 2, 6, elite = "fungicidal" }, { "ant", 12, 0.9, 1, 10 } },
+    { weather = "rain", { "knight", 5, 3, 1, 0, elite = "waxed" }, { "pillbug", 4, 4, 2, 0 }, { "gnat", 8, 0.8, 2, 4 }, { "brine", 2, 9, 1, 6 } },
     { { "spider", 5, 3, 2, 0 }, { "slug", 3, 6, 1, 2 }, { "mite", 4, 5, 1, 6 }, { "brine", 3, 7, 2, 8 },
         { "moth", 6, 1.5, 2, 3 }, { "ant", 16, 0.7, 2, 12 } },
     { { "knight", 6, 2.5, 2, 0 }, { "pillbug", 5, 3, 1, 0 }, { "gnat", 12, 0.6, 2, 4 }, { "spider", 5, 3, 1, 6 },
-        { "ant", 20, 0.6, 1, 10 }, { "slug", 2, 8, 2, 12 } },
+        { "ant", 20, 0.6, 1, 10, elite = "shelled" }, { "slug", 2, 8, 2, 12 } },
     { { "ant", 14, 0.8, 2, 0 }, { "dung", 1, 1, 1, 6 }, { "knight", 3, 5, 2, 10 }, { "spider", 3, 6, 1, 16 },
         { "gnat", 8, 1, 2, 20 } },
 }
@@ -766,12 +797,12 @@ local FLOWERPOT = {
     { { "pillbug", 2, 5, 1, 0 }, { "ant", 10, 1.1, 1, 2 }, { "dung", 1, 1, 1, 4, MID }, { "mite", 1, 1, 2, 8 } },
     { { "gnat", 4, 1.5, 1, 0 }, { "ant", 8, 1.1, 2, 2 }, { "pillbug", 2, 4, 1, 6 } },
     { weather = "night", { "moth", 4, 2, 1, 0 }, { "ant", 10, 1, 1, 2 }, { "brine", 1, 1, 1, 6 }, { "ant", 4, 1.2, 2, 10 } },
-    { { "slug", 1, 1, 1, 0 }, { "pillbug", 3, 4, 1, 2 }, { "mite", 2, 6, 2, 4 }, { "ant", 10, 0.9, 1, 8 } },
+    { { "slug", 1, 1, 1, 0 }, { "pillbug", 3, 4, 1, 2 }, { "mite", 2, 6, 2, 4 }, { "ant", 10, 0.9, 1, 8, elite = "fungicidal" } },
     { { "mole", 1, 1, 1, 0, MID }, { "spider", 2, 5, 1, 2 }, { "gnat", 5, 1.2, 1, 6 }, { "ant", 12, 0.9, 1, 10 },
         { "ant", 6, 1, 2, 10 } },
-    { weather = "rain", { "knight", 2, 5, 1, 0 }, { "brine", 2, 7, 1, 3 }, { "pillbug", 3, 4, 2, 4 }, { "ant", 10, 0.9, 1, 8 } },
+    { weather = "rain", { "knight", 2, 5, 1, 0, elite = "waxed" }, { "brine", 2, 7, 1, 3 }, { "pillbug", 3, 4, 2, 4 }, { "ant", 10, 0.9, 1, 8 } },
     { weather = "rain", { "pillbug", 4, 3, 1, 0 }, { "slug", 2, 7, 1, 2 }, { "mite", 3, 5, 2, 4 }, { "gnat", 6, 1, 1, 8 } },
-    { weather = "night", { "moth", 6, 1.5, 1, 0 }, { "spider", 3, 4, 1, 2 }, { "knight", 3, 5, 1, 6 }, { "ant", 14, 0.7, 2, 8 } },
+    { weather = "night", { "moth", 6, 1.5, 1, 0 }, { "spider", 3, 4, 1, 2 }, { "knight", 3, 5, 1, 6 }, { "ant", 14, 0.7, 2, 8, elite = "shelled" } },
     { { "ant", 12, 0.8, 1, 0 }, { "queen", 1, 1, 1, 4 }, { "ant", 8, 1, 2, 10 }, { "pillbug", 3, 4, 1, 12 } },
 }
 
@@ -784,14 +815,14 @@ local SHED = {
     { { "springtail", 6, 1, 1, 0 }, { "ant", 8, 1.1, 2, 3 }, { "springtail", 4, 1, 2, 8 } },
     { weather = "rain", { "spider", 2, 5, 2, 0 }, { "ant", 10, 1, 1, 2 }, { "dung", 1, 1, 1, 4, 0.2 }, { "brine", 1, 1, 1, 6 },
         { "springtail", 6, 0.8, 2, 8 } },
-    { { "knight", 1, 1, 1, 0 }, { "mite", 2, 6, 2, 2 }, { "ant", 12, 0.9, 1, 6 } },
+    { { "knight", 1, 1, 1, 0 }, { "mite", 2, 6, 2, 2 }, { "ant", 12, 0.9, 1, 6, elite = "fungicidal" } },
     { weather = "night", { "moth", 5, 1.5, 2, 0 }, { "spider", 3, 4, 1, 2 }, { "springtail", 8, 0.7, 2, 4 }, { "ant", 10, 1, 1, 8 } },
-    { { "slug", 2, 8, 1, 0 }, { "pillbug", 4, 4, 2, 2 }, { "springtail", 8, 0.6, 1, 6 }, { "gnat", 6, 1, 2, 8 } },
+    { { "slug", 2, 8, 1, 0 }, { "pillbug", 4, 4, 2, 2 }, { "springtail", 8, 0.6, 1, 6, elite = "shelled" }, { "gnat", 6, 1, 2, 8 } },
     { weather = "drought", { "knight", 2, 5, 2, 0 }, { "spider", 4, 4, 1, 2 }, { "queen", 1, 1, 1, 4, MID }, { "mite", 3, 5, 2, 6 },
         { "ant", 14, 0.8, 1, 8 } },
-    { { "pillbug", 4, 3, 1, 0 }, { "knight", 2, 5, 2, 2 }, { "springtail", 10, 0.5, 1, 6 }, { "brine", 2, 8, 2, 6 } },
+    { { "pillbug", 4, 3, 1, 0 }, { "knight", 2, 5, 2, 2, elite = "waxed" }, { "springtail", 10, 0.5, 1, 6 }, { "brine", 2, 8, 2, 6 } },
     { weather = "night", { "moth", 8, 1.2, 1, 0 }, { "spider", 5, 3, 2, 2 }, { "slug", 3, 6, 1, 4 }, { "ant", 16, 0.7, 2, 8 } },
-    { weather = "rain", { "springtail", 14, 0.4, 2, 0 }, { "knight", 3, 4, 1, 2 }, { "gnat", 10, 0.7, 2, 6 }, { "brine", 3, 6, 1, 8 } },
+    { weather = "rain", { "springtail", 14, 0.4, 2, 0, elite = "shelled" }, { "knight", 3, 4, 1, 2 }, { "gnat", 10, 0.7, 2, 6 }, { "brine", 3, 6, 1, 8 } },
     { { "ant", 10, 0.9, 1, 0 }, { "stag", 1, 1, 2, 3 }, { "ant", 10, 0.9, 1, 8 }, { "springtail", 8, 0.6, 2, 10 } },
 }
 
@@ -805,14 +836,14 @@ local LOG = {
     { weather = "night", { "mite", 3, 5, 1, 0 }, { "pillbug", 3, 4, 2, 2 }, { "queen", 1, 1, 1, 4, MID }, { "gnat", 4, 1.4, 1, 6 },
         { "ant", 8, 1, 2, 8 } },
     { weather = "rain", { "slug", 2, 8, 1, 0 }, { "brine", 2, 6, 2, 2 }, { "springtail", 8, 0.7, 1, 6 }, { "ant", 8, 1, 2, 6 } },
-    { weather = "night", { "spider", 3, 4, 2, 0 }, { "moth", 6, 1.4, 1, 2 }, { "mite", 3, 5, 2, 4 }, { "ant", 12, 0.9, 1, 8 } },
-    { weather = "night", { "knight", 3, 5, 1, 0 }, { "slug", 3, 6, 2, 2 }, { "springtail", 8, 0.6, 2, 6 }, { "moth", 6, 1.2, 1, 8 } },
+    { weather = "night", { "spider", 3, 4, 2, 0 }, { "moth", 6, 1.4, 1, 2 }, { "mite", 3, 5, 2, 4 }, { "ant", 12, 0.9, 1, 8, elite = "fungicidal" } },
+    { weather = "night", { "knight", 3, 5, 1, 0, elite = "waxed" }, { "slug", 3, 6, 2, 2 }, { "springtail", 8, 0.6, 2, 6 }, { "moth", 6, 1.2, 1, 8 } },
     { weather = "frost", { "pillbug", 4, 3, 2, 0 }, { "mite", 2, 4, 1, 2 }, { "mole", 1, 1, 2, 4, MID }, { "knight", 2, 5, 2, 6 },
         { "gnat", 8, 0.9, 1, 8 }, { "mite", 3, 3, 2, 12 } },
     { weather = "night", { "moth", 10, 1, 2, 0 }, { "spider", 4, 4, 1, 2 }, { "slug", 3, 6, 1, 4 }, { "ant", 16, 0.7, 2, 8 } },
-    { weather = "rain", { "springtail", 12, 0.5, 1, 0 }, { "knight", 4, 4, 2, 2 }, { "brine", 3, 6, 1, 6 }, { "mite", 4, 4, 2, 8 } },
+    { weather = "rain", { "springtail", 12, 0.5, 1, 0, elite = "shelled" }, { "knight", 4, 4, 2, 2 }, { "brine", 3, 6, 1, 6 }, { "mite", 4, 4, 2, 8 } },
     { weather = "night", { "slug", 4, 5, 2, 0 }, { "spider", 5, 3, 1, 2 }, { "moth", 12, 0.8, 2, 4 }, { "knight", 4, 4, 1, 8 },
-        { "ant", 16, 0.6, 2, 10 } },
+        { "ant", 16, 0.6, 2, 10, elite = "shelled" } },
     { weather = "night", { "ant", 14, 0.8, 1, 0 }, { "click", 1, 1, 2, 4 }, { "slug", 2, 8, 1, 8 }, { "moth", 8, 1, 2, 10 },
         { "springtail", 8, 0.6, 1, 14 } },
 }
@@ -825,14 +856,14 @@ local POND = {
     { { "ant", 10, 1.1, 1, 0 }, { "brine", 1, 1, 2, 4 }, { "mite", 1, 1, 2, 8 } },
     { weather = "night", { "moth", 5, 1.6, 1, 0 }, { "ant", 10, 1, 2, 2 }, { "queen", 1, 1, 1, 4, MID }, { "spider", 2, 5, 1, 6 } },
     { weather = "rain", { "slug", 2, 8, 1, 0 }, { "brine", 2, 6, 2, 3 }, { "ant", 12, 0.9, 2, 6 }, { "cricket", 2, 5, 1, 8 } },
-    { weather = "drought", { "knight", 2, 5, 1, 0 }, { "mite", 2, 6, 2, 2 }, { "pillbug", 3, 4, 2, 4 }, { "gnat", 5, 1.2, 1, 8 } },
-    { weather = "night", { "moth", 8, 1.2, 2, 0 }, { "spider", 3, 4, 1, 3 }, { "ant", 12, 0.9, 1, 6 }, { "cricket", 2, 5, 2, 8 } },
+    { weather = "drought", { "knight", 2, 5, 1, 0, elite = "waxed" }, { "mite", 2, 6, 2, 2 }, { "pillbug", 3, 4, 2, 4 }, { "gnat", 5, 1.2, 1, 8 } },
+    { weather = "night", { "moth", 8, 1.2, 2, 0 }, { "spider", 3, 4, 1, 3 }, { "ant", 12, 0.9, 1, 6, elite = "fungicidal" }, { "cricket", 2, 5, 2, 8 } },
     { { "ant", 10, 1, 2, 0 }, { "stag", 1, 1, 1, 3, MID }, { "gnat", 6, 1, 2, 10 } },
     { weather = "rain", { "brine", 3, 6, 1, 0 }, { "knight", 3, 5, 2, 2 }, { "slug", 2, 8, 1, 6 }, { "gnat", 8, 1, 2, 8 },
         { "cricket", 3, 4, 2, 10 } },
     { weather = "frost", { "pillbug", 5, 3, 1, 0 }, { "knight", 4, 4, 2, 2 }, { "spider", 4, 4, 1, 6 }, { "mite", 3, 5, 2, 8 },
         { "cricket", 3, 4, 1, 10 } },
-    { weather = "night", { "moth", 10, 1, 1, 0 }, { "slug", 3, 6, 2, 2 }, { "ant", 20, 0.6, 1, 6 }, { "brine", 2, 8, 2, 8 },
+    { weather = "night", { "moth", 10, 1, 1, 0 }, { "slug", 3, 6, 2, 2 }, { "ant", 20, 0.6, 1, 6, elite = "shelled" }, { "brine", 2, 8, 2, 8 },
         { "cricket", 4, 3, 1, 10 } },
     { weather = "rain", { "ant", 14, 0.8, 2, 0 }, { "waterbug", 1, 1, 1, 4 }, { "knight", 3, 5, 2, 10 }, { "gnat", 8, 1, 1, 14 } },
 }

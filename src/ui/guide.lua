@@ -412,7 +412,7 @@ local STEPS = {
     end, done = function(g) return g.wave >= 1 end, start = true },
     { coach = function()
         return coach({ text = function()
-            return tr("THE PUFFER HITS EVERYTHING NEAR IT, AND PUFFS ONCE MORE FOR EACH LINK IT HAS, UP TO FOUR. ")
+            return tr("THE PUFFER HITS EVERYTHING NEAR IT, AND PUFFS ONCE MORE FOR EACH LINK IT HAS, UP TO THREE. ")
                 .. tr(say("THE SAME BUTTON (OR F) SPEEDS THE GAME UP", "THE SAME BUTTON SPEEDS THE GAME UP"))
         end, at = function() local x, y, w, h = waveRect() return x + floor(w / 2), y + floor(h / 2) end })
     end, done = function(g) return g.phase ~= "wave" end },
@@ -491,6 +491,15 @@ local function meet(kind)
     end
     G.show({ head = trf(d.boss and "BOSS: %s" or "NEW: %s", d.name), body = d.blurb, answer = answer, pic = kind, boss = d.boss })
     teach(kind)
+end
+-- An elite, the first time one is coming: what it does and what beats it.
+local function elite(id, kind)
+    local el = D.ELITE[id]
+    local names = {}
+    for _, k in ipairs(el.answer) do names[#names + 1] = D.TOWER[k].name end
+    G.show({ head = trf("ELITE: %s", el.name), body = trf("%s, MARKED OVER ITS HEAD. %s.", el.tag, el.blurb),
+        answer = trf("ANSWERED BY: %s", table.concat(names, ", ")), pic = kind })
+    teach(id)
 end
 local function weather(id, soon)
     local w = D.WEATHER[id]
@@ -651,6 +660,12 @@ function G.update(g)
         for _, kind in ipairs(D.ENEMY_ORDER) do
             for _, row in ipairs(nxt) do
                 if row[1] == kind and not shown[kind] and not Profile.taught[kind] then shown[kind] = true; meet(kind) end
+            end
+        end
+        for _, row in ipairs(nxt) do
+            if row.elite and not shown[row.elite] and not Profile.taught[row.elite] then
+                shown[row.elite] = true
+                elite(row.elite, row[1])
             end
         end
     elseif g.phase == "wave" then

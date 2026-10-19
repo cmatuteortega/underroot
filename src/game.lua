@@ -498,8 +498,13 @@ end
 
 -- `by`, what bites it, if anything: a Bleeding Tooth's sap gets it back.
 function Game:biteLink(l, amount, by)
-    l.hp = l.hp - amount * self:shield(l)
+    l.hp = l.hp - amount * self:shield(l) * self:chewMul(by)
     if l.sap then self:sapStrike(by, l) end
+end
+
+-- A fungicidal elite is harder on a link.
+function Game:chewMul(by)
+    return by and by.elite == "fungicidal" and D.ELITE.fungicidal.chew or 1
 end
 
 -- Rolled over, sheared, flattened: cut outright, unless a shelf shields it.
@@ -508,7 +513,7 @@ function Game:crush(l, by)
     if self:shield(l) < 1 then
         if not l.crushed or self.clock - l.crushed > 0.5 then
             l.crushed = self.clock
-            l.hp = l.hp - 20
+            l.hp = l.hp - 20 * self:chewMul(by)
         end
         return
     end
@@ -706,8 +711,20 @@ function Game:stat(t, k)
 end
 
 -- What growing a species costs, and one of its upgrades: dearer while the
--- network has not grown its thrift.
-function Game:towerCost(kind) return floor(N.value(self.net, kind, "cost", D.TOWER[kind].cost) + 0.5) end
+-- network has not grown its thrift, and dearer for every one of the species
+-- already growing past the first few (D.CROWD).
+function Game:towerCost(kind)
+    local crowd = 1 + D.CROWD.each * max(0, self:growing(kind) - D.CROWD.free)
+    return floor(N.value(self.net, kind, "cost", D.TOWER[kind].cost) * crowd + 0.5)
+end
+
+-- How many of a species are growing now, on pockets and on the trail.
+function Game:growing(kind)
+    local n = 0
+    for _, node in ipairs(self.nodes) do if node.tower and node.tower.kind == kind then n = n + 1 end end
+    for _, m in ipairs(self.mats) do if m.kind == kind then n = n + 1 end end
+    return n
+end
 function Game:upCost(kind, row) return floor(N.value(self.net, kind, "cost", row.cost) + 0.5) end
 
 function Game:reserveMax(t)
@@ -967,7 +984,7 @@ function Game:endlessWave(n)
         local count = boss and g[2] or max(1, floor(g[2] * more + 0.5))
         local every = boss and g[3] or max(0.25, g[3] * closer)
         -- At full strength: a boss met weaker part way through the level is not here.
-        w[#w + 1] = { g[1], count, every, g[4], g[5] * closer }
+        w[#w + 1] = { g[1], count, every, g[4], g[5] * closer, elite = g.elite }
     end
     if bossWave then
         -- The level's bosses, and the gates its waves come in at.
@@ -999,7 +1016,7 @@ function Game:startWave()
     for _, g in ipairs(self.waves[self.wave]) do
         local kind, n, every, gate, at = g[1], g[2], g[3], g[4], g[5]
         for k = 0, n - 1 do
-            self.queue[#self.queue + 1] = { kind = kind, gate = gate, t = at + k * every, hp = g[6] }
+            self.queue[#self.queue + 1] = { kind = kind, gate = gate, t = at + k * every, hp = g[6], elite = g.elite }
         end
     end
     table.sort(self.queue, function(a, b) return a.t < b.t end)
@@ -1028,6 +1045,11 @@ function Game:spawnAt(kind, x, z, c, r)
         hp = hp, maxHp = hp, h = 0, flash = 0, slow = 1, off = (self.dice:random() - 0.5) * 6,
         walked = 0, anim = self.dice:random() * 4, state = "walk", boss = d.boss, stun = 0, mark = 0 }
     if d.boss then en.off = 0 end
+    -- An elite: what the wave's row put on it (src/defs.lua's ELITES).
+    if not d.boss and self.spawnElite then
+        en.elite = self.spawnElite
+        if en.elite == "waxed" then en.wax = 0 end
+    end
     en.y = self.world:groundAt(x, z)
     if d.fly then en.y = 12 end
     if d.ball then en.ballHp = d.ball * (self.spawnScale or 1); en.ballMax = en.ballHp end
@@ -1154,9 +1176,19 @@ function Game:hurt(e, amount, pierce, quiet, deep)
     amount = amount * self:vs(e.kind)
     -- On its back, a click beetle is soft.
     if e.state == "belly" then amount = amount * (D.ENEMIES[e.kind].belly or 1) end
-    -- A needle through a Rhinoceros Beetle's plates pierces only part of them.
-    local a = self:armor(e) * (pierce and (D.ENEMIES[e.kind].hardPlates or 0) or 1)
+    -- `pierce`, true or how much of the armor goes (a needle's `bore`); a
+    -- Rhinoceros Beetle's plates still turn part of it.
+    local keep = 1
+    if pierce then keep = max(1 - (pierce == true and 1 or pierce), D.ENEMIES[e.kind].hardPlates or 0) end
+    local a = self:armor(e) * keep
     local dmg = quiet and amount or max(amount * 0.15, amount - a)
+    -- Waxed: a hit while its wax is whole only breaks the wax.
+    if not quiet and e.wax and e.wax <= 0 then
+        e.wax = D.ELITE.waxed.regrow
+        self:sparks(e.x, e.y + 3, e.z, 3, { "w", "s" }, 18)
+        self:cue("clink", e.x, e.z)
+        return 0
+    end
     if not quiet then
         -- Most of it turned by a shell: it rings, and the sparks are grey.
         local glance = a > 0 and dmg < amount * 0.5
@@ -1310,9 +1342,9 @@ function Game:update(dt)
         self.waveClock = self.waveClock + dt
         while self.queue[1] and self.queue[1].t <= self.waveClock do
             local q = table.remove(self.queue, 1)
-            self.spawnScale = q.hp
+            self.spawnScale, self.spawnElite = q.hp, q.elite
             self:spawn(q.kind, q.gate)
-            self.spawnScale = nil
+            self.spawnScale, self.spawnElite = nil, nil
         end
         local living = 0
         for _, l in ipairs(self.links) do if alive(l) then living = living + 1 end end
@@ -1813,16 +1845,17 @@ function Game:fire(n, t, d, dt)
     self[SHOOTS[t.kind]](self, n, t, d, S, power, range, list)
 end
 
--- A puffer: a spore lobbed for every link it has (up to four), splashing.
+-- A puffer: a spore lobbed for every link it has (up to `puffs`), splashing,
+-- weaker on fliers.
 function Game:puff(n, t, d, S, power, range, list)
     self:motes(n.x, n.y + 8, n.z, 4, { "w", "t" }, 3, 8, 0.4)
     self:cue("puff", n.x, n.z)
-    local puffs = max(1, min(4, self:degree(n))) + (S("extraPuff") or 0)
+    local puffs = max(1, min(S("puffs") or 4, self:degree(n))) + (S("extraPuff") or 0)
     for k = 1, puffs do
         local o = list[(k - 1) % #list + 1]
         self.shots[#self.shots + 1] = { kind = "spore", x0 = n.x, y0 = n.y + 9, z0 = n.z,
             tx = o.x, tz = o.z, t = 0, flight = 0.45 + 0.05 * k, damage = S("damage") * power, splash = S("splash"),
-            linger = S("linger"), toxin = (S("toxin") or 0) * power }
+            linger = S("linger"), toxin = (S("toxin") or 0) * power, flier = S("flier") }
     end
 end
 
@@ -1861,7 +1894,7 @@ function Game:skewer(n, t, d, S, power, range, list)
                 end
             end
         end
-        self:hurt(o, dmg, true)
+        self:hurt(o, dmg, S("bore") or true)
     end
     self.shots[#self.shots + 1] = { kind = "needle", x0 = n.x, y0 = n.y + 12, z0 = n.z,
         x1 = far.x, y1 = far.y + 3, z1 = far.z, t = 0, flight = 0.12, big = deadEnd, mark = S("mark") }
@@ -2379,12 +2412,15 @@ function Game:updateShots(dt)
         if s.t >= s.flight then
             if s.kind == "spore" then
                 for _, e in ipairs(self.enemies) do
-                    if not e.dead and (e.x - s.tx) ^ 2 + (e.z - s.tz) ^ 2 <= s.splash ^ 2 then self:hurt(e, s.damage) end
+                    if not e.dead and (e.x - s.tx) ^ 2 + (e.z - s.tz) ^ 2 <= s.splash ^ 2 then
+                        self:hurt(e, s.damage * self:sporeMul(e) * (D.ENEMIES[e.kind].fly and s.flier or 1))
+                    end
                 end
                 self.fx[#self.fx + 1] = { cloud = true, x = s.tx, y = self.world:groundAt(s.tx, s.tz), z = s.tz, r = s.splash, life = 0.4, max = 0.4 }
                 self:cue("pop", s.tx, s.tz)
                 if s.linger then
-                    self.clouds[#self.clouds + 1] = { x = s.tx, z = s.tz, r = s.splash, life = s.linger, max = s.linger, dps = s.toxin }
+                    self.clouds[#self.clouds + 1] = { x = s.tx, z = s.tz, r = s.splash, life = s.linger, max = s.linger, dps = s.toxin,
+                        flier = s.flier }
                 end
             elseif s.kind == "shell" or s.kind == "bomblet" then
                 for _, e in ipairs(self.enemies) do
@@ -2432,13 +2468,20 @@ function Game:updateShots(dt)
     end
 end
 
+-- What a spore cloud, or its poison, does to this one: a shell turns most of it.
+function Game:sporeMul(e)
+    return e.elite == "shelled" and D.ELITE.shelled.spores or 1
+end
+
 function Game:updateClouds(dt)
     local wash = self:sky().clouds or 1
     for k = #self.clouds, 1, -1 do
         local c = self.clouds[k]
         c.life = c.life - dt * wash
         for _, e in ipairs(self.enemies) do
-            if not e.dead and (e.x - c.x) ^ 2 + (e.z - c.z) ^ 2 <= c.r * c.r then self:hurt(e, c.dps * dt, true, true) end
+            if not e.dead and (e.x - c.x) ^ 2 + (e.z - c.z) ^ 2 <= c.r * c.r then
+                self:hurt(e, c.dps * dt * self:sporeMul(e) * (D.ENEMIES[e.kind].fly and c.flier or 1), true, true)
+            end
         end
         if c.life <= 0 then table.remove(self.clouds, k) end
     end
@@ -2681,6 +2724,8 @@ function Game:move(e, dt)
     if e.exposed then e.exposed = e.exposed > dt and e.exposed - dt or nil end
     if e.confCd then e.confCd = e.confCd > dt and e.confCd - dt or nil end
     if (e.strip or 0) > 0 then e.strip = max(0, e.strip - (e.stripRegrow or 0.5) * (d.plates or 1) * dt) end
+    -- A waxed elite's wax growing back (whole at 0).
+    if e.wax and e.wax > 0 then e.wax = max(0, e.wax - dt) end
     -- A Bleeding Tooth's sap: it bleeds on a while after it has let go.
     if (e.bleedT or 0) > 0 then
         e.bleedT = e.bleedT - dt

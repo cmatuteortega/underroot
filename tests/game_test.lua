@@ -23,6 +23,10 @@ local function pocket(g, c, r)
     error("no pocket at " .. c .. "," .. r)
 end
 
+local function near(got, want, eps, what)
+    C.yes(math.abs(got - want) <= eps, ("%s: got %s, want %s"):format(what, got, want))
+end
+
 local function dist(a, b) return math.sqrt((a.x - b.x) ^ 2 + (a.z - b.z) ^ 2) end
 
 -- The pockets by how far they are from the sprout, nearest first.
@@ -221,5 +225,113 @@ return {
         C.no(has(new("crack", { net = N.grown({}) })), "a new network")
         C.yes(has(new("crack", { net = N.grown({ hyphae = 1, pulse = 1 }) })), "grown")
         C.yes(has(new("crack")), "the whole network")
+    end },
+
+    { "past the first two, each of a species already growing makes the next dearer", function()
+        local g = new()
+        g.nutrients = 1000
+        local list = byDistance(g)
+        local base = D.TOWER.puffer.cost
+        for k = 1, 4 do
+            link(g, g.heart, list[k])
+            local before = g.nutrients
+            local want = math.floor(base * (1 + D.CROWD.each * math.max(0, k - 1 - D.CROWD.free)) + 0.5)
+            C.eq(g:towerCost("puffer"), want, "the puffer after " .. (k - 1))
+            C.yes(g:build("puffer", list[k]), "built " .. k)
+            C.eq(g.nutrients, before - want, "paid for " .. k)
+        end
+        C.eq(g:towerCost("needle"), D.TOWER.needle.cost, "another species is not crowded")
+        g:sell(list[4])
+        C.eq(g:towerCost("puffer"), math.floor(base * (1 + D.CROWD.each) + 0.5), "one cleared, cheaper again")
+    end },
+
+    { "a puffer's spores do half to a flier, a needle goes through most armor", function()
+        local g = new()
+        local p = byDistance(g)[1]
+        link(g, g.heart, p)
+        local t = g:build("puffer", p)
+        local function spore(e)
+            local hp = e.hp
+            g.shots = { { kind = "spore", tx = e.x, tz = e.z, t = 0, flight = 0, damage = 6, splash = 4,
+                flier = g:stat(t, "flier") } }
+            g:updateShots(0)
+            return hp - e.hp
+        end
+        local ant = g:spawnAt("ant", 40, 40, 0, 0)
+        C.eq(spore(ant), 6, "a walker takes all of it")
+        ant.dead = true
+        local gnat = g:spawnAt("gnat", 40, 40, 0, 0)
+        C.eq(spore(gnat), 3, "a flier half")
+        local knight = g:spawnAt("knight", 80, 80, 0, 0)
+        local hp = knight.hp
+        g:hurt(knight, 26, D.TOWER.needle.bore)
+        near(hp - knight.hp, 26 - 9 * (1 - D.TOWER.needle.bore), 1e-6, "a needle leaves a quarter of the armor")
+        local rhino = g:spawnAt("rhino", 120, 120, 0, 0)
+        hp = rhino.hp
+        g:hurt(rhino, 26, 1)
+        near(hp - rhino.hp, 26 - 12 * D.ENEMIES.rhino.hardPlates, 1e-6, "a rhino's plates still turn half")
+    end },
+
+    { "elites: a shell turns spores, wax turns a hit, a fungicide chews harder", function()
+        local g = new()
+        g.spawnElite = "shelled"
+        local shelled = g:spawnAt("ant", 40, 40, 0, 0)
+        g.spawnElite = "waxed"
+        local waxed = g:spawnAt("ant", 80, 80, 0, 0)
+        g.spawnElite = "fungicidal"
+        local fung = g:spawnAt("ant", 120, 120, 0, 0)
+        g.spawnElite = nil
+        local boss = (function() g.spawnElite = "waxed"; local b = g:spawnAt("queen", 160, 160, 0, 0); g.spawnElite = nil; return b end)()
+        C.eq(boss.elite, nil, "never a boss")
+
+        local hp = shelled.hp
+        g.shots = { { kind = "spore", tx = shelled.x, tz = shelled.z, t = 0, flight = 0, damage = 6, splash = 4 } }
+        g:updateShots(0)
+        near(hp - shelled.hp, 6 * D.ELITE.shelled.spores, 1e-6, "spores do a third to a shell")
+        hp = shelled.hp
+        g:hurt(shelled, 6)
+        C.eq(hp - shelled.hp, 6, "anything else in full")
+
+        hp = waxed.hp
+        C.eq(g:hurt(waxed, 6), 0, "the wax takes the first hit")
+        C.eq(waxed.hp, hp, "and none of it gets through")
+        g:hurt(waxed, 6)
+        C.eq(waxed.hp, hp - 6, "the next, while it grows back, does")
+        g:move(waxed, D.ELITE.waxed.regrow + 0.1)
+        hp = waxed.hp
+        g:hurt(waxed, 6)
+        C.eq(waxed.hp, hp, "grown back, it turns one more")
+
+        local a, b = byDistance(g)[1], byDistance(g)[2]
+        local l1 = link(g, g.heart, a)
+        local l2 = link(g, g.heart, b)
+        local h1, h2 = l1.hp, l2.hp
+        g:biteLink(l1, 5, shelled)
+        g:biteLink(l2, 5, fung)
+        C.eq(h1 - l1.hp, 5, "a plain bite")
+        C.eq(h2 - l2.hp, 5 * D.ELITE.fungicidal.chew, "a fungicidal one")
+    end },
+
+    { "every elite a wave names is one there is, and on no boss", function()
+        local any = false
+        for _, lv in ipairs(D.LEVELS) do
+            for n, w in ipairs(lv.waves) do
+                for _, row in ipairs(w) do
+                    if row.elite then
+                        any = true
+                        C.yes(D.ELITE[row.elite], lv.id .. " wave " .. n .. ": " .. row.elite)
+                        C.no(D.ENEMIES[row[1]].boss, lv.id .. " wave " .. n .. ": not on a boss")
+                    end
+                end
+            end
+        end
+        C.yes(any, "the levels bring some")
+        local g = new("crack")
+        for k = 1, 11 do g.waves[k] = D.LEVEL.crack.waves[12] end
+        g.wave, g.cleared = 11, 11
+        g:startWave()
+        local found = false
+        for _, q in ipairs(g.queue) do if q.elite == "waxed" then found = true end end
+        C.yes(found, "the queue carries them")
     end },
 }

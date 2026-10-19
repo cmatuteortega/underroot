@@ -97,17 +97,20 @@ local function nodeScreen(n)
 end
 
 local function waveSummary(wave)
+    -- Counted by kind, and an elite of a kind apart from the plain ones.
     local count = {}
     for _, g in ipairs(wave) do
-        count[g[1]] = count[g[1]] or 0
-        count[g[1]] = count[g[1]] + g[2] * (g[1] == "mite" and D.ENEMIES.mite.swarm or 1)
+        local key = g[1] .. (g.elite and (" " .. g.elite) or "")
+        count[key] = (count[key] or 0) + g[2] * (g[1] == "mite" and D.ENEMIES.mite.swarm or 1)
     end
     local parts = {}
     if wave.weather then parts[1] = D.WEATHER[wave.weather].name .. ":" end
     for _, kind in ipairs(D.ENEMY_ORDER) do
-        if count[kind] then
-            local name = D.ENEMIES[kind].boss and D.ENEMIES[kind].name or D.ENEMIES[kind].short or tr(kind:upper())
-            parts[#parts + 1] = (D.ENEMIES[kind].boss and "" or (count[kind] .. " ")) .. name
+        local name = D.ENEMIES[kind].boss and D.ENEMIES[kind].name or D.ENEMIES[kind].short or tr(kind:upper())
+        if count[kind] then parts[#parts + 1] = (D.ENEMIES[kind].boss and "" or (count[kind] .. " ")) .. name end
+        for _, el in ipairs(D.ELITES) do
+            local n = count[kind .. " " .. el.id]
+            if n then parts[#parts + 1] = n .. " " .. el.tag .. " " .. name end
         end
     end
     return table.concat(parts, "  ")
@@ -151,6 +154,10 @@ local function hint()
         for _, g in ipairs(nxt) do
             if not S.game.seen[g[1]] then return trf("NEW: %s. %s", D.ENEMIES[g[1]].name, D.ENEMIES[g[1]].blurb), "t" end
         end
+        for _, g in ipairs(nxt) do
+            local el = g.elite and D.ELITE[g.elite]
+            if el then return trf("ELITE NEXT: %s %s. %s", el.tag, D.ENEMIES[g[1]].name, el.blurb), "t" end
+        end
         if nxt.weather then
             local wx = D.WEATHER[nxt.weather]
             return trf("%s NEXT WAVE: %s", wx.name, wx.blurb), "s"
@@ -185,7 +192,8 @@ local function tooltip()
                 S.game.nutrients >= cost and "l" or "r"
         end
         if b.tower and b.mode == S.mode then return trf(say("%s: CLICK AGAIN TO READ IT", "%s: TAP AGAIN TO READ IT"), b.name), "w" end
-        return b.name .. (b.cost and (" (" .. b.cost .. ")") or "") .. ": " .. b.blurb, "w"
+        local cost = b.tower and S.game:towerCost(b.mode) or b.cost
+        return b.name .. (cost and (" (" .. cost .. ")") or "") .. ": " .. b.blurb, "w"
     end
     if S.hover.turn == 1 then return say(trf("TURN THE BOARD (%s)", O.label("e")), tr("TURN THE BOARD")), "w" end
     if S.hover.turn == -1 then return tr(say("TURN THE BOARD BACK (Q)", "TURN THE BOARD BACK")), "w" end
@@ -481,7 +489,7 @@ local function draw()
         else
             local open = S.game:unlocked(b.mode)
             local pic = icon(b.mode, nil, 0, on and (S.game.clock * 0.7) % 1 or 0)
-            local afford = S.game.nutrients >= (b.cost or 0)
+            local afford = S.game.nutrients >= (b.tower and S.game:towerCost(b.mode) or b.cost or 0)
             blit(pic, cx, b.mode == "mat" and by + 14 or by + 21, (not afford or not open) and T.DARKER2 or nil)
         end
         if not S.touch then text(O.label(b.key:lower()), bx + 1, by + 1, "s") end
@@ -489,8 +497,10 @@ local function draw()
             local c = "W" .. S.game:unlockAt(b.mode)
             text(c, bx + bw - Font.width(c) - 1, by + bh - 6, "k")
         elseif b.cost then
-            local c = tostring(b.cost)
-            text(c, bx + bw - Font.width(c) - 1, by + bh - 6, S.game.nutrients >= b.cost and "l" or "r")
+            -- Live: crowding makes a species dearer the more of it grows.
+            local cost = b.tower and S.game:towerCost(b.mode) or b.cost
+            local c = tostring(cost)
+            text(c, bx + bw - Font.width(c) - 1, by + bh - 6, S.game.nutrients >= cost and "l" or "r")
         end
     end
     local wx, wy, ww, wh = waveRect()

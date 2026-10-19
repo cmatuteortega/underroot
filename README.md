@@ -424,8 +424,8 @@ On every level the last seven species unlock as the waves are cleared.
 
 | tower | cost | does | network twist | branch A | branch B |
 | --- | --- | --- | --- | --- | --- |
-| Spore Puffer | 30 | lobs spore clouds, splash; hits fliers | +1 puff per link at its node (up to 4) | Lingering Toxin, Miasma | Rapid Fire, Spore Gatling |
-| Enoki Needle | 45 | long range, single target, ignores armor; hits fliers | x1.8 damage on a dead end (one link) | Skewer, Lance (runs through 2, 3 in a line) | Mark Target, Hunter's Mark (marked prey takes more from everything) |
+| Spore Puffer | 30 | lobs spore clouds, splash; hits fliers at half | +1 puff per link at its node (up to 3) | Lingering Toxin, Miasma | Rapid Fire, Spore Gatling |
+| Enoki Needle | 45 | long range, single target, ignores 3/4 of armor (Lance: all); hits fliers | x1.8 damage on a dead end (one link) | Skewer, Lance (runs through 2, 3 in a line) | Mark Target, Hunter's Mark (marked prey takes more from everything) |
 | Slime Mat | 18 | on the trail: slows, catches a rolling pillbug | stickier for every living link draped over it (x0.82 slow and +50% digest each, up to 3); with none it withers | Glue, Amber | Digest, Stomach (dissolves what stands on it) |
 | Lion's Mane | 40 | heals links, regrows cut ones | tends only the branch below it, 3 hops out (Mane at the fork, not the hub) | Fast Regrowth, Old Growth (4, 5 hops) | Purge (clears webs and stuns, heals the towers it tends), Sanctuary (they can't be webbed or stunned) |
 | Relay | 30 | no attack | works on what it is linked to: its links carry x2 flow and it pumps them full however thin the way to it, and the towers linked to it hit 10% harder | Battery, Deep Battery (they hold more) | Amplifier, Resonator (they hit harder, triple flow) |
@@ -623,9 +623,26 @@ pocket that watches the most trail, put the next of a fixed rotation on it). It 
 much weaker, losing the Crack at the Stag Beetle every time, so it is for new maps
 before they have a build order, not for tuning.
 
+### Crowding and elites
+
+So that two species cannot carry a run, past the first two of a species each
+one of it already growing makes the next 20% dearer (`D.CROWD`), and some wave
+rows carry an elite (`elite = id`, `D.ELITES`), marked by a bar over the bug's
+head and named in the forecast:
+
+| Elite | What it does | What it breaks |
+| --- | --- | --- |
+| Shelled | Spore clouds and their poison do a third | A wall of Spore Puffers: Needle, Mortar, Mat |
+| Waxed | Its wax turns aside one hit, then regrows 2s after | Slow, heavy single shots: many small hits, Mortar bomblets, Mat |
+| Fungicidal | Chews and crushes links twice as hard | A bare network: Lion's Mane, Shelf, Bleeding Tooth |
+
+They come in the first five levels, from the Crack's eleventh wave on, and
+endless carries them over from the waves it copies.
+
 ### Not in yet
 
-Elite modifiers and props. Each of those is a row and a model more, below.
+Scent-masked and Hive-minded elites, and props. Each of those is a row and a
+model more, below.
 
 ## How it sounds
 

@@ -172,8 +172,12 @@ Elite modifiers can be added to any normal enemy to make waves unpredictable:
 
 - **Fungicidal:** deals double damage to links.
 - **Scent-masked:** ignores Ghost Lamps and Stinkhorns.
-- **Armored shell:** takes reduced damage from clouds and area effects.
+- **Armored shell:** takes reduced damage from spore clouds and their poison.
+- **Waxed:** a waxy coat turns aside one hit, then regrows; many small hits beat it.
 - **Hive-minded:** when killed, calls two more of its kind.
+
+Shelled and Waxed between them keep any one damage tower from answering a wave:
+the shell breaks a wall of Spore Puffers, the wax a row of Enoki Needles.
 
 ## Environment
 
