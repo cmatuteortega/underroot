@@ -61,6 +61,8 @@ end
 -- The camera on the middle of the board, less what the strip and the
 -- toolbar cover, moved by the pan.
 local function centre()
+    -- No board yet (a second finger down on the picker before the first level).
+    if not S.world then return end
     local l, r = toBoard(S.inset.l), toBoard(S.inset.r)
     local top, bottom = toBoard(S.inset.t + TOP), toBoard(S.inset.b + BOTTOM)
     S.camx = floor((S.world.w - (S.cw - l - r)) / 2 - l) + S.panx
