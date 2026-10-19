@@ -8,6 +8,11 @@
 -- a row in a level's waves, and a new level a row in LEVELS with a map in
 -- src/world.lua.
 
+-- What a player reads here is written in English; src/lang.lua puts it into
+-- the language up, in place, and builds again what is made of other lines
+-- (Lang.compose).
+local Lang = require "src.lang"
+
 local D = {}
 
 D.INCOME = 2.2         -- per second, while a wave is on: the sprout's sugar
@@ -705,18 +710,24 @@ D.GLOSSARY = {
     { name = "NUTRIENTS", forms = { "NUTRIENTS", "SUGAR" },
         about = "WHAT A RUN IS SPENT IN. THE SPROUT MAKES THEM WHILE A WAVE IS ON, EVERY CLEARED WAVE PAYS MORE, "
             .. "AND BODIES DRUNK ADD TO THEM." },
-    { name = "SPORES", forms = { "SPORES" },
-        about = "KEPT IN THE SPORE BANK BETWEEN RUNS, EVEN WHEN THE SPROUT FALLS: " .. D.SPORES.wave
-            .. " FOR EVERY WAVE CLEARED, " .. D.SPORES.win .. " MORE FOR A WIN AND " .. D.SPORES.first
-            .. " MORE AGAIN FOR A LEVEL'S FIRST. THEY GROW THE NETWORK: NEW SPECIES, SEEDS, THE SPORE PULSE." },
+    { name = "SPORES", forms = { "SPORES" } },
     { name = "MUTATION", forms = { "MUTATION", "MUTATIONS" },
         about = "AFTER SOME WAVES THE NETWORK MUTATES: PICK ONE OF THREE CHANGES FOR THE REST OF THE RUN. A SEED "
             .. "BRINGS SOME OF ITS OWN." },
-    { name = "RAIN", forms = { "RAIN" }, about = D.WEATHER.rain.blurb .. "." },
-    { name = "DROUGHT", forms = { "DROUGHT" }, about = D.WEATHER.drought.blurb .. "." },
-    { name = "NIGHT", forms = { "NIGHT" }, about = D.WEATHER.night.blurb .. "." },
-    { name = "FROST", forms = { "FROST" }, about = D.WEATHER.frost.blurb .. "." },
+    { name = "RAIN", forms = { "RAIN" } },
+    { name = "DROUGHT", forms = { "DROUGHT" } },
+    { name = "NIGHT", forms = { "NIGHT" } },
+    { name = "FROST", forms = { "FROST" } },
 }
+for _, g in ipairs(D.GLOSSARY) do
+    if g.name == "SPORES" then
+        Lang.compose(g, "about", "KEPT IN THE SPORE BANK BETWEEN RUNS, EVEN WHEN THE SPROUT FALLS: %s FOR EVERY WAVE "
+            .. "CLEARED, %s MORE FOR A WIN AND %s MORE AGAIN FOR A LEVEL'S FIRST. THEY GROW THE NETWORK: NEW SPECIES, "
+            .. "SEEDS, THE SPORE PULSE.", D.SPORES.wave, D.SPORES.win, D.SPORES.first)
+    end
+    local w = D.WEATHER[g.name:lower()]
+    if w then Lang.compose(g, "about", "%s.", w.blurb) end
+end
 
 -- Waves: { kind, how many, seconds between, gate, start[, health] }, health
 -- a fraction of the usual (a boss met part way through a level comes weaker), gates counted down
@@ -1126,8 +1137,10 @@ local function species(kind, at, price, m, groups, extra)
     end
     for b = 1, 2 do
         local up = t.up[b]
-        add({ id = kind .. ".up" .. b, at = kind .. "." .. groups[math.min(b, #groups)].id, name = up[1].name,
-            blurb = "A BRANCH OF " .. t.name .. " UPGRADES, " .. up[1].name .. " FIRST", up = { kind, b }, price = cost(PU) })
+        local branch = { id = kind .. ".up" .. b, at = kind .. "." .. groups[math.min(b, #groups)].id, name = up[1].name,
+            up = { kind, b }, price = cost(PU) }
+        Lang.compose(branch, "blurb", "A BRANCH OF %s UPGRADES, %s FIRST", t.name, up[1].name)
+        add(branch)
     end
     return first
 end
@@ -1258,8 +1271,10 @@ add({ id = "lore.wild", at = "ring", name = "WILD MUTATIONS", blurb = "MORE MUTA
 local SLOTS = { { 5, "FIVE", "crack", 15 }, { 6, "SIX", "shed", 35 }, { 7, "SEVEN", "pond", 60 }, { 8, "EIGHT", "lawn", 100 } }
 local slotAt = "sprout"
 for _, sl in ipairs(SLOTS) do
-    slotAt = add({ id = "slots." .. sl[1], at = slotAt, name = sl[2] .. " SPECIES", blurb = sl[2] .. " SPECIES CAN COME ON A RUN",
-        slots = sl[1], won = sl[3], price = { sl[4] } })
+    local row = { id = "slots." .. sl[1], at = slotAt, slots = sl[1], won = sl[3], price = { sl[4] } }
+    Lang.compose(row, "name", "%s SPECIES", sl[2])
+    Lang.compose(row, "blurb", "%s SPECIES CAN COME ON A RUN", sl[2])
+    slotAt = add(row)
 end
 
 -- The sprout: its health and sugar, its seeds and their mutations.
@@ -1293,8 +1308,10 @@ for _, sd in ipairs(D.SEEDS) do
     local base, step = 3, 2
     if sd.id ~= "bean" then base, step = 12, 5 end
     for n = 1, #own do price[n] = base + step * (n - 1) end
-    add({ id = sd.id .. ".mut", at = sd.id, name = sd.short .. " MUTATIONS", blurb = "MORE OF THE " .. sd.short .. "'S OWN MUTATIONS",
-        mutations = own, price = price })
+    local row = { id = sd.id .. ".mut", at = sd.id, mutations = own, price = price }
+    Lang.compose(row, "name", "%s MUTATIONS", sd.short)
+    Lang.compose(row, "blurb", "MORE OF THE %s'S OWN MUTATIONS", sd.short)
+    add(row)
 end
 
 -- Field notes: what the network learns of each kind of enemy once it has met
@@ -1312,12 +1329,17 @@ local NOTES = {
 add({ id = "notes", at = "sprout", name = "FIELD NOTES", blurb = "WHAT THE NETWORK KNOWS OF WHAT EATS IT. EACH OPENS ONCE ONE IS MET",
     free = true })
 for _, n in ipairs(NOTES) do
-    local id = add({ id = "notes." .. n.id, at = "notes", name = n.name, blurb = "HIT " .. n.name .. " HARDER", vs = n.kinds,
-        seen = n.kinds, from = 0.95, price = { 4, 8 } })
-    id = add({ id = id .. ".bodies", at = id, name = n.name .. ": BODIES", blurb = "THEIR BODIES FEED THE NETWORK MORE",
-        loot = n.kinds, seen = n.kinds, from = 0.8, price = { 5, 9 } })
-    add({ id = "notes." .. n.id .. ".weak", at = id, name = n.name .. ": WEAK SPOTS", blurb = "WHERE THEY ARE WEAK: HIT " .. n.name .. " HARDER STILL",
-        vs = n.kinds, seen = n.kinds, from = 0.96, price = { 7, 12 } })
+    local hit = { id = "notes." .. n.id, at = "notes", name = n.name, vs = n.kinds, seen = n.kinds, from = 0.95, price = { 4, 8 } }
+    Lang.compose(hit, "blurb", "HIT %s HARDER", n.name)
+    local id = add(hit)
+    local bodies = { id = id .. ".bodies", at = id, blurb = "THEIR BODIES FEED THE NETWORK MORE",
+        loot = n.kinds, seen = n.kinds, from = 0.8, price = { 5, 9 } }
+    Lang.compose(bodies, "name", "%s: BODIES", n.name)
+    id = add(bodies)
+    local weak = { id = "notes." .. n.id .. ".weak", at = id, vs = n.kinds, seen = n.kinds, from = 0.96, price = { 7, 12 } }
+    Lang.compose(weak, "name", "%s: WEAK SPOTS", n.name)
+    Lang.compose(weak, "blurb", "WHERE THEY ARE WEAK: HIT %s HARDER STILL", n.name)
+    add(weak)
 end
 
 D.NETWORK = NET

@@ -30,6 +30,8 @@ local View = require "src.ui.view"
 local flair = require "src.ui.flair"
 local codex = require "src.ui.codex"
 local N = require "src.network"
+local Lang = require "src.lang"
+local tr, trf = Lang.t, Lang.f
 
 local floor, max, min, sin = math.floor, math.max, math.min, math.sin
 local color, box, text, wrapLines, say, inside = Draw.color, Draw.box, Draw.text, Draw.wrapLines, Draw.say, Draw.inside
@@ -106,7 +108,7 @@ end
 -- A card up, or after the ones already waiting. `act(id)` hears the button.
 function G.show(c)
     c.where = c.where or "run"
-    c.buttons = c.buttons or { { id = "ok", text = "OK" } }
+    c.buttons = c.buttons or { { id = "ok", text = tr("OK") } }
     c.t0 = flair.now()
     if G.card then G.queue[#G.queue + 1] = c else G.card = c; sound("panel") end
 end
@@ -242,7 +244,7 @@ local function coachLayout(c)
     local y = S.inset.t + TOP + 3
     local L = { x = x, y = y, w = w, h = h, lines = lines }
     if c.skip then
-        local s = "SKIP TUTORIAL"
+        local s = tr("SKIP TUTORIAL")
         L.skip = { x = x + w - Font.width(s) - 8, y = y + h + 3, w = Font.width(s) + 8, h = 11, s = s }
     end
     return L
@@ -371,14 +373,14 @@ end
 -- stay until the thing is `done`.
 local STEPS = {
     { card = function(g)
-        return { head = S.level.name, body = "YOU ARE THE MYCELIUM UNDER THIS SPROUT. BUGS COME DOWN THE TRAIL TO EAT IT: "
-            .. "HOLD THEM OFF FOR " .. #g.waves .. " WAVES AND IT LIVES. THIS FIRST TIME, THE SPORE PUFFER IS ALL YOU HAVE.",
-            buttons = { { id = "ok", text = "SHOW ME" }, { id = "skip", text = "SKIP TUTORIAL" } } }
+        return { head = S.level.name, body = trf("YOU ARE THE MYCELIUM UNDER THIS SPROUT. BUGS COME DOWN THE TRAIL TO EAT IT: "
+            .. "HOLD THEM OFF FOR %s WAVES AND IT LIVES. THIS FIRST TIME, THE SPORE PUFFER IS ALL YOU HAVE.", #g.waves),
+            buttons = { { id = "ok", text = tr("SHOW ME") }, { id = "skip", text = tr("SKIP TUTORIAL") } } }
     end },
     { coach = function(g)
         return coach({ text = function()
-            return say("DRAG FROM THE SPROUT TO THE POCKET IT POINTS AT: A LINK GROWS OUT TO IT",
-                "DRAG YOUR FINGER FROM THE SPROUT TO THE POCKET IT POINTS AT: A LINK GROWS OUT TO IT")
+            return tr(say("DRAG FROM THE SPROUT TO THE POCKET IT POINTS AT: A LINK GROWS OUT TO IT",
+                "DRAG YOUR FINGER FROM THE SPROUT TO THE POCKET IT POINTS AT: A LINK GROWS OUT TO IT"))
         end, drag = function()
             local n = nearestPocket(g)
             if not n then return end
@@ -389,8 +391,8 @@ local STEPS = {
     end, done = function(g) return living(g) ~= nil end },
     { coach = function(g)
         return coach({ text = function()
-            if S.mode ~= "puffer" then return "PICK THE SPORE PUFFER, DOWN ON THE BAR" end
-            return say("NOW CLICK THE POCKET YOU LINKED: THE PUFFER GROWS THERE", "NOW TAP THE POCKET YOU LINKED: THE PUFFER GROWS THERE")
+            if S.mode ~= "puffer" then return tr("PICK THE SPORE PUFFER, DOWN ON THE BAR") end
+            return tr(say("NOW CLICK THE POCKET YOU LINKED: THE PUFFER GROWS THERE", "NOW TAP THE POCKET YOU LINKED: THE PUFFER GROWS THERE"))
         end, at = function()
             if S.mode ~= "puffer" then return buttonAt("puffer") end
             local n = freeLinked(g)
@@ -398,35 +400,35 @@ local STEPS = {
         end })
     end, done = function(g) return towers(g) > 0 end },
     { card = function()
-        return { head = "NUTRIENTS", body = "LINKS AND TOWERS ARE PAID FOR IN NUTRIENTS, THE COUNT TOP LEFT. A LONGER LINK COSTS "
-            .. "MORE. THE SPROUT MAKES MORE WHILE A WAVE IS ON, AND EVERY WAVE CLEARED PAYS A BONUS.",
+        return { head = tr("NUTRIENTS"), body = tr("LINKS AND TOWERS ARE PAID FOR IN NUTRIENTS, THE COUNT TOP LEFT. A LONGER LINK COSTS "
+            .. "MORE. THE SPROUT MAKES MORE WHILE A WAVE IS ON, AND EVERY WAVE CLEARED PAYS A BONUS."),
             point = function() return S.inset.l + 22, S.inset.t + 9 end }
     end },
     { coach = function()
         return coach({ text = function()
-            return say("PRESS START (OR SPACE) FOR THE FIRST WAVE. THE BUGS COME IN WHERE IT BLINKS \"IN\"",
-                "TAP START FOR THE FIRST WAVE. THE BUGS COME IN WHERE IT BLINKS \"IN\"")
+            return tr(say("PRESS START (OR SPACE) FOR THE FIRST WAVE. THE BUGS COME IN WHERE IT BLINKS \"IN\"",
+                "TAP START FOR THE FIRST WAVE. THE BUGS COME IN WHERE IT BLINKS \"IN\""))
         end, at = function() local x, y, w, h = waveRect() return x + floor(w / 2), y + floor(h / 2) end })
     end, done = function(g) return g.wave >= 1 end, start = true },
     { coach = function()
         return coach({ text = function()
-            return "THE PUFFER HITS EVERYTHING NEAR IT, AND PUFFS ONCE MORE FOR EACH LINK IT HAS, UP TO FOUR. "
-                .. say("THE SAME BUTTON (OR F) SPEEDS THE GAME UP", "THE SAME BUTTON SPEEDS THE GAME UP")
+            return tr("THE PUFFER HITS EVERYTHING NEAR IT, AND PUFFS ONCE MORE FOR EACH LINK IT HAS, UP TO FOUR. ")
+                .. tr(say("THE SAME BUTTON (OR F) SPEEDS THE GAME UP", "THE SAME BUTTON SPEEDS THE GAME UP"))
         end, at = function() local x, y, w, h = waveRect() return x + floor(w / 2), y + floor(h / 2) end })
     end, done = function(g) return g.phase ~= "wave" end },
     { card = function()
-        return { head = "WAVE CLEARED", body = "IT PAID A BONUS IN NUTRIENTS, AND " .. D.SPORES.wave .. " SPORES INTO THE "
-            .. "SPORE BANK, KEPT FOR GOOD. SPEND THE NUTRIENTS NOW: MORE LINKS, MORE PUFFERS. "
-            .. say("CLICK", "TAP") .. " A TOWER TO SEE ITS UPGRADES." }
+        return { head = tr("WAVE CLEARED"), body = trf("IT PAID A BONUS IN NUTRIENTS, AND %s SPORES INTO THE "
+            .. "SPORE BANK, KEPT FOR GOOD. SPEND THE NUTRIENTS NOW: MORE LINKS, MORE PUFFERS. ", D.SPORES.wave)
+            .. tr(say("CLICK A TOWER TO SEE ITS UPGRADES.", "TAP A TOWER TO SEE ITS UPGRADES.")) }
     end, ready = function(g) return g.phase == "build" end },
     { coach = function(g)
         return coach({ text = function()
             if S.mode ~= "prune" then
-                return say("PRUNE (X) CUTS ONE OF YOUR OWN LINKS FOR HALF ITS COST BACK, OR CLEARS A TOWER. PICK IT",
-                    "PRUNE CUTS ONE OF YOUR OWN LINKS FOR HALF ITS COST BACK, OR CLEARS A TOWER. PICK IT")
+                return tr(say("PRUNE (X) CUTS ONE OF YOUR OWN LINKS FOR HALF ITS COST BACK, OR CLEARS A TOWER. PICK IT",
+                    "PRUNE CUTS ONE OF YOUR OWN LINKS FOR HALF ITS COST BACK, OR CLEARS A TOWER. PICK IT"))
             end
-            return say("CLICK A LINK TO PRUNE IT, OR X AGAIN TO PUT IT DOWN. BRINE SLIDES DOWN LINKS: PRUNE AHEAD OF IT",
-                "TAP A LINK TO PRUNE IT, OR PRUNE AGAIN TO PUT IT DOWN. BRINE SLIDES DOWN LINKS: PRUNE AHEAD OF IT")
+            return tr(say("CLICK A LINK TO PRUNE IT, OR X AGAIN TO PUT IT DOWN. BRINE SLIDES DOWN LINKS: PRUNE AHEAD OF IT",
+                "TAP A LINK TO PRUNE IT, OR PRUNE AGAIN TO PUT IT DOWN. BRINE SLIDES DOWN LINKS: PRUNE AHEAD OF IT"))
         end, at = function()
             if S.mode ~= "prune" then return buttonAt("prune") end
             local l = living(g)
@@ -437,8 +439,8 @@ local STEPS = {
         return (G.pruning and S.mode ~= "prune") or g.phase ~= "build"
     end },
     { card = function()
-        return { head = "THE NETWORK IS YOURS", body = "GROW IT AS YOU LIKE, AND START EACH WAVE WHEN YOU ARE READY. "
-            .. "WHAT IS NEW IS EXPLAINED AS IT COMES. " .. say("P OR ESCAPE PAUSES.", "TAP THE TOP BAR TO PAUSE.") }
+        return { head = tr("THE NETWORK IS YOURS"), body = tr("GROW IT AS YOU LIKE, AND START EACH WAVE WHEN YOU ARE READY. "
+            .. "WHAT IS NEW IS EXPLAINED AS IT COMES. ") .. tr(say("P OR ESCAPE PAUSES.", "TAP THE TOP BAR TO PAUSE.")) }
     end, last = true },
 }
 
@@ -485,14 +487,14 @@ local function meet(kind)
     if D.COUNTERS[kind] then
         local names = {}
         for _, k in ipairs(D.COUNTERS[kind]) do names[#names + 1] = D.TOWER[k].name end
-        answer = "ANSWERED BY: " .. table.concat(names, ", ")
+        answer = trf("ANSWERED BY: %s", table.concat(names, ", "))
     end
-    G.show({ head = (d.boss and "BOSS: " or "NEW: ") .. d.name, body = d.blurb, answer = answer, pic = kind, boss = d.boss })
+    G.show({ head = trf(d.boss and "BOSS: %s" or "NEW: %s", d.name), body = d.blurb, answer = answer, pic = kind, boss = d.boss })
     teach(kind)
 end
 local function weather(id, soon)
     local w = D.WEATHER[id]
-    G.show({ head = w.name .. (soon and " NEXT WAVE" or ""), body = w.blurb .. ". IT LASTS THE ONE WAVE." })
+    G.show({ head = soon and trf("%s NEXT WAVE", w.name) or w.name, body = w.blurb .. tr(". IT LASTS THE ONE WAVE.") })
     teach(id)
 end
 
@@ -510,49 +512,50 @@ end
 local LESSONS = {
     { id = "cut", always = true, when = function(g) return cutLink(g) ~= nil end, show = function(g)
         local l = cutLink(g)
-        G.show({ head = "A LINK WAS CUT", body = "BUGS CHEW THE LINKS THAT CROSS THEIR TRAIL. PAST A CUT NOTHING IS FED: "
-            .. "TOWERS THERE FIRE ON THEIR RESERVE, THEN GO DORMANT.", point = function() return linkAt(l) end,
+        G.show({ head = tr("A LINK WAS CUT"), body = tr("BUGS CHEW THE LINKS THAT CROSS THEIR TRAIL. PAST A CUT NOTHING IS FED: "
+            .. "TOWERS THERE FIRE ON THEIR RESERVE, THEN GO DORMANT."), point = function() return linkAt(l) end,
             act = function()
                 G.lesson = { where = "run", text = function()
-                    return say("CLICK THE CUT LINK TO REGROW IT, OR REGROW ALL (1) FOR EVERY CUT AT ONCE",
-                        "TAP THE CUT LINK TO REGROW IT, OR REGROW ALL FOR EVERY CUT AT ONCE")
+                    return tr(say("CLICK THE CUT LINK TO REGROW IT, OR REGROW ALL (1) FOR EVERY CUT AT ONCE",
+                        "TAP THE CUT LINK TO REGROW IT, OR REGROW ALL FOR EVERY CUT AT ONCE"))
                 end, at = function() return linkAt(l) end, done = function() return l.state ~= "cut" or l.hand end }
             end })
     end },
     { id = "mutate", when = function(g) return g.phase == "mutate" end, show = function()
-        G.show({ head = "THE NETWORK MUTATES", body = "EVERY FEW WAVES, PICK ONE OF THREE CHANGES. IT LASTS THE REST OF "
-            .. "THE RUN. THE NETWORK CAN GROW MORE OF THEM TO PICK FROM." })
+        G.show({ head = tr("THE NETWORK MUTATES"), body = tr("EVERY FEW WAVES, PICK ONE OF THREE CHANGES. IT LASTS THE REST OF "
+            .. "THE RUN. THE NETWORK CAN GROW MORE OF THEM TO PICK FROM.") })
     end },
     { id = "quality", build = true, when = hasQuality, show = function()
-        G.show({ head = "RICH AND POOR POCKETS", body = "A RICH POCKET (A DEAD BEETLE) GIVES ITS TOWER +30% POWER AND "
-            .. "PAYS SUGAR WHILE IT IS FED. A POOR ONE (A PEBBLE) GIVES -25%. " .. say("POINT AT", "TAP") .. " A POCKET TO READ IT." })
+        G.show({ head = tr("RICH AND POOR POCKETS"), body = tr("A RICH POCKET (A DEAD BEETLE) GIVES ITS TOWER +30% POWER AND "
+            .. "PAYS SUGAR WHILE IT IS FED. A POOR ONE (A PEBBLE) GIVES -25%. ")
+            .. tr(say("POINT AT A POCKET TO READ IT.", "TAP A POCKET TO READ IT.")) })
     end },
     { id = "ring", build = true, when = function(g) return #g.rings > 0 or g.level.ringNodes ~= nil end, show = function(g)
         local k = g.level.ringNodes or D.RING.nodes
-        G.show({ head = "FAIRY RINGS", body = k .. " OR MORE FED POCKETS LINKED IN A LOOP ROUND THE TRAIL CLOSE A FAIRY "
-            .. "RING: ITS TOWERS HIT X" .. D.RING.damage .. ", AND WHAT WALKS INSIDE IT WADES AT X" .. D.RING.slow .. "."
-            .. (g.level.ringNodes and (" HERE ONLY " .. k .. " ARE NEEDED.") or "") })
+        G.show({ head = tr("FAIRY RINGS"), body = trf("%s OR MORE FED POCKETS LINKED IN A LOOP ROUND THE TRAIL CLOSE A FAIRY "
+            .. "RING: ITS TOWERS HIT X%s, AND WHAT WALKS INSIDE IT WADES AT X%s.", k, D.RING.damage, D.RING.slow)
+            .. (g.level.ringNodes and trf(" HERE ONLY %s ARE NEEDED.", k) or "") })
     end },
     -- High ground as soon as there is some; low ground once rain is coming to it.
     { id = "high", build = true, when = function(g) return hasGround(g, "high") end, show = function()
-        G.show({ head = "HIGH GROUND", body = "A STONE IS HIGH GROUND: THE GIANT WATER BUG CANNOT REACH WHAT GROWS "
-            .. "ON IT, AND A MORTAR THERE HAS NO LEAST RANGE." })
+        G.show({ head = tr("HIGH GROUND"), body = tr("A STONE IS HIGH GROUND: THE GIANT WATER BUG CANNOT REACH WHAT GROWS "
+            .. "ON IT, AND A MORTAR THERE HAS NO LEAST RANGE.") })
     end },
     { id = "low", build = true, when = function(g)
         local nxt = g:nextWave()
         return hasGround(g, "low") and nxt ~= nil and nxt.weather == "rain"
     end, show = function()
-        G.show({ head = "LOW GROUND", body = "A LEAF OR A LILY PAD LIES LOW: RAIN WASHES THE RESERVE OFF ITS TOWER. "
-            .. "RAIN IS COMING NEXT WAVE." })
+        G.show({ head = tr("LOW GROUND"), body = tr("A LEAF OR A LILY PAD LIES LOW: RAIN WASHES THE RESERVE OFF ITS TOWER. "
+            .. "RAIN IS COMING NEXT WAVE.") })
     end },
     { id = "ford", build = true, when = function() return S.world.fords end, show = function()
-        G.show({ head = "THE FORD", body = "OPEN WATER CUTS THE TRAIL HERE. A DROUGHT DRIES IT TO MUD, AND THE BUGS TAKE "
-            .. "THE SHORTCUT ACROSS: LOOK AT THE FORECAST." })
+        G.show({ head = tr("THE FORD"), body = tr("OPEN WATER CUTS THE TRAIL HERE. A DROUGHT DRIES IT TO MUD, AND THE BUGS TAKE "
+            .. "THE SHORTCUT ACROSS: LOOK AT THE FORECAST.") })
     end },
     { id = "pulse", build = true, when = function(g) return g:hasPulse() end, show = function()
-        G.show({ head = "THE SPORE PULSE", body = "IT IS ON THE BAR NOW. PICK IT, THEN A FED NODE: THE TOWERS ON THE WAY "
-            .. "THERE FROM THE SPROUT FIRE X" .. D.PULSE.rate .. " AS OFTEN FOR X" .. D.PULSE.damage .. " DAMAGE, FOR "
-            .. D.PULSE.duration .. "S. THEN IT REGROWS.", point = function() return buttonAt("pulse") end })
+        G.show({ head = tr("THE SPORE PULSE"), body = trf("IT IS ON THE BAR NOW. PICK IT, THEN A FED NODE: THE TOWERS ON THE WAY "
+            .. "THERE FROM THE SPROUT FIRE X%s AS OFTEN FOR X%s DAMAGE, FOR %sS. THEN IT REGROWS.", D.PULSE.rate, D.PULSE.damage,
+            D.PULSE.duration), point = function() return buttonAt("pulse") end })
     end },
 }
 
@@ -582,10 +585,10 @@ local function bank(g)
     local open = G.openNodes(3)
     local names = {}
     for _, o in ipairs(open) do if o.open then names[#names + 1] = o.row.name .. " (" .. o.price .. ")" end end
-    local body = "THIS RUN EARNED " .. g.spores .. " SPORES, AND THE BANK HOLDS " .. Profile.spores .. ". THEY STAY, WIN "
-        .. "OR LOSE, AND GROW THE NETWORK UNDER THE SPROUT: NEW SPECIES, TOUGHER LINKS, THE SPORE PULSE."
-    if #names > 0 then body = body .. " OPEN NOW: " .. table.concat(names, ", ") .. "."
-    elseif open[1] then body = body .. " NEXT: " .. open[1].row.name .. " FOR " .. open[1].price .. "." end
+    local body = trf("THIS RUN EARNED %s SPORES, AND THE BANK HOLDS %s. THEY STAY, WIN "
+        .. "OR LOSE, AND GROW THE NETWORK UNDER THE SPROUT: NEW SPECIES, TOUGHER LINKS, THE SPORE PULSE.", g.spores, Profile.spores)
+    if #names > 0 then body = body .. trf(" OPEN NOW: %s.", table.concat(names, ", "))
+    elseif open[1] then body = body .. trf(" NEXT: %s FOR %s.", open[1].row.name, open[1].price) end
     -- No new species open yet: the nearest, and what it grows off.
     if not (open[1] and open[1].species) then
         for _, row in ipairs(D.NETWORK) do
@@ -593,14 +596,14 @@ local function bank(g)
             if row.species and Profile.nodeState(row.id) == "shut" and up then
                 local st = Profile.nodeState(up.id)
                 if st == "open" or st == "poor" then
-                    body = body .. " A NEW SPECIES, THE " .. row.name .. ", GROWS OFF " .. up.name .. "."
+                    body = body .. trf(" A NEW SPECIES, THE %s, GROWS OFF %s.", row.name, up.name)
                     break
                 end
             end
         end
     end
-    G.show({ head = "THE SPORE BANK", body = body,
-        buttons = { { id = "network", text = "SEE THE NETWORK" }, { id = "later", text = "LATER" } },
+    G.show({ head = tr("THE SPORE BANK"), body = body,
+        buttons = { { id = "network", text = tr("SEE THE NETWORK") }, { id = "later", text = tr("LATER") } },
         act = function(id) if id == "network" then require("src.ui.network").open() end end })
     teach("bank")
 end
@@ -668,12 +671,13 @@ function G.network(net)
     if S.script or Profile.taught.network then return end
     Profile.teach("network")
     local first = G.openNodes(1)[1]
-    local body = "SPORES (TOP LEFT) COME FROM EVERY RUN: " .. D.SPORES.wave .. " A WAVE CLEARED, MORE FOR A WIN. "
-        .. "EACH NODE HERE GROWS FROM THE ONE ABOVE IT, A RANK AT A TIME, AND STAYS GROWN FOR EVERY RUN AFTER."
+    local body = trf("SPORES (TOP LEFT) COME FROM EVERY RUN: %s A WAVE CLEARED, MORE FOR A WIN. "
+        .. "EACH NODE HERE GROWS FROM THE ONE ABOVE IT, A RANK AT A TIME, AND STAYS GROWN FOR EVERY RUN AFTER.", D.SPORES.wave)
     if first then
         net.sel = first.row.id
         net.centre(first.row.id)
-        body = body .. " A GOOD FIRST: " .. first.row.name .. ". " .. say("CLICK", "TAP") .. " IT AGAIN, OR ITS BUTTON, TO GROW IT."
+        body = body .. trf(say(" A GOOD FIRST: %s. CLICK IT AGAIN, OR ITS BUTTON, TO GROW IT.",
+            " A GOOD FIRST: %s. TAP IT AGAIN, OR ITS BUTTON, TO GROW IT."), first.row.name)
         local id = first.row.id
         G.lesson = { where = "network", at = function()
             local L = net.layout()
@@ -683,7 +687,7 @@ function G.network(net)
             end
         end, done = function() return net.sel ~= id or N.rank(Profile.ranks(), id) > 0 end }
     end
-    G.show({ where = "network", head = "THE NETWORK", body = body, span = function()
+    G.show({ where = "network", head = tr("THE NETWORK"), body = body, span = function()
         local L = net.layout()
         return L.area.x, L.area.x + L.area.w
     end })

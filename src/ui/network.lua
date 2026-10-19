@@ -42,6 +42,8 @@ local Pixels = require "src.ui.pixels"
 local flair = require "src.ui.flair"
 local Title = require "src.ui.title"
 local Guide = require "src.ui.guide"
+local Lang = require "src.lang"
+local tr, trf = Lang.t, Lang.f
 
 local floor, max, min = math.floor, math.max, math.min
 local color, box, text, wrapLines, say, inside, wide =
@@ -85,9 +87,9 @@ function net.howTo(id)
     local row = Profile.nodeOf(id)
     local state, level = Profile.nodeState(row.id)
     local name = D.TOWER[id] and D.TOWER[id].name or D.SEED[id].name
-    if state == "locked" then return "???: WIN " .. level.name .. ", THEN GROW IT ON THE NETWORK" end
-    if state == "shut" then return name .. ": GROW " .. D.NET[row.at].name .. " ON THE NETWORK FIRST" end
-    return name .. ": GROW IT ON THE NETWORK, " .. N.price(Profile.ranks(), row.id) .. " SPORES. YOU HAVE " .. Profile.spores
+    if state == "locked" then return trf("???: WIN %s, THEN GROW IT ON THE NETWORK", level.name) end
+    if state == "shut" then return trf("%s: GROW %s ON THE NETWORK FIRST", name, D.NET[row.at].name) end
+    return trf("%s: GROW IT ON THE NETWORK, %s SPORES. YOU HAVE %s", name, N.price(Profile.ranks(), row.id), Profile.spores)
 end
 
 -- How many nodes there are spores for now: the menu's button shows it.
@@ -169,14 +171,14 @@ local function panelWidth() return wide() and min(150, floor(S.vw * 0.36)) or S.
 
 function net.layout()
     local L = { back = { x = S.inset.l + 4, y = S.inset.t + 4, w = 34, h = 12 } }
-    local rs = net.sure > flair.now() and "SURE? ALL BACK" or "REGROW"
+    local rs = tr(net.sure > flair.now() and "SURE? ALL BACK" or "REGROW")
     L.regrow = { s = rs, w = Font.width(rs) + 8, h = 12, y = S.inset.t + 4 }
     L.regrow.x = S.vw - S.inset.r - 4 - L.regrow.w
-    local as = Profile.all and "ALL: ON" or "ALL: OFF"
+    local as = tr(Profile.all and "ALL: ON" or "ALL: OFF")
     L.all = { s = as, w = Font.width(as) + 8, h = 12, y = S.inset.t + 4 }
     L.all.x = L.regrow.x - 5 - L.all.w
     L.spores = { x = L.back.x + L.back.w + 6, y = S.inset.t + 4, h = 12 }
-    L.spores.s = "SPORES " .. Profile.spores
+    L.spores.s = trf("SPORES %s", Profile.spores)
     L.spores.w = Font.width(L.spores.s) + 4
     local top, bottom = S.inset.t + 20, S.vh - S.inset.b - 2
     L.area = { x = S.inset.l, y = top, w = S.vw - S.inset.l - S.inset.r, h = bottom - top }
@@ -283,7 +285,7 @@ end
 function net.toggleAll()
     Profile.setAll(not Profile.all)
     sound(Profile.all and "on" or "off")
-    net.note = { s = Profile.all and "THE WHOLE NETWORK IS ON: EVERY NODE GROWN" or "THE NETWORK IS AS GROWN AGAIN",
+    net.note = { s = tr(Profile.all and "THE WHOLE NETWORK IS ON: EVERY NODE GROWN" or "THE NETWORK IS AS GROWN AGAIN"),
         k = Profile.all and "g" or "t", t = flair.now() + 2.5 }
 end
 
@@ -344,15 +346,15 @@ local function nowNextNotes(get, kind, row, r)
 end
 
 local function kindOf(row)
-    if not row.at then return "THE SPROUT" end
-    if row.species then return "SPECIES: " .. D.TOWER[row.species].role end
+    if not row.at then return tr("THE SPROUT") end
+    if row.species then return trf("SPECIES: %s", D.TOWER[row.species].role) end
     if row.tower then return D.TOWER[row.tower].name end
-    if row.up then return "UPGRADES: " .. D.TOWER[row.up[1]].name end
-    if row.seed then return "SEED" end
-    if row.vs or row.loot then return "FIELD NOTES" end
-    if row.mutations then return "MUTATIONS" end
-    if row.slots then return "THE LOADOUT" end
-    return "THE NETWORK"
+    if row.up then return trf("UPGRADES: %s", D.TOWER[row.up[1]].name) end
+    if row.seed then return tr("SEED") end
+    if row.vs or row.loot then return tr("FIELD NOTES") end
+    if row.mutations then return tr("MUTATIONS") end
+    if row.slots then return tr("THE LOADOUT") end
+    return tr("THE NETWORK")
 end
 
 -- A node's panel, as lines { s, k } `w` wide.
@@ -365,8 +367,8 @@ function net.lines(id, w)
     add(row.name, "w")
     add(kindOf(row), "t")
     if not row.free then
-        local s = r > 0 and "GROWN" or "NOT GROWN"
-        if n > 1 then s = r >= n and ("RANK " .. r .. ", FULLY GROWN") or ("RANK " .. r .. " > " .. (r + 1)) end
+        local s = tr(r > 0 and "GROWN" or "NOT GROWN")
+        if n > 1 then s = r >= n and trf("RANK %s, FULLY GROWN", r) or trf("RANK %s > %s", r, r + 1) end
         add(s, r >= n and "g" or "l")
     end
     gap()
@@ -377,34 +379,34 @@ function net.lines(id, w)
         gap()
         local d = D.TOWER[row.tower]
         for _, k in ipairs(row.stats) do
-            local name = NAME[k] or k:upper()
+            local name = tr(NAME[k] or k:upper())
             if type(d[k]) == "number" then
                 add(name .. " " .. nowNext(N.MODE[k] or "more", d[k], row, r), "l")
             else
                 local nxt = r < n and N.factor(row, r + 1) or nil
-                add(name .. ", FROM ITS UPGRADES: " .. pair(N.factor(row, r), nxt, true), "l")
+                add(trf("%s, FROM ITS UPGRADES: %s", name, pair(N.factor(row, r), nxt, true)), "l")
             end
         end
     end
     if row.world then
         gap()
         local w2 = WORLD[row.world]
-        add(w2[1] .. " " .. nowNext(N.WORLD[row.world], w2[2], row, r), "l")
+        add(tr(w2[1]) .. " " .. nowNext(N.WORLD[row.world], w2[2], row, r), "l")
         if row.world == "pulse" then
             local function back(rr) return floor(N.scale("less", D.PULSE.cooldown, N.factor(row, rr)) + 0.5) .. "S" end
-            add("COMES BACK IN " .. back(r) .. (r < n and (" > " .. back(r + 1)) or ""), "l")
+            add(trf("COMES BACK IN %s", back(r)) .. (r < n and (" > " .. back(r + 1)) or ""), "l")
         end
     end
     local kinds = row.vs or row.loot
     if kinds then
         gap()
-        if row.vs then add("DAMAGE TO THEM " .. nowNextNotes(N.vs, kinds[1], row, r), "l") end
-        if row.loot then add("THEIR BODIES WORTH " .. nowNextNotes(N.loot, kinds[1], row, r), "l") end
+        if row.vs then add(trf("DAMAGE TO THEM %s", nowNextNotes(N.vs, kinds[1], row, r)), "l") end
+        if row.loot then add(trf("THEIR BODIES WORTH %s", nowNextNotes(N.loot, kinds[1], row, r)), "l") end
         local met = {}
         for _, k in ipairs(kinds) do
             if Profile.seen[k] and not D.ENEMIES[k].segment then met[#met + 1] = D.ENEMIES[k].name end
         end
-        if #met > 0 then add("MET: " .. table.concat(met, ", "), "s") end
+        if #met > 0 then add(trf("MET: %s", table.concat(met, ", ")), "s") end
     end
     if row.up then
         gap()
@@ -426,9 +428,9 @@ function net.lines(id, w)
     if row.slots then
         gap()
         local now = N.slots(Profile.grown())
-        add("SPECIES ON A RUN " .. now .. (r < n and now < row.slots and (" > " .. row.slots) or ""), "l")
+        add(trf("SPECIES ON A RUN %s", now) .. (r < n and now < row.slots and (" > " .. row.slots) or ""), "l")
     end
-    if row.pulse then gap(); add("THE PULSE ON THE TOOLBAR: A SURGE TO ANY FED NODE, EVERY TOWER ON THE WAY OVERCHARGED", "s") end
+    if row.pulse then gap(); add(tr("THE PULSE ON THE TOOLBAR: A SURGE TO ANY FED NODE, EVERY TOWER ON THE WAY OVERCHARGED"), "s") end
     return out
 end
 
@@ -436,12 +438,12 @@ end
 local function buttonText(id)
     local state, level = Profile.nodeState(id)
     local row = D.NET[id]
-    if Profile.all and not row.free then return "ALL ON: SWITCH IT OFF TO GROW IT", false, "g" end
-    if state == "full" then return row.free and "THERE FROM THE START" or "FULLY GROWN", false, "g" end
-    if state == "open" then return say("G: ", "") .. "GROW IT: " .. N.price(Profile.ranks(), id) .. " SPORES", true, "l" end
-    if state == "poor" then return N.price(Profile.ranks(), id) .. " SPORES. YOU HAVE " .. Profile.spores, false, "r" end
-    if state == "shut" then return "GROW " .. D.NET[row.at].name .. " FIRST", false, "k" end
-    if state == "locked" then return "WIN " .. level.name .. " FIRST", false, "r" end
+    if Profile.all and not row.free then return tr("ALL ON: SWITCH IT OFF TO GROW IT"), false, "g" end
+    if state == "full" then return tr(row.free and "THERE FROM THE START" or "FULLY GROWN"), false, "g" end
+    if state == "open" then return say("G: ", "") .. trf("GROW IT: %s SPORES", N.price(Profile.ranks(), id)), true, "l" end
+    if state == "poor" then return trf("%s SPORES. YOU HAVE %s", N.price(Profile.ranks(), id), Profile.spores), false, "r" end
+    if state == "shut" then return trf("GROW %s FIRST", D.NET[row.at].name), false, "k" end
+    if state == "locked" then return trf("WIN %s FIRST", level.name), false, "r" end
     return "???", false, "k"
 end
 
@@ -455,7 +457,7 @@ function net.grow(id)
     net.grew[id] = flair.now()
     sound((row.species or row.seed) and "unlock" or "grow")
     local r = N.rank(Profile.ranks(), id)
-    if r >= N.ranks(row) then say2(row.name .. " FULLY GROWN", "g") else say2(row.name .. ": RANK " .. r, "l") end
+    if r >= N.ranks(row) then say2(trf("%s FULLY GROWN", row.name), "g") else say2(trf("%s: RANK %s", row.name, r), "l") end
     return true
 end
 
@@ -474,7 +476,7 @@ local function testing()
     Profile.spores = Profile.spores + net.TESTING
     Profile.save()
     sound("unlock")
-    say2("+" .. net.TESTING .. " SPORES, FOR TESTING", "t")
+    say2(trf("+%s SPORES, FOR TESTING", net.TESTING), "t")
 end
 
 local function regrow()
@@ -483,7 +485,7 @@ local function regrow()
         local back = Profile.regrow()
         net.grew = {}
         sound("prune")
-        say2("THE NETWORK IS SOLD BACK: +" .. back .. " SPORES", "t")
+        say2(trf("THE NETWORK IS SOLD BACK: +%s SPORES", back), "t")
     else
         net.sure = flair.now() + 3
         sound("select")
@@ -922,10 +924,10 @@ function net.draw()
     -- The top: BACK, the spores, how much is grown, ALL and REGROW.
     local b = L.back
     box(b.x, b.y, b.w, b.h, S.hover.netBack and "n" or "u", S.hover.netBack and "t" or "k")
-    text("BACK", b.x + floor((b.w - Font.width("BACK")) / 2), b.y + 4, "w")
+    text(tr("BACK"), b.x + floor((b.w - Font.width(tr("BACK"))) / 2), b.y + 4, "w")
     text(L.spores.s, L.spores.x + 2, L.spores.y + 4, "t")
     local all, spent = N.total(Profile.ranks())
-    local pct = "NETWORK " .. floor(spent / all * 100) .. "%"
+    local pct = trf("NETWORK %s%%", floor(spent / all * 100))
     -- Left out on a screen too narrow for it.
     if L.spores.x + L.spores.w + 8 + Font.width(pct) < L.all.x - 4 then
         text(pct, L.spores.x + L.spores.w + 8, L.spores.y + 4, Profile.all and "g" or "c")
@@ -944,8 +946,8 @@ function net.draw()
     local tip, k
     if net.note and net.note.t > now then tip, k = net.note.s, net.note.k
     elseif not L.panel then
-        tip, k = say("CLICK A NODE TO READ IT, AGAIN TO GROW IT. DRAG TO LOOK ROUND. TAB: THE NEXT YOU CAN GROW",
-            "TAP A NODE TO READ IT, AGAIN TO GROW IT. DRAG TO LOOK ROUND"), "s"
+        tip, k = tr(say("CLICK A NODE TO READ IT, AGAIN TO GROW IT. DRAG TO LOOK ROUND. TAB: THE NEXT YOU CAN GROW",
+            "TAP A NODE TO READ IT, AGAIN TO GROW IT. DRAG TO LOOK ROUND")), "s"
     end
     if tip then
         local y = L.panel and not wide() and L.panel.y - 11 or S.vh - S.inset.b - 10

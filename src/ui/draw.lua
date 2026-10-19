@@ -13,10 +13,25 @@ local function inside(x, y, rx, ry, rw, rh) return x >= rx and y >= ry and x < r
 -- Wider than it is tall: panels go down the side rather than across.
 local function wide() return S.vw > S.vh end
 
+-- The words of `str`, a word too long for a line on its own (a long one in
+-- Spanish, on a narrow card) broken with a hyphen.
+local function words(str, w)
+    local out = {}
+    for word in str:gmatch("%S+") do
+        while Font.width(word) > w and Font.length(word) > 2 do
+            local n = math.max(1, floor((w + 1) / 4) - 1)
+            out[#out + 1] = Font.cut(word, n) .. "-"
+            word = word:sub(#Font.cut(word, n) + 1)
+        end
+        out[#out + 1] = word
+    end
+    return out
+end
+
 -- Words broken into lines no wider than w.
 local function wrapLines(str, w)
     local lines, line = {}, ""
-    for word in str:gmatch("%S+") do
+    for _, word in ipairs(words(str, w)) do
         local try = line == "" and word or line .. " " .. word
         if Font.width(try) > w and line ~= "" then
             lines[#lines + 1] = line
@@ -64,9 +79,9 @@ local function say(m, t) return S.touch and t or m end
 -- Words broken into lines `w` wide, from (x, y) down, seven pixels a line.
 local function wrap(s, x, y, w, k)
     local line = ""
-    for word in s:gmatch("%S+") do
+    for _, word in ipairs(words(s, w)) do
         local try = line == "" and word or line .. " " .. word
-        if Font.width(try) > w then
+        if Font.width(try) > w and line ~= "" then
             text(line, x, y, k)
             line, y = word, y + 7
         else

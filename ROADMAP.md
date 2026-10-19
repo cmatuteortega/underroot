@@ -86,7 +86,7 @@ teaches it, a thing at a time; what is left is to watch new players with it.
     key remapping for thirteen of a run's keys.
   - **[M]** Display: haptics on / off (and the first buzzes, see Phase 3),
     battery saver (30 fps, half the sparks and motes), left-handed layout.
-  - Language: still to come with the translations (Phase 5).
+  - Language: English or Spanish, under GAMEPLAY (Phase 5).
 - [x] **[M/D] Credits** (CREDITS on the home screen) and a version number on
   the title and the home screen (`src/version.lua`; the build workflows stamp
   the commit into `build.txt`). The credits still want the tileset's artist
@@ -143,11 +143,11 @@ shake. To go further:
   cursor moved by the stick that snaps to pockets and nodes, a radial menu for
   the species, shoulder buttons for speed and turning the board, glyphs that
   match the pad. The Deck's screen (1280×800) and its touch screen both work.
-- [ ] **[M/D] Translations.** Every player-facing line is written straight into
-  the code (`say(...)`, `D.GLOSSARY`, `about`). Move them to a strings file per
-  language, and give the font accented letters (and later other alphabets).
-  Spanish first; then French, German, Portuguese (Brazil), and the store
-  languages that sell best for the genre.
+- [ ] **[M/D] Translations.** Done for Spanish: a strings file per language
+  (`src/lang/`, keyed by the English line), the font's accented capitals, a
+  language setting. Still to come: French, German, Portuguese (Brazil), and the
+  store languages that sell best for the genre (other alphabets want a font
+  of their own), and a native speaker's pass over the Spanish.
 - [ ] **[M/D] Accessibility review** against the Game Accessibility Guidelines:
   the colour-blind mode, text size, no information carried by sound alone, a
   slower speed (×0.5) for anyone who needs it, and holds replaced by taps.

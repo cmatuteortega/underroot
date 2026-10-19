@@ -10,6 +10,8 @@
 -- How loud the sound is overall (`sound`) and the guide's tips (`tips`) keep
 -- the lines they had before there were settings; the screen shows them here.
 
+local Lang = require "src.lang"
+
 local O = {}
 
 local OS = love.system and love.system.getOS() or "Linux"
@@ -35,6 +37,8 @@ O.SECTIONS = {
         { id = "bgmute", name = "MUTE IN THE BACKGROUND", choices = ONOFF, default = true },
     } },
     { id = "play", name = "GAMEPLAY", rows = {
+        -- Starts on the system's language, if the game has it (main.lua).
+        { id = "language", name = "LANGUAGE", default = "en", choices = {} },
         { id = "speed", name = "WAVES START AT", default = 1,
             choices = { { v = 1, name = "X1" }, { v = 2, name = "X2" }, { v = 3, name = "X3" } } },
         { id = "auto", name = "NEXT WAVE BY ITSELF", choices = OFFON, default = false },
@@ -92,6 +96,11 @@ for _, k in ipairs(O.KEYS) do O.KEY[k.id] = k end
 O.FIXED = { escape = true, backspace = true, ["return"] = true, f11 = true, v = true, m = true, n = true, r = true,
     ["="] = true, ["+"] = true, ["-"] = true, kpenter = true, ["kp+"] = true, ["kp-"] = true,
     lshift = true, rshift = true, lalt = true, ralt = true, lctrl = true, rctrl = true }
+
+for _, l in ipairs(Lang.LANGS) do
+    local c = O.SECTIONS[2].rows[1].choices
+    c[#c + 1] = { v = l.code, name = l.name }
+end
 
 O.ROW = {}
 for _, s in ipairs(O.SECTIONS) do for _, r in ipairs(s.rows) do O.ROW[r.id] = r end end
@@ -198,7 +207,10 @@ function O.down(id)
 end
 
 -- How a key is written on the screen: "SPACE", "F", "1".
-function O.name(key) return (key:gsub("^kp", "PAD "):upper()) end
+function O.name(key)
+    local name = key:gsub("^kp", "PAD "):upper()
+    return Lang.t(name)
+end
 -- The key now doing what `key` (a usual key) does, as it is written.
 function O.label(key)
     for _, k in ipairs(O.KEYS) do if k.key == key then return O.name(O.key(k.id)) end end

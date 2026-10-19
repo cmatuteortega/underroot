@@ -14,10 +14,12 @@ local Run = require "src.ui.run"
 local codex = require "src.ui.codex"
 local Settings = require "src.ui.settings"
 local O = require "src.options"
+local Lang = require "src.lang"
 
 local floor = math.floor
 local box, text, centred, inside = Draw.box, Draw.text, Draw.centred, Draw.inside
 local sound = flair.sound
+local tr, trf = Lang.t, Lang.f
 
 local pause = {}
 
@@ -92,12 +94,12 @@ function pause.draw()
     local L = pause.layout()
     box(L.x, L.y, L.w, L.h, "u", "c")
     if pause.ask then
-        text("RESTART THE LEVEL?", L.x + 8, L.y + 8, "l")
-        text("THIS RUN SO FAR IS LOST.", L.x + 8, L.y + 18, "w")
+        text(tr("RESTART THE LEVEL?"), L.x + 8, L.y + 8, "l")
+        text(tr("THIS RUN SO FAR IS LOST."), L.x + 8, L.y + 18, "w")
     else
-        local head = "PAUSED"
+        local head = tr("PAUSED")
         text(head, L.x + floor((L.w - Font.width(head)) / 2), L.y + 6, "l")
-        local w = S.game.endless and ("ENDLESS WAVE " .. S.game.wave) or ("WAVE " .. S.game.wave .. "/" .. #S.game.waves)
+        local w = S.game.endless and trf("ENDLESS WAVE %s", S.game.wave) or trf("WAVE %s/%s", S.game.wave, #S.game.waves)
         local s = S.level.name .. "  " .. w
         if Font.width(s) > L.w - 8 then s = w end
         text(s, L.x + floor((L.w - Font.width(s)) / 2), L.y + 13, "s")
@@ -106,10 +108,11 @@ function pause.draw()
         local on = S.hover.pause == b.id
         local warn = b.id == "yes"
         box(b.x, b.y, b.w, b.h, on and "n" or "u", on and "t" or (warn and "r" or "c"))
-        text(b.name, b.x + floor((b.w - Font.width(b.name)) / 2), b.y + 5, warn and "r" or "w")
+        local name = tr(b.name)
+        text(name, b.x + floor((b.w - Font.width(name)) / 2), b.y + 5, warn and "r" or "w")
     end
     if not S.touch and not pause.ask then
-        centred("ESC OR " .. O.label("p") .. " TO RESUME", L.y + L.h + 6, "s", "o")
+        centred(trf("ESC OR %s TO RESUME", O.label("p")), L.y + L.h + 6, "s", "o")
     end
 end
 

@@ -14,12 +14,14 @@ local Draw = require "src.ui.draw"
 local Pixels = require "src.ui.pixels"
 local Toolbar = require "src.ui.toolbar"
 local flair = require "src.ui.flair"
+local Lang = require "src.lang"
 
 local floor, max, min = math.floor, math.max, math.min
 local box, text, wrapLines, number, wide = Draw.box, Draw.text, Draw.wrapLines, Draw.number, Draw.wide
 local blit, icon, CUT = Pixels.blit, Pixels.icon, Pixels.CUT
 local turnRect, barTop = Toolbar.turnRect, Toolbar.barTop
 local TOP = S.TOP
+local tr, trf = Lang.t, Lang.f
 
 local function infoWidth() return wide() and min(150, floor(S.vw * 0.36)) or S.vw - S.inset.l - S.inset.r - 6 end
 
@@ -28,8 +30,8 @@ local function infoWidth() return wide() and min(150, floor(S.vw * 0.36)) or S.v
 local function howToGrow(id)
     local row = Profile.nodeOf(id)
     local state, level = Profile.nodeState(row.id)
-    if state == "locked" then return "WIN " .. level.name .. ", THEN GROW IT ON THE NETWORK." end
-    return "GROW IT ON THE NETWORK: " .. (N.price(Profile.ranks(), row.id) or 0) .. " SPORES."
+    if state == "locked" then return trf("WIN %s, THEN GROW IT ON THE NETWORK.", level.name) end
+    return trf("GROW IT ON THE NETWORK: %s SPORES.", N.price(Profile.ranks(), row.id) or 0)
 end
 
 -- The panel of one still locked behind a win: no name, no numbers, only how to get it.
@@ -43,7 +45,7 @@ local function lockedLines(what, id, w)
         end
     end
     add("???", "k", 24, 8)
-    add(what .. "   LOCKED", "k", 24)
+    add(tr(what) .. "   " .. tr("LOCKED"), "k", 24)
     if height < 22 then out[#out + 1] = { h = 22 - height }; height = 22 end
     add(howToGrow(id), "s")
     return out, height
@@ -73,7 +75,7 @@ local function infoLines(kind, t, w)
     local cost = t and t.spent or math.floor(get("cost") + 0.5)
 
     add(t and t.branch and d.up[t.branch][t.tier].name or d.name, "w", 24, 8)
-    add(d.role .. "   " .. (t and ("SPENT " .. cost) or ("COST " .. cost)), "t", 24)
+    add(d.role .. "   " .. (t and trf("SPENT %s", cost) or trf("COST %s", cost)), "t", 24)
     if height < 22 then gap(22 - height) end
 
     -- On the board: what is wrong with it, if anything.
@@ -84,7 +86,7 @@ local function infoLines(kind, t, w)
         elseif t.thirsty then why = "THIRSTY: FEED IT FROM A RELAY"
         elseif (t.webbed or 0) > 0 then why = "WEBBED SHUT"
         elseif kind == "mat" and not t.fed then why = "WITHERING: DRAPE A LINK OVER IT" end
-        if why then add(why, "r"); gap(2) end
+        if why then add(tr(why), "r"); gap(2) end
     end
 
     -- A species read about first; one on the board puts its numbers and its
@@ -94,18 +96,18 @@ local function infoLines(kind, t, w)
         if not Profile.owns(kind) then add(howToGrow(kind), "r"); gap(3) end
     end
     local parts = {}
-    if get("damage") then parts[#parts + 1] = "DAMAGE " .. number(get("damage")) end
-    if get("every") then parts[#parts + 1] = "EVERY " .. number(get("every")) .. "S" end
+    if get("damage") then parts[#parts + 1] = trf("DAMAGE %s", number(get("damage"))) end
+    if get("every") then parts[#parts + 1] = trf("EVERY %sS", number(get("every"))) end
     local r = (t and t.node) and S.game:towerRange(t) or get("range")
-    if r then parts[#parts + 1] = "RANGE " .. floor(r + 0.5) end
-    if get("splash") then parts[#parts + 1] = "SPLASH " .. number(get("splash")) end
-    if kind == "mat" then parts[#parts + 1] = "SLOW " .. floor((1 - (t and S.game:matSlow(t) or get("slow"))) * 100 + 0.5) .. "%" end
+    if r then parts[#parts + 1] = trf("RANGE %s", floor(r + 0.5)) end
+    if get("splash") then parts[#parts + 1] = trf("SPLASH %s", number(get("splash"))) end
+    if kind == "mat" then parts[#parts + 1] = trf("SLOW %s%%", floor((1 - (t and S.game:matSlow(t) or get("slow"))) * 100 + 0.5)) end
     if kind == "relay" then
-        parts[#parts + 1] = "FLOW X" .. number(get("capMul"))
-        parts[#parts + 1] = "DAMAGE +" .. floor(((get("amp") or 1) - 1) * 100 + 0.5) .. "%"
+        parts[#parts + 1] = trf("FLOW X%s", number(get("capMul")))
+        parts[#parts + 1] = trf("DAMAGE +%s%%", floor(((get("amp") or 1) - 1) * 100 + 0.5))
     end
-    if t and t.hp and kind ~= "mat" then parts[#parts + 1] = "HP " .. math.ceil(t.hp) .. "/" .. S.game:maxHp(t)
-    elseif not t and d.hp then parts[#parts + 1] = "HP " .. floor(get("hp") + 0.5) end
+    if t and t.hp and kind ~= "mat" then parts[#parts + 1] = trf("HP %s/%s", math.ceil(t.hp), S.game:maxHp(t))
+    elseif not t and d.hp then parts[#parts + 1] = trf("HP %s", floor(get("hp") + 0.5)) end
     -- A number never parted from its name: lines broken between them.
     local line = ""
     for _, part in ipairs(parts) do
@@ -118,9 +120,9 @@ local function infoLines(kind, t, w)
     local open = {}
     if t then for _, u in ipairs(S.game:upgrades(t)) do open[u.branch * 10 + u.tier] = u end end
     gap(4)
-    add("UPGRADES", "t")
+    add(tr("UPGRADES"), "t")
     for b = 1, 2 do
-        if b == 2 then add("OR", "s") end
+        if b == 2 then add(tr("OR"), "s") end
         local shut = t and t.branch and t.branch ~= b
         for tier = 1, 2 do
             local row = d.up[b][tier]
@@ -136,7 +138,7 @@ local function infoLines(kind, t, w)
                 local net = tier <= N.tier(t and S.game.net or grown, kind, b)
                 local k = had and "g" or ((shut or not net) and "k" or "w")
                 local price = t and S.game:upCost(kind, row) or floor(N.value(grown, kind, "cost", row.cost) + 0.5)
-                add((tier == 1 and "I  " or "II ") .. row.name .. "  " .. (had and "GROWN" or (net and price or "NOT ON THE NETWORK")), k)
+                add((tier == 1 and "I  " or "II ") .. row.name .. "  " .. (had and tr("GROWN") or (net and price or tr("NOT ON THE NETWORK"))), k)
                 -- On the board only what it can grow now says what it does.
                 if not t then add(row.blurb, "s", 12) end
             end
@@ -160,14 +162,14 @@ local function seedLines(id, w)
     end
     local function gap(h) out[#out + 1] = { h = h }; height = height + h end
     add(sd.name, "w", 24, 8)
-    add("SEED   " .. (Profile.ownsSeed(id) and "GROWN" or "NOT GROWN YET"), "t", 24)
+    add(tr("SEED") .. "   " .. tr(Profile.ownsSeed(id) and "GROWN" or "NOT GROWN YET"), "t", 24)
     if height < 22 then gap(22 - height) end
     add(sd.about, "w")
     gap(3)
     if not Profile.ownsSeed(id) then add(howToGrow(id), "r"); gap(3) end
     add(sd.blurb, "l")
     gap(4)
-    add("ITS MUTATIONS", "t")
+    add(tr("ITS MUTATIONS"), "t")
     for _, m in ipairs(D.MUTATIONS) do
         if m.seed == id then
             add(m.name, "w")

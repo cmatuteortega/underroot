@@ -7,6 +7,8 @@ local Sfx = require "src.sfx"
 local S = require "src.ui.state"
 local Draw = require "src.ui.draw"
 local O = require "src.options"
+local Lang = require "src.lang"
+local tr, trf = Lang.t, Lang.f
 
 local floor, max, min = math.floor, math.max, math.min
 local IDX = T.IDX
@@ -153,7 +155,7 @@ end
 
 function flair.loading()
     love.graphics.clear(unpack(T.RGB[IDX.o]))
-    local s = "GROWING " .. S.level.name
+    local s = trf("GROWING %s", S.level.name)
     local w = 80
     local x, y = floor((S.vw - w) / 2), floor(S.vh / 2)
     text(s, floor((S.vw - Font.width(s)) / 2), y - 10, "t")
@@ -198,11 +200,11 @@ function flair.draw()
         end
     end
     if flair.note > 0 then
-        local lv = Sfx.level >= 1 and "LOUD" or (Sfx.level > 0 and "QUIET" or "OFF")
-        centred("SOUND " .. lv .. "  (V)", S.inset.t + TOP + 46, Sfx.level > 0 and "l" or "k", "o")
+        local lv = tr(Sfx.level >= 1 and "LOUD" or (Sfx.level > 0 and "QUIET" or "OFF"))
+        centred(trf("SOUND %s  (V)", lv), S.inset.t + TOP + 46, Sfx.level > 0 and "l" or "k", "o")
     end
     if flair.quit > 0 and S.menu then
-        centred(Draw.say("ESC AGAIN TO QUIT", "BACK AGAIN TO QUIT"), S.vh - S.inset.b - 22, "w", "o")
+        centred(tr(Draw.say("ESC AGAIN TO QUIT", "BACK AGAIN TO QUIT")), S.vh - S.inset.b - 22, "w", "o")
     end
     if flair.pressed and flair.pressed.t > 0 then
         local ok, x, y, w, h = pcall(flair.pressed.rect)

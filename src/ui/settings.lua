@@ -17,9 +17,11 @@ local audio = require "src.ui.audio"
 local Title = require "src.ui.title"
 local View = require "src.ui.view"
 local Profile = require "src.profile"
+local Lang = require "src.lang"
 
 local floor, max, min = math.floor, math.max, math.min
 local box, text, inside, centred = Draw.box, Draw.text, Draw.inside, Draw.centred
+local tr = Lang.t
 local sound = flair.sound
 
 local settings = {}
@@ -70,6 +72,10 @@ function settings.apply(id)
         if S.world and S.game then View.centre() end
     elseif id == "window" or id == "size" then window()
     elseif id == "vsync" then if love.window and love.window.setVSync then love.window.setVSync(v and 1 or 0) end
+    elseif id == "language" then
+        Lang.set(v)
+        require("src.ui.codex").init()
+        if S.game then require("src.ui.toolbar").layTools(S.game) end
     end
 end
 
@@ -77,6 +83,7 @@ end
 -- conf.lua opened it.
 function settings.applyAll()
     for _, id in ipairs({ "effects", "ambience", "text" }) do settings.apply(id) end
+    -- (The language is set by main.lua, before anything is drawn.)
     if not O.MOBILE then
         if O.get("window") ~= "full" then window() end
         if not O.get("vsync") then settings.apply("vsync") end
@@ -126,12 +133,20 @@ local function rows()
     local s = section()
     local list = {}
     if s.keys then
-        for _, k in ipairs(O.KEYS) do list[#list + 1] = { id = k.id, name = k.name, bind = true } end
-        list[#list + 1] = { id = "unbind", name = "PUT EVERY KEY BACK", button = true }
+        for _, k in ipairs(O.KEYS) do list[#list + 1] = { id = k.id, name = tr(k.name), bind = true } end
+        list[#list + 1] = { id = "unbind", name = tr("PUT EVERY KEY BACK"), button = true }
         return list
     end
+    -- Each in the language up: a copy of the row, with its words in it.
     for _, r in ipairs(O.rows(s)) do
-        if not (r.id == "tutorial" and S.fromRun) then list[#list + 1] = r end
+        if not (r.id == "tutorial" and S.fromRun) then
+            local row = setmetatable({ name = tr(r.name) }, { __index = r })
+            if r.choices then
+                row.choices = {}
+                for k, c in ipairs(r.choices) do row.choices[k] = { v = c.v, name = tr(c.name) } end
+            end
+            list[#list + 1] = row
+        end
     end
     return list
 end
@@ -165,7 +180,7 @@ function settings.layout()
     local L = { back = { x = S.inset.l + 4, y = S.inset.t + 4, w = 34, h = 12 }, tabs = {}, rows = {} }
     local secs = O.sections()
     local tws, gap = {}, 3
-    for k, s in ipairs(secs) do tws[k] = Font.width(s.name) + 8 end
+    for k, s in ipairs(secs) do tws[k] = Font.width(tr(s.name)) + 8 end
     local total = span(tws, gap)
     local x0, ty
     local right = L.back.x + L.back.w + 6
@@ -239,18 +254,18 @@ local function drawSlider(R, chosen)
         box(c.x, c.y + c.h - h, c.w, h, lit and "l" or (on and "n" or "u"), on and "t" or (lit and "c" or "k"))
     end
     local name = chosen and r.choices[chosen].name or ""
-    text(chosen == 1 and "OFF" or name .. "%", R.after, R.choices[1].y + 4, chosen == 1 and "k" or "w")
+    text(chosen == 1 and tr("OFF") or name .. "%", R.after, R.choices[1].y + 4, chosen == 1 and "k" or "w")
 end
 
 function settings.draw()
     local L = settings.layout()
     local b = L.back
     box(b.x, b.y, b.w, b.h, S.hover.back and "n" or "u", S.hover.back and "t" or "k")
-    text("BACK", b.x + floor((b.w - Font.width("BACK")) / 2), b.y + 4, "w")
+    text(tr("BACK"), b.x + floor((b.w - Font.width(tr("BACK"))) / 2), b.y + 4, "w")
     for k, t in ipairs(L.tabs) do
         local up, on = k == settings.tab, S.hover.tab == k
         box(t.x, t.y, t.w, t.h, up and "d" or (on and "n" or "u"), up and "l" or (on and "t" or "k"))
-        text(O.sections()[k].name, t.x + 4, t.y + 4, up and "l" or "w")
+        text(tr(O.sections()[k].name), t.x + 4, t.y + 4, up and "l" or "w")
     end
     for _, R in ipairs(L.rows) do
         local r = R.row
@@ -261,7 +276,7 @@ function settings.draw()
             local listening = settings.listen == r.id
             local on = S.hover.bind == r.id
             box(c.x, c.y, c.w, c.h, listening and "d" or (on and "n" or "u"), listening and "l" or (on and "t" or "c"))
-            local s = listening and (floor(flair.now() * 3) % 2 == 0 and "PRESS" or "") or O.name(O.key(r.id))
+            local s = listening and (floor(flair.now() * 3) % 2 == 0 and tr("PRESS") or "") or O.name(O.key(r.id))
             text(s, c.x + floor((c.w - Font.width(s)) / 2), c.y + 5, O.bound[r.id] and "g" or "w")
         elseif r.button then
             local c = R.choices[1]
@@ -285,11 +300,11 @@ function settings.draw()
     -- What a setting needs said of it.
     local note
     if section().keys then
-        note = settings.listen and "PRESS THE NEW KEY, ESC TO LEAVE IT" or "CLICK ONE, THEN PRESS ITS NEW KEY"
+        note = tr(settings.listen and "PRESS THE NEW KEY, ESC TO LEAVE IT" or "CLICK ONE, THEN PRESS ITS NEW KEY")
     elseif section().id == "comfort" and O.get("text") == "large" and S.textStep == 0 then
-        note = "THE SCREEN IS TOO SMALL FOR LARGE TEXT"
+        note = tr("THE SCREEN IS TOO SMALL FOR LARGE TEXT")
     elseif section().id == "display" and not O.MOBILE and O.get("window") == "full" then
-        note = "THE WINDOW SIZE IS FOR WHEN IT IS A WINDOW. F11 SWITCHES"
+        note = tr("THE WINDOW SIZE IS FOR WHEN IT IS A WINDOW. F11 SWITCHES")
     end
     if note then centred(note, S.vh - S.inset.b - 12, "s", "o") end
 end

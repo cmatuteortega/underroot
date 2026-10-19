@@ -4,29 +4,31 @@
 local D = require "src.defs"
 local S = require "src.ui.state"
 local O = require "src.options"
+local tr = require("src.lang").t
 
 local floor, ceil, min = math.floor, math.ceil, math.min
 
 -- The toolbar: regrow-all, the species the run brought (in their usual order,
 -- each on its usual key), prune and the pulse (once the network has grown it).
--- Laid out again for each run.
+-- Laid out again for each run, and when the language changes.
 local BUTTONS = {}
 local function layTools(g)
     for k = #BUTTONS, 1, -1 do BUTTONS[k] = nil end
     -- Not a tool: a press regrows every cut link at once (links are grown by
     -- dragging, with nothing in hand).
-    BUTTONS[1] = { mode = "regrow", key = "1", name = "REGROW ALL", action = true }
+    BUTTONS[1] = { mode = "regrow", key = "1", name = tr("REGROW ALL"), action = true }
     for _, t in ipairs(D.TOWERS) do
         if not g or g:brought(t.id) then
             BUTTONS[#BUTTONS + 1] = { mode = t.id, key = t.key, name = t.name, blurb = t.blurb, cost = g and g:towerCost(t.id) or t.cost,
                 tower = true }
         end
     end
-    BUTTONS[#BUTTONS + 1] = { mode = "prune", key = "X", name = "PRUNE", blurb = "CUT YOUR OWN LINK (HALF BACK) OR CLEAR A TOWER" }
+    BUTTONS[#BUTTONS + 1] = { mode = "prune", key = "X", name = tr("PRUNE"),
+        blurb = tr("CUT YOUR OWN LINK (HALF BACK) OR CLEAR A TOWER") }
     -- The pulse only once the network has grown it.
     if not g or g:hasPulse() then
-        BUTTONS[#BUTTONS + 1] = { mode = "pulse", key = "Q", name = "SPORE PULSE",
-            blurb = "PICK A FED NODE: EVERY TOWER ON THE WAY THERE OVERCHARGES" }
+        BUTTONS[#BUTTONS + 1] = { mode = "pulse", key = "Q", name = tr("SPORE PULSE"),
+            blurb = tr("PICK A FED NODE: EVERY TOWER ON THE WAY THERE OVERCHARGES") }
     end
 end
 layTools()

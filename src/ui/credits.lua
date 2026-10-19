@@ -11,6 +11,7 @@ local S = require "src.ui.state"
 local Draw = require "src.ui.draw"
 local flair = require "src.ui.flair"
 local Title = require "src.ui.title"
+local tr = require("src.lang").t
 
 local floor, max = math.floor, math.max
 local box, text, inside = Draw.box, Draw.text, Draw.inside
@@ -60,6 +61,7 @@ end
 -- lines off the screen are skipped.
 function credits.roll(y)
     local function centre(s, yy, k)
+        s = tr(s)
         if yy > -8 and yy < S.vh then text(s, floor((S.vw - Font.width(s)) / 2), yy, k) end
     end
     for _, l in ipairs(credits.LINES) do
@@ -119,7 +121,7 @@ local function canEnd() return Profile.won[D.LEVELS[#D.LEVELS].id] end
 function credits.layout()
     local L = { back = { x = S.inset.l + 4, y = S.inset.t + 4, w = 34, h = 12 } }
     if canEnd() then
-        local w = Font.width("THE ENDING") + 12
+        local w = Font.width(tr("THE ENDING")) + 12
         L.ending = { x = S.vw - S.inset.r - 4 - w, y = S.inset.t + 4, w = w, h = 12 }
     end
     return L
@@ -134,7 +136,8 @@ function credits.draw()
         local r = b[1]
         if r then
             box(r.x, r.y, r.w, r.h, b[3] and "n" or "u", b[3] and "t" or "k")
-            text(b[2], r.x + floor((r.w - Font.width(b[2])) / 2), r.y + 4, "w")
+            local s = tr(b[2])
+            text(s, r.x + floor((r.w - Font.width(s)) / 2), r.y + 4, "w")
         end
     end
     text(V.text, S.vw - S.inset.r - Font.width(V.text) - 3, S.vh - S.inset.b - 8, "k")

@@ -27,6 +27,8 @@ love . --shots pond    # dev: the same for another level (flowerpot, shed, log, 
                        # add `challenge` (or `hornet`) for a challenge wave
 love . --sheet         # dev: every look of every model on one sheet (sheet.png)
 love . --sounds        # dev: every sound and loop written as a .wav (sounds/), to listen to
+love . --lang es       # dev: this time in another language (with --shots too: the
+                       # script prints any line it met with nothing written for it)
 love . --bot 10        # dev: plays the Crack headless 10 times, prints how it went
 love . --bot 10 lawn   # dev: another level; add `challenge` (or `hornet`), or `generic` for the
                        # map-agnostic player instead of the level's build order,
@@ -80,6 +82,14 @@ run under a veil with RESUME, RESTART, SETTINGS, ENCYCLOPEDIA and QUIT TO
 MENU. RESTART asks first; QUIT TO MENU keeps the run for CONTINUE, paused
 where it was. The settings and the encyclopedia opened from it come back to it.
 
+**Languages** (`src/lang.lua`): every line is written in English where it
+is used, and that line is the key a language's file (`src/lang/es.lua`)
+puts its own beside: `tr("BACK")`, or `trf("WAVE %s/%s", n, of)` for one
+with numbers or names in it. What `src/defs.lua` writes is put into the
+language in place when it changes. A new language is a file there and a row
+in `L.LANGS`; `tests/lang_test.lua` says what it is missing. The 3x5 font
+draws the accented capitals Spanish needs (Á É Í Ó Ú Ü Ñ ¿ ¡).
+
 **Settings** (`src/options.lua` says what each is, `src/ui/settings.lua`
 shows and applies them; kept in the save as `settings` and `keys` lines, only
 what differs from where it starts). A tab a section, `1`-`5` or `Tab` between
@@ -89,7 +99,8 @@ them, the arrows along and across the rows:
   each a slider of five steps, and whether to mute in the background (out of
   focus; a hidden window is always quiet). There is no music yet (see
   `ROADMAP.md`, Phase 3), so no music slider.
-- GAMEPLAY: the speed a wave starts at (x1, x2, x3), the next wave by itself
+- GAMEPLAY: the language (English or Spanish; a first run starts in the
+  system's, if the game has it), the speed a wave starts at (x1, x2, x3), the next wave by itself
   (twelve seconds of build phase after the first, counted down on START),
   asking before clearing a tower or lifting a mat (a first click marks it, a
   second clears it), range circles for what is pointed at or every tower,

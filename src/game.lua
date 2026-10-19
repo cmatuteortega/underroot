@@ -35,11 +35,13 @@
 -- is read through `sky` where that number is used, the way a mutation is.
 
 local D = require "src.defs"
+local Lang = require "src.lang"
 local N = require "src.network"
 local World = require "src.world"
 
 local sqrt, max, min, abs, floor, huge = math.sqrt, math.max, math.min, math.abs, math.floor, math.huge
 local cos, sin, atan2 = math.cos, math.sin, math.atan2
+local tr, trf = Lang.t, Lang.f
 -- Looks only (sparks, dust, motes): their own dice, so what the rules roll
 -- (and a bot's run) is the same with or without them.
 local looks = love.math.newRandomGenerator(7)
@@ -137,8 +139,9 @@ function Game.new(world, level, opts)
     return self
 end
 
+-- Words over the board, in the language up (src/lang.lua).
 function Game:say(text, x, y, z, k)
-    self.texts[#self.texts + 1] = { text = text, x = x, y = y, z = z, k = k or "l", life = 1.1 }
+    self.texts[#self.texts + 1] = { text = tr(text), x = x, y = y, z = z, k = k or "l", life = 1.1 }
 end
 
 -- A sound, and where it happened, for src/ui/audio.lua to play (src/sfx.lua). One of
@@ -411,10 +414,10 @@ function Game:canLink(a, b)
     if not a or not b or a == b then return false, nil, "" end
     local len = dist(a, b)
     local cost = self.pods > 0 and 0 or self:linkCost(len)
-    if self:linkBetween(a, b) then return false, cost, "ALREADY LINKED" end
-    if len > self:linkReach() then return false, cost, "TOO FAR" end
-    if not (a.conn or b.conn) then return false, cost, "NOT CONNECTED TO THE SPROUT" end
-    if self.nutrients < cost then return false, cost, "NOT ENOUGH NUTRIENTS" end
+    if self:linkBetween(a, b) then return false, cost, tr("ALREADY LINKED") end
+    if len > self:linkReach() then return false, cost, tr("TOO FAR") end
+    if not (a.conn or b.conn) then return false, cost, tr("NOT CONNECTED TO THE SPROUT") end
+    if self.nutrients < cost then return false, cost, tr("NOT ENOUGH NUTRIENTS") end
     return true, cost
 end
 
@@ -735,12 +738,12 @@ end
 function Game:canBuild(kind, node)
     local d = D.TOWER[kind]
     if not node or node.heart or node.tower then return false end
-    if not self:brought(kind) then return false, "LEFT AT HOME" end
-    if not self:unlocked(kind) then return false, "UNLOCKS AFTER WAVE " .. self:unlockAt(kind) end
-    if d.unique and self.uniques[kind] then return false, "ONE PER RUN" end
-    if (node.salted or 0) > 0 then return false, "SALTED" end
-    if (node.moldy or 0) > 0 then return false, "MOLDY" end
-    if self.nutrients < self:towerCost(kind) then return false, "NOT ENOUGH NUTRIENTS" end
+    if not self:brought(kind) then return false, tr("LEFT AT HOME") end
+    if not self:unlocked(kind) then return false, trf("UNLOCKS AFTER WAVE %s", self:unlockAt(kind)) end
+    if d.unique and self.uniques[kind] then return false, tr("ONE PER RUN") end
+    if (node.salted or 0) > 0 then return false, tr("SALTED") end
+    if (node.moldy or 0) > 0 then return false, tr("MOLDY") end
+    if self.nutrients < self:towerCost(kind) then return false, tr("NOT ENOUGH NUTRIENTS") end
     return true
 end
 
@@ -796,7 +799,7 @@ end
 function Game:canUpgrade(t, branch)
     for _, u in ipairs(self:upgrades(t)) do
         if u.branch == branch then
-            if self.nutrients < u.cost then return false, "NOT ENOUGH NUTRIENTS", u end
+            if self.nutrients < u.cost then return false, tr("NOT ENOUGH NUTRIENTS"), u end
             return true, nil, u
         end
     end
@@ -853,18 +856,18 @@ end
 function Game:canLay(kind, c, r)
     local d = D.TOWER[kind]
     if not self.world:distAt(c, r) or self.world.cell(c, r) == "H" then return false end
-    if not self:brought(kind) then return false, "LEFT AT HOME" end
-    if not self:unlocked(kind) then return false, "UNLOCKS AFTER WAVE " .. self:unlockAt(kind) end
-    if self:matAt(c, r) then return false, "TILE TAKEN" end
+    if not self:brought(kind) then return false, tr("LEFT AT HOME") end
+    if not self:unlocked(kind) then return false, trf("UNLOCKS AFTER WAVE %s", self:unlockAt(kind)) end
+    if self:matAt(c, r) then return false, tr("TILE TAKEN") end
     if d.touch then
         local x, z = c * TILE + TILE / 2, r * TILE + TILE / 2
         local near = false
         for _, l in ipairs(self.links) do
             if alive(l) and l.a.conn and segDist(x, z, l.a.x, l.a.z, l.b.x, l.b.z) <= d.touch then near = true break end
         end
-        if not near then return false, "MUST GROW BESIDE A FED LINK" end
+        if not near then return false, tr("MUST GROW BESIDE A FED LINK") end
     end
-    if self.nutrients < self:towerCost(kind) then return false, "NOT ENOUGH NUTRIENTS" end
+    if self.nutrients < self:towerCost(kind) then return false, tr("NOT ENOUGH NUTRIENTS") end
     return true
 end
 
@@ -926,7 +929,7 @@ function Game:goEndless()
     self.phase = "build"
     local bonus = self:waveBonus()
     self.nutrients = self.nutrients + bonus
-    self:say("ENDLESS +" .. bonus, self.heart.x, 26, self.heart.z, "r")
+    self:say(trf("ENDLESS +%s", bonus), self.heart.x, 26, self.heart.z, "r")
     self:cue("clear")
 end
 
@@ -1228,7 +1231,7 @@ function Game:kill(e)
     if boss then
         self.stats.bosses = self.stats.bosses + 1
         self.events.shake = 0.5
-        self:say(d.name .. " FALLS", e.x, 30, e.z, "g")
+        self:say(trf("%s FALLS", d.name), e.x, 30, e.z, "g")
     end
     if e.infected and e.infected > 0 then
         -- Cordyceps: the host fruits where it falls, and the spores look for the next.
@@ -1387,7 +1390,7 @@ function Game:update(dt)
             self.phase = "build"
             local bonus = self:waveBonus()
             self.nutrients = self.nutrients + bonus
-            self:say("WAVE CLEAR +" .. bonus, self.heart.x, 26, self.heart.z, "g")
+            self:say(trf("WAVE CLEAR +%s", bonus), self.heart.x, 26, self.heart.z, "g")
             self:cue("clear")
             self:shock(self.heart.x, self.heart.z, 36, 0.8, "g", "l")
             self:motes(self.heart.x, 4, self.heart.z, 18, { "g", "l" }, 12, 22, 1.1)
@@ -1606,7 +1609,7 @@ function Game:seedCleared()
         for _, o in ipairs(self.nodes) do if o.tower and self:sunlit(o) then n = n + 1 end end
         if n > 0 then
             self.nutrients = self.nutrients + 4 * n
-            self:say("SEED HEAD +" .. 4 * n, h.x, 38, h.z, "t")
+            self:say(trf("SEED HEAD +%s", 4 * n), h.x, 38, h.z, "t")
         end
     end
     if self.mods.compost then
@@ -1621,7 +1624,7 @@ function Game:seedCleared()
         paid = floor(paid + 0.5)
         if paid > 0 then
             self.nutrients = self.nutrients + paid
-            self:say("COMPOST +" .. paid, h.x, 46, h.z, "l")
+            self:say(trf("COMPOST +%s", paid), h.x, 46, h.z, "l")
         end
     end
 end
@@ -3338,7 +3341,7 @@ function Game:collapse(t)
         self:burst(h.x, 2, h.z, 12, { "t", "n", "u" }, 18)
         self:shock(h.x, h.z, 14, 0.5, "n", "u")
     end
-    self:say(buried > 0 and ("CAVED IN: " .. buried .. " BURIED") or "CAVED IN", t.a.x, 20, t.a.z, "g")
+    self:say(buried > 0 and trf("CAVED IN: %s BURIED", buried) or "CAVED IN", t.a.x, 20, t.a.z, "g")
     self:cue("thump", t.a.x, t.a.z)
 end
 

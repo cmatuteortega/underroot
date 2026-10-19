@@ -10,10 +10,12 @@ local Draw = require "src.ui.draw"
 local flair = require "src.ui.flair"
 local Loadout = require "src.ui.loadout"
 local Title = require "src.ui.title"
+local Lang = require "src.lang"
 
 local floor, ceil, max, min = math.floor, math.ceil, math.max, math.min
 local box, text, centred, wrap, say, inside = Draw.box, Draw.text, Draw.centred, Draw.wrap, Draw.say, Draw.inside
 local sound, deny = flair.sound, flair.deny
+local tr, trf = Lang.t, Lang.f
 
 -- The level picker: a card a level, in rows of as many as fit across (three
 -- on a wide screen, two rows of them; down the middle on a narrow one), and
@@ -72,7 +74,7 @@ local function draw()
         Loadout.open(n)
     end
     local cards, switch = levelCards()
-    centred("WHERE DOES THE SPROUT COME UP?", cards[1].y - 18, "t", "o")
+    centred(tr("WHERE DOES THE SPROUT COME UP?"), cards[1].y - 18, "t", "o")
     for k, c in ipairs(cards) do
         local l = D.LEVELS[k]
         local open, on = Profile.levelOpen(k), S.hover.level == k
@@ -81,40 +83,40 @@ local function draw()
         local small = c.h < LH
         if not open then
             if small then
-                text("WIN " .. D.LEVELS[k - 1].name, c.x + 4, c.y + c.h - 8, "r")
+                text(trf("WIN %s", D.LEVELS[k - 1].name), c.x + 4, c.y + c.h - 8, "r")
             else
-                text("WIN " .. D.LEVELS[k - 1].name, c.x + 4, c.y + 14, "r")
-                text("TO OPEN IT", c.x + 4, c.y + 21, "r")
+                text(trf("WIN %s", D.LEVELS[k - 1].name), c.x + 4, c.y + 14, "r")
+                text(tr("TO OPEN IT"), c.x + 4, c.y + 21, "r")
             end
         else
             if not small then
                 local y = wrap(l.idea, c.x + 4, c.y + 14, c.w - 8, "t")
-                wrap("BOSS: " .. l.boss, c.x + 4, y + 1, c.w - 8, "r")
+                wrap(trf("BOSS: %s", l.boss), c.x + 4, y + 1, c.w - 8, "r")
             end
-            local tag = Profile.won[l.id] and "WON" or (#l.waves .. " WAVES")
+            local tag = Profile.won[l.id] and tr("WON") or trf("%s WAVES", #l.waves)
             text(tag, c.x + c.w - Font.width(tag) - 4, c.y + c.h - 8, Profile.won[l.id] and "g" or "s")
             -- The endless record, bottom left, once there is one.
-            if Profile.records[l.id] then text("BEST " .. Profile.records[l.id], c.x + 4, c.y + c.h - 8, "r") end
+            if Profile.records[l.id] then text(trf("BEST %s", Profile.records[l.id]), c.x + 4, c.y + c.h - 8, "r") end
         end
     end
     if Profile.challengeOpen() then
         local c = switch
         box(c.x, c.y, c.w, c.h, S.hover.challenge and "n" or "u", S.challenge and "r" or "k")
-        local s = "CHALLENGE: " .. (S.challenge and D.CHALLENGE[S.challenge].name or "OFF")
+        local s = trf("CHALLENGE: %s", S.challenge and D.CHALLENGE[S.challenge].name or tr("OFF"))
         text(s, c.x + floor((c.w - Font.width(s)) / 2), c.y + 5, S.challenge and "r" or "w")
         if S.challenge then
             centred(D.CHALLENGE[S.challenge].blurb, c.y + c.h + 6, "r", "o")
         elseif S.hover.challenge then
-            centred("A LAST WAVE ON ANY LEVEL, A BOSS IN IT", c.y + c.h + 6, "r", "o")
+            centred(tr("A LAST WAVE ON ANY LEVEL, A BOSS IN IT"), c.y + c.h + 6, "r", "o")
         end
     end
     local bb = backButton()
     box(bb.x, bb.y, bb.w, bb.h, S.hover.back and "n" or "u", S.hover.back and "t" or "k")
-    text("BACK", bb.x + floor((bb.w - Font.width("BACK")) / 2), bb.y + 4, "w")
-    text("SPORES " .. Profile.spores, bb.x + bb.w + 6, S.inset.t + 7, "t")
+    text(tr("BACK"), bb.x + floor((bb.w - Font.width(tr("BACK"))) / 2), bb.y + 4, "w")
+    text(trf("SPORES %s", Profile.spores), bb.x + bb.w + 6, S.inset.t + 7, "t")
     local hintY = S.vh - S.inset.b - 12
-    centred(say("1-" .. #D.LEVELS .. " OR CLICK A LEVEL", "TAP A LEVEL") .. (Profile.challengeOpen() and say("   C: CHALLENGE", "") or "")
-        .. say("   ESC: BACK", ""), hintY, "s", "o")
+    centred(say(trf("1-%s OR CLICK A LEVEL", #D.LEVELS), tr("TAP A LEVEL"))
+        .. (Profile.challengeOpen() and say(tr("   C: CHALLENGE"), "") or "") .. say(tr("   ESC: BACK"), ""), hintY, "s", "o")
 end
 
 -- What is pointed at: a level, the challenge switch or BACK.

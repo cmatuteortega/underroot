@@ -40,6 +40,7 @@ local Settings = require "src.ui.settings"
 local Pause = require "src.ui.pause"
 local O = require "src.options"
 local Game = require "src.game"
+local Lang = require "src.lang"
 
 -- Something broken: a report in crash.txt and a screen saying so (src/crash.lua).
 love.errorhandler = require("src.crash").handler
@@ -101,7 +102,17 @@ function love.load(args)
     love.graphics.setLineStyle("rough")
     setWindowIcon()
     fit()
+    -- A player who has not picked a language plays in the system's.
+    O.ROW.language.default = Lang.detect()
     Profile.load()
+    -- The language: the settings', or for the script English (so its pictures
+    -- stay the same), or what `--lang es` asks for, this time only.
+    local lang = O.get("language")
+    for _, a in ipairs(args or {}) do if a == "--shots" then lang = "en" end end
+    for n, a in ipairs(args or {}) do
+        if a == "--lang" and args[n + 1] then lang = args[n + 1] end
+    end
+    Lang.set(lang)
     codex.init()
     for n, a in ipairs(args or {}) do
         -- For testing the network: `--spores 100000` puts that many in the bank.

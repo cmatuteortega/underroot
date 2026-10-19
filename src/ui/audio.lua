@@ -9,6 +9,8 @@ local S = require "src.ui.state"
 local flair = require "src.ui.flair"
 local Title = require "src.ui.title"
 local O = require "src.options"
+local Lang = require "src.lang"
+local tr, trf = Lang.t, Lang.f
 
 local floor, min = math.floor, math.min
 local sound = flair.sound
@@ -55,13 +57,13 @@ function audio.hear()
         local n = c.name
         if n == "wave" then
             local w = S.game.weather and D.WEATHER[S.game.weather]
-            flair.banner = { text = "WAVE " .. S.game.wave, sub = w and w.name .. ": " .. w.blurb, k = "r", t = 2.2, max = 2.2 }
+            flair.banner = { text = trf("WAVE %s", S.game.wave), sub = w and w.name .. ": " .. w.blurb, k = "r", t = 2.2, max = 2.2 }
         elseif n == "clear" then
-            flair.banner = { text = "WAVE " .. S.game.cleared .. " CLEARED", k = "g", t = 1.8, max = 1.8 }
+            flair.banner = { text = trf("WAVE %s CLEARED", S.game.cleared), k = "g", t = 1.8, max = 1.8 }
         elseif n == "unlock" and S.game.newSpecies then
-            flair.banner = { text = "NEW SPECIES: " .. D.TOWER[S.game.newSpecies].name, k = "l", t = 2.4, max = 2.4 }
+            flair.banner = { text = trf("NEW SPECIES: %s", D.TOWER[S.game.newSpecies].name), k = "l", t = 2.4, max = 2.4 }
         elseif n == "ring" then
-            flair.banner = { text = "A FAIRY RING CLOSES", sub = "TOWERS IN IT HIT HARDER. ENEMIES IN IT WADE", k = "l", t = 2.2, max = 2.2 }
+            flair.banner = { text = tr("A FAIRY RING CLOSES"), sub = tr("TOWERS IN IT HIT HARDER. ENEMIES IN IT WADE"), k = "l", t = 2.2, max = 2.2 }
         end
     end
     S.game.cues = {}

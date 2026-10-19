@@ -19,6 +19,8 @@ local Pixels = require "src.ui.pixels"
 local flair = require "src.ui.flair"
 local Title = require "src.ui.title"
 local credits = require "src.ui.credits"
+local Lang = require "src.lang"
+local tr, trf = Lang.t, Lang.f
 
 local floor, max, min, sin = math.floor, math.max, math.min, math.sin
 local color, text, centred, say = Draw.color, Draw.text, Draw.centred, Draw.say
@@ -54,19 +56,20 @@ local function smooth(f) f = max(0, min(1, f)) return f * f * (3 - 2 * f) end
 -- of pixels { x, y, d } with d how far along it is.
 local garden
 local function layout()
-    if garden and garden.w == S.vw and garden.h == S.vh then return garden end
+    if garden and garden.w == S.vw and garden.h == S.vh and garden.lang == Lang.code then return garden end
     local gy = floor(S.vh * 0.5)
     local cx = floor(S.vw / 2)
     local n = #D.LEVELS
     local m = 16
-    local G = { w = S.vw, h = S.vh, gy = gy, cx = cx, nodes = {}, long = 0 }
+    local G = { w = S.vw, h = S.vh, lang = Lang.code, gy = gy, cx = cx, nodes = {}, long = 0 }
     local seeds = {}
     for _, sd in ipairs(D.SEEDS) do seeds[#seeds + 1] = sd.id end
     for k, l in ipairs(D.LEVELS) do
         local x = floor(m + (k - 1) * (S.vw - 2 * m) / max(1, n - 1) + 0.5)
         local y = gy + 16 + ((k - 1) % 3) * 12
         local name = l.name
-        if S.vw < 360 then name = name:gsub("^THE ", "") end
+        -- Its article left off, on a narrow screen.
+        if S.vw < 360 then for _, a in ipairs({ "THE ", "EL ", "LA " }) do name = name:gsub("^" .. a, "") end end
         local path = {}
         local x0, y0 = cx, gy + 2
         local len = max(1, floor(math.sqrt((x - x0) ^ 2 + (y - y0) ^ 2)))
@@ -164,10 +167,10 @@ function ending.draw()
 
     -- The words over it.
     local wy = S.inset.t + floor(S.vh * 0.08) - down
-    if t > 0.4 and wy > -10 then centred("THE SPROUT HAS GROWN", wy, "g", "o") end
+    if t > 0.4 and wy > -10 then centred(tr("THE SPROUT HAS GROWN"), wy, "g", "o") end
     if t > all and wy + 14 > -10 then
-        centred("AND THE MYCELIUM IS UNDER THE WHOLE GARDEN,", wy + 14, "w", "o")
-        centred("FROM " .. D.LEVELS[1].name .. " TO " .. D.LEVELS[#D.LEVELS].name, wy + 24, "w", "o")
+        centred(tr("AND THE MYCELIUM IS UNDER THE WHOLE GARDEN,"), wy + 14, "w", "o")
+        centred(trf("FROM %s TO %s", D.LEVELS[1].name, D.LEVELS[#D.LEVELS].name), wy + 24, "w", "o")
     end
 
     -- The credits, rolling up once the garden is going down, then what is open.
@@ -178,13 +181,13 @@ function ending.draw()
         if y < floor(S.vh * 0.45) then
             local cy = max(y + 10, floor(S.vh * 0.45))
             for n, c in ipairs(opened()) do
-                centred("CHALLENGE MODE IS OPEN: THE " .. c.name, cy + (n - 1) * 11, "r", "o")
+                centred(trf("CHALLENGE MODE IS OPEN: THE %s", c.name), cy + (n - 1) * 11, "r", "o")
             end
-            if floor(t * 1.5) % 2 == 0 then centred(say("CLICK TO GO ON", "TAP TO GO ON"), cy + #opened() * 11 + 8, "s", "o") end
+            if floor(t * 1.5) % 2 == 0 then centred(tr(say("CLICK TO GO ON", "TAP TO GO ON")), cy + #opened() * 11 + 8, "s", "o") end
             ending.done = true
         end
     end
-    if not S.touch and not ending.done then text("ESC: SKIP", S.vw - S.inset.r - Font.width("ESC: SKIP") - 3, S.vh - S.inset.b - 8, "k") end
+    if not S.touch and not ending.done then text(tr("ESC: SKIP"), S.vw - S.inset.r - Font.width(tr("ESC: SKIP")) - 3, S.vh - S.inset.b - 8, "k") end
 end
 
 -- A tap goes on to the next part; once it is all there, it is over.

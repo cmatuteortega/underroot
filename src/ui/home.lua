@@ -14,6 +14,7 @@ local Settings = require "src.ui.settings"
 local Run = require "src.ui.run"
 local Credits = require "src.ui.credits"
 local V = require "src.version"
+local tr = require("src.lang").t
 
 local floor, max = math.floor, math.max
 local box, text, centred, inside = Draw.box, Draw.text, Draw.centred, Draw.inside
@@ -75,7 +76,7 @@ function home.draw()
         if shown(k) then
             local ch = home.choices()[k]
             local on = S.hover.home == k
-            local s, edge, ink = ch.name, on and "t" or "c", "w"
+            local s, edge, ink = tr(ch.name), on and "t" or "c", "w"
             -- The network's lit while there are spores for something on it.
             if ch.id == "network" then
                 local ready = Network.ready()
@@ -87,19 +88,19 @@ function home.draw()
     end
     if shown(#home.choices()) then
         if not S.touch then
-            centred((Run.canContinue() and "C " or "") .. "L N E S OR CLICK ONE", S.vh - S.inset.b - 12, "s", "o")
+            centred((Run.canContinue() and "C " or "") .. tr("L N E S OR CLICK ONE"), S.vh - S.inset.b - 12, "s", "o")
         end
         -- The credits in the corner, the version in the other.
         local c = home.creditsRect()
         local on = S.hover.credits == "open"
         box(c.x, c.y, c.w, c.h, on and "n" or "u", on and "t" or "k")
-        text("CREDITS", c.x + 4, c.y + 4, "w")
+        text(tr("CREDITS"), c.x + 4, c.y + 4, "w")
         text(V.text, S.vw - S.inset.r - Font.width(V.text) - 3, S.vh - S.inset.b - 8, "k")
     end
 end
 
 function home.creditsRect()
-    return { x = S.inset.l + 4, y = S.vh - S.inset.b - 16, w = Font.width("CREDITS") + 8, h = 12 }
+    return { x = S.inset.l + 4, y = S.vh - S.inset.b - 16, w = Font.width(tr("CREDITS")) + 8, h = 12 }
 end
 
 function home.hover(mx, my)

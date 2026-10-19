@@ -20,6 +20,7 @@ local Loadout = require "src.ui.loadout"
 local Guide = require "src.ui.guide"
 local Pause = require "src.ui.pause"
 local O = require "src.options"
+local Lang = require "src.lang"
 
 local floor, ceil, max, min, abs, sqrt = math.floor, math.ceil, math.max, math.min, math.abs, math.sqrt
 local color, box, text, label, centred, wrapLines, say, inside =
@@ -31,6 +32,7 @@ local info, freeSpan = Panel.info, Panel.freeSpan
 local toHud, cursor, zoomBy, turnCamera = View.toHud, View.cursor, View.zoomBy, View.turnCamera
 local sound, deny = flair.sound, flair.deny
 local TOP, TURN_TIME = S.TOP, S.TURN_TIME
+local tr, trf = Lang.t, Lang.f
 
 local function members(set)
     local k = 0
@@ -60,10 +62,10 @@ end
 local function wonButtons()
     local list = {}
     local last = S.level == D.LEVELS[#D.LEVELS]
-    if not last then list[#list + 1] = { id = "next", text = "NEXT LEVEL", key = "N" } end
-    list[#list + 1] = { id = "endless", text = "GO ENDLESS", key = "E" }
-    list[#list + 1] = { id = "again", text = "AGAIN", key = "R" }
-    list[#list + 1] = { id = "levels", text = "LEVELS", key = "M" }
+    if not last then list[#list + 1] = { id = "next", text = tr("NEXT LEVEL"), key = "N" } end
+    list[#list + 1] = { id = "endless", text = tr("GO ENDLESS"), key = "E" }
+    list[#list + 1] = { id = "again", text = tr("AGAIN"), key = "R" }
+    list[#list + 1] = { id = "levels", text = tr("LEVELS"), key = "M" }
     local gap = 4
     local function width(from, to)
         local w = gap * (to - from)
@@ -104,7 +106,7 @@ local function waveSummary(wave)
     if wave.weather then parts[1] = D.WEATHER[wave.weather].name .. ":" end
     for _, kind in ipairs(D.ENEMY_ORDER) do
         if count[kind] then
-            local name = D.ENEMIES[kind].boss and D.ENEMIES[kind].name or D.ENEMIES[kind].short or kind:upper()
+            local name = D.ENEMIES[kind].boss and D.ENEMIES[kind].name or D.ENEMIES[kind].short or tr(kind:upper())
             parts[#parts + 1] = (D.ENEMIES[kind].boss and "" or (count[kind] .. " ")) .. name
         end
     end
@@ -122,20 +124,20 @@ local function hint()
     if S.game.phase ~= "build" then
         local brine = false
         for _, e in ipairs(S.game.enemies) do if e.kind == "brine" and e.slide then brine = true end end
-        if brine then return say("BRINE IN THE NETWORK! PRUNE (" .. O.label("x") .. ") THE LINK IT IS ON", "BRINE IN THE NETWORK! PRUNE THE LINK IT IS ON"), "r" end
+        if brine then return say(trf("BRINE IN THE NETWORK! PRUNE (%s) THE LINK IT IS ON", O.label("x")), tr("BRINE IN THE NETWORK! PRUNE THE LINK IT IS ON")), "r" end
         return nil
     end
     local living = 0
     for _, l in ipairs(S.game.links) do if l.state ~= "cut" then living = living + 1 end end
     local towers = 0
     for _, n in ipairs(S.game.nodes) do if n.tower then towers = towers + 1 end end
-    if living == 0 then return "DRAG FROM THE SPROUT TO A POCKET TO GROW A LINK", "g" end
-    if towers == 0 then return say("PICK A FRUITING BODY BELOW, THEN CLICK A LINKED POCKET", "PICK A FRUITING BODY BELOW, THEN TAP A LINKED POCKET"), "g" end
+    if living == 0 then return tr("DRAG FROM THE SPROUT TO A POCKET TO GROW A LINK"), "g" end
+    if towers == 0 then return tr(say("PICK A FRUITING BODY BELOW, THEN CLICK A LINKED POCKET", "PICK A FRUITING BODY BELOW, THEN TAP A LINKED POCKET")), "g" end
     local nxt = S.game:nextWave()
     if nxt then
         for _, g in ipairs(nxt) do
             local e = D.ENEMIES[g[1]]
-            if e.boss then return "BOSS NEXT: " .. e.name .. ". " .. e.blurb, "r" end
+            if e.boss then return trf("BOSS NEXT: %s. %s", e.name, e.blurb), "r" end
         end
     end
     if S.game.newSpecies then
@@ -143,21 +145,21 @@ local function hint()
         local grown = false
         for _, n in ipairs(S.game.nodes) do if n.tower and n.tower.kind == kind then grown = true end end
         for _, m in ipairs(S.game.mats) do if m.kind == kind then grown = true end end
-        if not grown then return "NEW SPECIES: " .. D.TOWER[kind].name .. ". " .. D.TOWER[kind].blurb, "l" end
+        if not grown then return trf("NEW SPECIES: %s. %s", D.TOWER[kind].name, D.TOWER[kind].blurb), "l" end
     end
     if nxt then
         for _, g in ipairs(nxt) do
-            if not S.game.seen[g[1]] then return "NEW: " .. D.ENEMIES[g[1]].name .. ". " .. D.ENEMIES[g[1]].blurb, "t" end
+            if not S.game.seen[g[1]] then return trf("NEW: %s. %s", D.ENEMIES[g[1]].name, D.ENEMIES[g[1]].blurb), "t" end
         end
         if nxt.weather then
             local wx = D.WEATHER[nxt.weather]
-            return wx.name .. " NEXT WAVE: " .. wx.blurb, "s"
+            return trf("%s NEXT WAVE: %s", wx.name, wx.blurb), "s"
         end
     end
     if S.selected and S.game:upgrades(S.selected)[1] and S.game.wave <= 2 then
-        return say("UPGRADES: CLICK ONE IN THE PANEL, OR " .. O.label("z") .. " / " .. O.label("c"), "UPGRADES: TAP ONE IN THE PANEL"), "l"
+        return say(trf("UPGRADES: CLICK ONE IN THE PANEL, OR %s / %s", O.label("z"), O.label("c")), tr("UPGRADES: TAP ONE IN THE PANEL")), "l"
     end
-    if S.game.wave == 0 then return say(O.label("space") .. " TO START THE FIRST WAVE", "TAP START FOR THE FIRST WAVE"), "g" end
+    if S.game.wave == 0 then return say(trf("%s TO START THE FIRST WAVE", O.label("space")), tr("TAP START FOR THE FIRST WAVE")), "g" end
 end
 
 local function tooltip()
@@ -165,104 +167,104 @@ local function tooltip()
         local m = S.game.choices[S.hover.mutation]
         return (m.seed and (S.game.seed.short .. " ") or "") .. m.name .. ": " .. m.blurb, m.seed and "g" or "l"
     end
-    if S.game.phase == "mutate" then return say("THE NETWORK MUTATES. PICK ONE (1 2 3)", "THE NETWORK MUTATES. PICK ONE"), "l" end
+    if S.game.phase == "mutate" then return tr(say("THE NETWORK MUTATES. PICK ONE (1 2 3)", "THE NETWORK MUTATES. PICK ONE")), "l" end
     if S.hover.up then
         local ok, why = S.game:canUpgrade(S.selected, S.hover.up.branch)
-        return "GROW " .. S.hover.up.row.name .. ": " .. S.hover.up.cost .. (ok and "" or ("  (" .. why .. ")")), ok and "l" or "r"
+        return trf("GROW %s: %s", S.hover.up.row.name, S.hover.up.cost) .. (ok and "" or ("  (" .. why .. ")")), ok and "l" or "r"
     end
     if S.hover.button then
         local b = BUTTONS[S.hover.button]
         if b.tower and not S.game:unlocked(b.mode) then
-            return b.name .. ": UNLOCKS AFTER WAVE " .. S.game:unlockAt(b.mode), "r"
+            return trf("%s: UNLOCKS AFTER WAVE %s", b.name, S.game:unlockAt(b.mode)), "r"
         end
         if b.action then
             local list, cost = S.game:repairable(), 0
             for _, l in ipairs(list) do cost = cost + S.game:repairCost(l) end
-            if #list == 0 then return "REGROW ALL: NO CUT LINKS", "s" end
-            return "REGROW " .. #list .. " CUT LINK" .. (#list > 1 and "S" or "") .. ", NEAREST THE SPROUT FIRST: " .. cost,
+            if #list == 0 then return tr("REGROW ALL: NO CUT LINKS"), "s" end
+            return trf(#list > 1 and "REGROW %s CUT LINKS, NEAREST THE SPROUT FIRST: %s" or "REGROW %s CUT LINK, NEAREST THE SPROUT FIRST: %s", #list, cost),
                 S.game.nutrients >= cost and "l" or "r"
         end
-        if b.tower and b.mode == S.mode then return say(b.name .. ": CLICK AGAIN TO READ IT", b.name .. ": TAP AGAIN TO READ IT"), "w" end
+        if b.tower and b.mode == S.mode then return trf(say("%s: CLICK AGAIN TO READ IT", "%s: TAP AGAIN TO READ IT"), b.name), "w" end
         return b.name .. (b.cost and (" (" .. b.cost .. ")") or "") .. ": " .. b.blurb, "w"
     end
-    if S.hover.turn == 1 then return say("TURN THE BOARD (" .. O.label("e") .. ")", "TURN THE BOARD"), "w" end
-    if S.hover.turn == -1 then return say("TURN THE BOARD BACK (Q)", "TURN THE BOARD BACK"), "w" end
+    if S.hover.turn == 1 then return say(trf("TURN THE BOARD (%s)", O.label("e")), tr("TURN THE BOARD")), "w" end
+    if S.hover.turn == -1 then return tr(say("TURN THE BOARD BACK (Q)", "TURN THE BOARD BACK")), "w" end
     if S.hover.wave then
-        return S.game.phase == "build" and say("START THE NEXT WAVE (" .. O.label("space") .. ")", "START THE NEXT WAVE")
-            or say("GAME SPEED (" .. O.label("f") .. ")", "GAME SPEED"), "w"
+        return S.game.phase == "build" and say(trf("START THE NEXT WAVE (%s)", O.label("space")), tr("START THE NEXT WAVE"))
+            or say(trf("GAME SPEED (%s)", O.label("f")), tr("GAME SPEED")), "w"
     end
     if S.mode == "grow" and S.drag and S.hover.node and S.hover.node ~= S.drag then
         local ok, cost, why = S.game:canLink(S.drag, S.hover.node)
-        if ok then return "GROW LINK: " .. cost, "l" end
+        if ok then return trf("GROW LINK: %s", cost), "l" end
         return (why or "") .. (cost and ("  (" .. cost .. ")") or ""), "r"
     end
     if S.mode == "pulse" and S.hover.node then
-        if S.game.pulseCd > 0 then return "PULSE REGROWING: " .. math.ceil(S.game.pulseCd) .. "S", "r" end
-        if not S.hover.node.conn then return "NOT FED: THE PULSE CANNOT REACH IT", "r" end
-        return "SEND THE PULSE HERE", "l"
+        if S.game.pulseCd > 0 then return trf("PULSE REGROWING: %sS", math.ceil(S.game.pulseCd)), "r" end
+        if not S.hover.node.conn then return tr("NOT FED: THE PULSE CANNOT REACH IT"), "r" end
+        return tr("SEND THE PULSE HERE"), "l"
     end
     if S.hover.node and S.hover.node.tower then
         local t = S.hover.node.tower
         local s = towerName(t)
         if S.mode == "prune" then
-            local ask = S.clearAsk == t and say(". CLICK AGAIN TO CLEAR IT", ". TAP AGAIN TO CLEAR IT") or ""
-            return "CLEAR " .. s .. ": +" .. floor(t.spent * D.SELL) .. ask, "r"
+            local ask = S.clearAsk == t and tr(say(". CLICK AGAIN TO CLEAR IT", ". TAP AGAIN TO CLEAR IT")) or ""
+            return trf("CLEAR %s: +%s", s, floor(t.spent * D.SELL)) .. ask, "r"
         end
-        if t.webbed > 0 then s = s .. ": WEBBED SHUT"
-        elseif t.stun > 0 then s = s .. ": STUNNED"
-        elseif t.hunger == "dormant" then s = s .. ": DORMANT, NO NUTRIENTS"
-        elseif not S.hover.node.conn then s = s .. ": CUT OFF, ON ITS RESERVE"
-        elseif t.thirsty then s = s .. ": THIRSTY, NEEDS A RELAY BESIDE IT"
-        elseif t.hunger == "starved" then s = s .. ": STARVED" end
-        if t.hp < S.game:maxHp(t) then s = s .. "  HP " .. math.ceil(t.hp) end
-        if t.kind == "puffer" then s = s .. "  PUFFS " .. max(1, min(4, S.game:degree(S.hover.node))) end
-        if t.kind == "needle" and S.game:degree(S.hover.node) == 1 then s = s .. "  DEAD END X1.8" end
-        if t.kind == "lamp" then s = s .. "  GLOW " .. floor(t.glow or 0) end
-        if t.kind == "mane" then s = s .. "  TENDS " .. members(t.care) .. " NODES" end
-        if t.kind == "relay" then s = s .. "  PUMPS INTO " .. #S.game:neighbours(S.hover.node) end
-        if t.kind == "inky" then s = s .. "  FEEDS " .. #S.game:neighbours(S.hover.node) .. " FIRST" end
-        if t.kind == "cordyceps" then s = s .. "  HOLD X" .. string.format("%.1f", S.game:deepHold(t)) end
-        if t.kind == "stink" then s = s .. "  REEKS DOWN " .. S.game:degree(S.hover.node) .. " LINKS" end
-        if t.kind == "mortar" and S.hover.node.pocket.high then s = s .. "  HIGH: NO MIN RANGE" end
+        if t.webbed > 0 then s = s .. tr(": WEBBED SHUT")
+        elseif t.stun > 0 then s = s .. tr(": STUNNED")
+        elseif t.hunger == "dormant" then s = s .. tr(": DORMANT, NO NUTRIENTS")
+        elseif not S.hover.node.conn then s = s .. tr(": CUT OFF, ON ITS RESERVE")
+        elseif t.thirsty then s = s .. tr(": THIRSTY, NEEDS A RELAY BESIDE IT")
+        elseif t.hunger == "starved" then s = s .. tr(": STARVED") end
+        if t.hp < S.game:maxHp(t) then s = s .. trf("  HP %s", math.ceil(t.hp)) end
+        if t.kind == "puffer" then s = s .. trf("  PUFFS %s", max(1, min(4, S.game:degree(S.hover.node)))) end
+        if t.kind == "needle" and S.game:degree(S.hover.node) == 1 then s = s .. tr("  DEAD END X1.8") end
+        if t.kind == "lamp" then s = s .. trf("  GLOW %s", floor(t.glow or 0)) end
+        if t.kind == "mane" then s = s .. trf("  TENDS %s NODES", members(t.care)) end
+        if t.kind == "relay" then s = s .. trf("  PUMPS INTO %s", #S.game:neighbours(S.hover.node)) end
+        if t.kind == "inky" then s = s .. trf("  FEEDS %s FIRST", #S.game:neighbours(S.hover.node)) end
+        if t.kind == "cordyceps" then s = s .. trf("  HOLD X%s", string.format("%.1f", S.game:deepHold(t))) end
+        if t.kind == "stink" then s = s .. trf("  REEKS DOWN %s LINKS", S.game:degree(S.hover.node)) end
+        if t.kind == "mortar" and S.hover.node.pocket.high then s = s .. tr("  HIGH: NO MIN RANGE") end
         if t.kind == "agaric" then
             local k = S.game:degree(S.hover.node)
-            s = s .. (k == 2 and "  BRIDGE X1.5" or "  X0.75: NEEDS TWO LINKS")
+            s = s .. tr(k == 2 and "  BRIDGE X1.5" or "  X0.75: NEEDS TWO LINKS")
         end
-        if t.kind == "earthstar" then s = s .. "  HEARS " .. floor(S.game:towerRange(t)) end
+        if t.kind == "earthstar" then s = s .. trf("  HEARS %s", floor(S.game:towerRange(t))) end
         if t.kind == "oyster" then
             local d = D.TOWER.oyster
             s = s .. "  X" .. string.format("%.2f", max(d.outer, d.inner - d.perHop * (S.game:depth(S.hover.node) - 1)))
         end
-        if t.kind == "tooth" then s = s .. "  SAPS " .. members(S.game:touches(t)) .. " NODES" end
-        if t.kind == "truffle" then s = s .. "  " .. (t.streak or 0) .. " WAVES UNCUT" end
-        if t.kind == "turkey" then s = s .. "  HASTENS " .. members(t.care) end
-        if (t.haste or 1) > 1 then s = s .. "  +" .. floor((t.haste - 1) * 100 + 0.5) .. "% PACE" end
+        if t.kind == "tooth" then s = s .. trf("  SAPS %s NODES", members(S.game:touches(t))) end
+        if t.kind == "truffle" then s = s .. trf("  %s WAVES UNCUT", t.streak or 0) end
+        if t.kind == "turkey" then s = s .. trf("  HASTENS %s", members(t.care)) end
+        if (t.haste or 1) > 1 then s = s .. trf("  +%s%% PACE", floor((t.haste - 1) * 100 + 0.5)) end
         if t.kind == "giant" then
             local k = S.game:rooted(t)
-            if t.grown < 1 then s = s .. "  GROWING " .. floor(t.grown * 100) .. "%"
-            else s = s .. "  " .. k .. " NODES: HITS " .. floor(S.game:stat(t, "damage") + S.game:stat(t, "perNode") * k) end
+            if t.grown < 1 then s = s .. trf("  GROWING %s%%", floor(t.grown * 100))
+            else s = s .. trf("  %s NODES: HITS %s", k, floor(S.game:stat(t, "damage") + S.game:stat(t, "perNode") * k)) end
         end
-        if S.hover.node.ringed then s = s .. "  RING" end
-        if (t.amp or 1) > 1 then s = s .. "  AMPED" end
-        return s .. "  " .. S.hover.node.quality:upper() .. " POCKET", "w"
+        if S.hover.node.ringed then s = s .. tr("  RING") end
+        if (t.amp or 1) > 1 then s = s .. tr("  AMPED") end
+        return s .. "  " .. tr(S.hover.node.quality:upper() .. " POCKET"), "w"
     end
     if S.hover.node then
         local n = S.hover.node
         if n.heart then
             -- The seed it grew from, and what it has left to give.
             local sd = S.game.seed
-            local s = sd.name .. ": " .. (sd.id ~= "bean" and sd.blurb or "IF IT DIES, YOU LOSE")
-            if S.game.regrows > 0 then s = s .. ". REGROWS " .. S.game.regrows .. " MORE" end
-            if S.game.pods > 0 then s = s .. ". " .. S.game.pods .. " FREE LINKS" end
+            local s = sd.name .. ": " .. (sd.id ~= "bean" and sd.blurb or tr("IF IT DIES, YOU LOSE"))
+            if S.game.regrows > 0 then s = s .. trf(". REGROWS %s MORE", S.game.regrows) end
+            if S.game.pods > 0 then s = s .. trf(". %s FREE LINKS", S.game.pods) end
             return s, "g"
         end
-        local s = n.pocket.kind:upper() .. ": " .. n.quality:upper() .. " POCKET"
-        if (n.salted or 0) > 0 then s = s .. ", SALTED" end
-        if n.quality == "rich" then s = s .. ". +30% POWER, PAYS SUGAR" elseif n.quality == "poor" then s = s .. ". -25% POWER" end
-        if n.pocket.high then s = s .. ". HIGH GROUND" elseif n.pocket.low then s = s .. ". LOW: RAIN WASHES IT" end
+        local s = tr(n.pocket.kind:upper()) .. ": " .. tr(n.quality:upper() .. " POCKET")
+        if (n.salted or 0) > 0 then s = s .. tr(", SALTED") end
+        if n.quality == "rich" then s = s .. tr(". +30% POWER, PAYS SUGAR") elseif n.quality == "poor" then s = s .. tr(". -25% POWER") end
+        if n.pocket.high then s = s .. tr(". HIGH GROUND") elseif n.pocket.low then s = s .. tr(". LOW: RAIN WASHES IT") end
         if D.TOWER[S.mode] and not D.TOWER[S.mode].onTrail then
             local ok, why = S.game:canBuild(S.mode, n)
-            if ok then return "GROW " .. D.TOWER[S.mode].name .. " HERE: " .. S.game:towerCost(S.mode), "l" end
+            if ok then return trf("GROW %s HERE: %s", D.TOWER[S.mode].name, S.game:towerCost(S.mode)), "l" end
             if why then return why, "r" end
         end
         return s, "w"
@@ -270,44 +272,44 @@ local function tooltip()
     if S.hover.link then
         local l = S.hover.link
         if S.mode == "prune" then
-            return "PRUNE LINK: +" .. floor(l.cost * (l.state == "alive" and D.LINK.prune or D.LINK.prune * 0.5)), "r"
+            return trf("PRUNE LINK: +%s", floor(l.cost * (l.state == "alive" and D.LINK.prune or D.LINK.prune * 0.5))), "r"
         end
         if l.state == "cut" then
-            if l.salted then return "SALTED LINK. IT WILL NOT REGROW: PRUNE IT", "w" end
-            if l.hand then return "REGROWING", "l" end
-            return say("CUT LINK. CLICK TO REGROW: ", "CUT LINK. TAP TO REGROW: ") .. S.game:repairCost(l), "l"
+            if l.salted then return tr("SALTED LINK. IT WILL NOT REGROW: PRUNE IT"), "w" end
+            if l.hand then return tr("REGROWING"), "l" end
+            return tr(say("CUT LINK. CLICK TO REGROW: ", "CUT LINK. TAP TO REGROW: ")) .. S.game:repairCost(l), "l"
         end
-        if l.state == "grow" then return "GROWING", "l" end
-        local s = "LINK " .. floor(l.hp) .. "/" .. floor(S.game:linkHp()) .. "  FLOW " .. (l.cap or D.LINK.cap)
-        if l.thick then s = s .. " (RELAY)" end
-        if not l.a.conn then s = s .. "  NOT FED" end
+        if l.state == "grow" then return tr("GROWING"), "l" end
+        local s = trf("LINK %s/%s  FLOW %s", floor(l.hp), floor(S.game:linkHp()), l.cap or D.LINK.cap)
+        if l.thick then s = s .. tr(" (RELAY)") end
+        if not l.a.conn then s = s .. tr("  NOT FED") end
         return s, "w"
     end
     if D.TOWER[S.mode] and D.TOWER[S.mode].onTrail and S.hover.c then
         local d = D.TOWER[S.mode]
         local ok, why = S.game:canLay(S.mode, S.hover.c, S.hover.r)
-        if ok then return "GROW " .. d.name .. ": " .. S.game:towerCost(d.id), "l" end
-        if not S.world:distAt(S.hover.c, S.hover.r) then return d.name .. " GOES ON THE TRAIL", "r" end
+        if ok then return trf("GROW %s: %s", d.name, S.game:towerCost(d.id)), "l" end
+        if not S.world:distAt(S.hover.c, S.hover.r) then return trf("%s GOES ON THE TRAIL", d.name), "r" end
         return why or "", "r"
     end
     if S.mode == "prune" and S.hover.mat then
-        local ask = S.clearAsk == S.hover.mat and say(". CLICK AGAIN TO LIFT IT", ". TAP AGAIN TO LIFT IT") or ""
-        return "LIFT " .. D.TOWER[S.hover.mat.kind].name .. ": +" .. S.game:liftValue(S.hover.mat) .. ask, "r"
+        local ask = S.clearAsk == S.hover.mat and tr(say(". CLICK AGAIN TO LIFT IT", ". TAP AGAIN TO LIFT IT")) or ""
+        return trf("LIFT %s: +%s", D.TOWER[S.hover.mat.kind].name, S.game:liftValue(S.hover.mat)) .. ask, "r"
     end
     if S.hover.mat and S.mode == "grow" then
         local m = S.hover.mat
         local s = towerName(m)
         if m.kind == "mat" then
-            s = s .. (m.fed and (": " .. m.draped .. " LINK" .. (m.draped > 1 and "S" or "") .. " OVER IT")
-                or ": WITHERING " .. math.ceil(m.life) .. "S")
-            s = s .. "  SLOW " .. floor((1 - S.game:matSlow(m)) * 100) .. "%"
-        else s = s .. "  HP " .. math.ceil(m.hp) .. "/" .. S.game:maxHp(m) end
+            s = s .. (m.fed and trf(m.draped > 1 and ": %s LINKS OVER IT" or ": %s LINK OVER IT", m.draped)
+                or trf(": WITHERING %sS", math.ceil(m.life)))
+            s = s .. trf("  SLOW %s%%", floor((1 - S.game:matSlow(m)) * 100))
+        else s = s .. trf("  HP %s/%s", math.ceil(m.hp), S.game:maxHp(m)) end
         return s, "w"
     end
-    if S.mode == "grow" and S.drag then return say("LET GO OVER A GLOWING POCKET", "LET GO OVER A GLOWING POCKET"), "l" end
+    if S.mode == "grow" and S.drag then return tr("LET GO OVER A GLOWING POCKET"), "l" end
     if S.mode == "pulse" then
-        if S.game.pulseCd > 0 then return "PULSE REGROWING: " .. math.ceil(S.game.pulseCd) .. "S", "r" end
-        return say("CLICK A FED NODE TO SEND THE PULSE", "TAP A FED NODE TO SEND THE PULSE"), "l"
+        if S.game.pulseCd > 0 then return trf("PULSE REGROWING: %sS", math.ceil(S.game.pulseCd)), "r" end
+        return tr(say("CLICK A FED NODE TO SEND THE PULSE", "TAP A FED NODE TO SEND THE PULSE")), "l"
     end
 end
 
@@ -358,7 +360,7 @@ local function draw()
     love.graphics.rectangle("fill", 0, 0, S.vw, S.inset.t + TOP - 1)
     local ty = S.inset.t + 3
     local inc = S.game.income or 0
-    local s = "NUTRIENTS " .. floor(S.game.nutrients)
+    local s = trf("NUTRIENTS %s", floor(S.game.nutrients))
     -- Short of them: red, and a shiver. A lot just in: bright.
     local nk, nx = "l", 0
     if flair.nut.t > 0 then
@@ -372,17 +374,17 @@ local function draw()
         text(i, x + 2, ty, inc >= 0 and "c" or "r")
         x = x + Font.width(i) + 4
     end
-    s = "SPROUT " .. math.ceil(S.game.heartHp) .. "/" .. S.game.heartMax
+    s = trf("SPROUT %s/%s", math.ceil(S.game.heartHp), S.game.heartMax)
     text(s, x + 8, ty, S.game.heartHp < S.game.heartMax * 0.4 and "r" or "g")
-    local w = "WAVE " .. S.game.wave .. "/" .. #S.game.waves
-    if S.game.endless then w = "ENDLESS WAVE " .. S.game.wave .. "  BEST " .. max(S.game.best, S.game.cleared) end
+    local w = trf("WAVE %s/%s", S.game.wave, #S.game.waves)
+    if S.game.endless then w = trf("ENDLESS WAVE %s  BEST %s", S.game.wave, max(S.game.best, S.game.cleared)) end
     local nxt = S.game:nextWave()
     local right = w
-    if nxt and S.game.phase == "build" then right = "NEXT: " .. waveSummary(nxt) .. "   " .. w end
+    if nxt and S.game.phase == "build" then right = tr("NEXT: ") .. waveSummary(nxt) .. "   " .. w end
     if S.game.phase == "wave" then
         local left = #S.game.queue
         for _ in ipairs(S.game.enemies) do left = left + 1 end
-        right = left .. " LEFT   " .. w
+        right = trf("%s LEFT   %s", left, w)
         if S.game.weather then right = D.WEATHER[S.game.weather].name .. "   " .. right end
     end
     local leftEnd = x + 8 + Font.width(s) + 8
@@ -397,7 +399,7 @@ local function draw()
     local sky = S.game.phase == "wave" and S.game.weather or (S.game.phase == "build" and nxt and nxt.weather)
     if sky and right ~= w then
         local name = D.WEATHER[sky].name
-        local nx = S.game.phase == "build" and rx + Font.width("NEXT: ") or rx
+        local nx = S.game.phase == "build" and rx + Font.width(tr("NEXT: ")) or rx
         S.weatherBox = { x = nx - 3, y = 0, w = Font.width(name) + 6, h = S.inset.t + TOP, kind = sky, next = S.game.phase == "build" }
     end
     if S.weatherTip and not (S.weatherBox and S.weatherBox.kind == S.weatherTip) then S.weatherTip = nil end
@@ -416,7 +418,7 @@ local function draw()
             if e then
                 local i, j = S.world:toImage(e.x - 6, S.world:groundAt(e.x, e.z) + 6, e.z)
                 local sx, sy = toHud(i, j)
-                if floor(S.game.clock * 2) % 2 == 0 then label(n .. " IN", sx - 6, sy - 10, "w", "r") end
+                if floor(S.game.clock * 2) % 2 == 0 then label(trf("%s IN", n), sx - 6, sy - 10, "w", "r") end
             end
         end
     end
@@ -495,18 +497,18 @@ local function draw()
     if S.game.phase == "build" then
         box(wx, wy, ww, wh, S.hover.wave and "m" or "d", "g")
         -- Starting by itself (the settings): how long until it does.
-        local go = "START"
+        local go = tr("START")
         if O.get("auto") and S.game.wave > 0 and S.autoWait and not S.tutorial then
-            go = "START " .. math.ceil(math.max(0, Run.AUTO_WAIT - S.autoWait))
+            go = go .. " " .. math.ceil(math.max(0, Run.AUTO_WAIT - S.autoWait))
         end
         text(go, wx + floor((ww - Font.width(go)) / 2), wy + 5, "g")
-        local s2 = "WAVE " .. (S.game.wave + 1)
+        local s2 = trf("WAVE %s", S.game.wave + 1)
         text(s2, wx + floor((ww - Font.width(s2)) / 2), wy + 13, "w")
         local k = O.label("space")
         if not S.touch then text(k, wx + floor((ww - Font.width(k)) / 2), wy + 20, "s") end
     else
         box(wx, wy, ww, wh, "u", S.hover.wave and "t" or "o")
-        local s2 = "SPEED X" .. S.speed
+        local s2 = trf("SPEED X%s", S.speed)
         text(s2, wx + floor((ww - Font.width(s2)) / 2), wy + 9, "w")
         local k = O.label("f")
         if not S.touch then text(k, wx + floor((ww - Font.width(k)) / 2), wy + 18, "s") end
@@ -538,15 +540,15 @@ local function draw()
             color("t")
             love.graphics.rectangle("fill", bx, by + 6, floor(w * boss.ballHp / boss.ballMax), 2)
         end
-        local name = d.name .. (boss.under and (boss.kind == "mole" and " (UNDERGROUND)" or " (UNDER WATER)") or "")
+        local name = d.name .. (boss.under and tr(boss.kind == "mole" and " (UNDERGROUND)" or " (UNDER WATER)") or "")
         -- Red says boss; the colour-blind mode says it in words too.
-        if O.get("colour") then name = "BOSS: " .. name end
+        if O.get("colour") then name = trf("BOSS: %s", name) end
         text(name, floor(bx + (w - Font.width(name)) / 2), by + (boss.ballHp and boss.ballHp > 0 and 11 or 7), "w")
     end
     if S.game.bossIntro then
         local d = D.ENEMIES[S.game.bossIntro.kind]
         if floor(S.game.bossIntro.t * 4) % 4 ~= 0 or S.game.bossIntro.t < 2.5 then
-            centred((O.get("colour") and "BOSS: " or "") .. d.name, S.inset.t + TOP + 22, "r", "o")
+            centred(O.get("colour") and trf("BOSS: %s", d.name) or d.name, S.inset.t + TOP + 22, "r", "o")
         end
         centred(d.blurb, S.inset.t + TOP + 33, "w", "o")
     end
@@ -569,7 +571,7 @@ local function draw()
             if cut then lines = { tip:sub(1, cut - 1), tip:sub(cut + 1) } end
         end
         for n, l in ipairs(lines) do
-            if Font.width(l) > room then l = l:sub(1, floor(room / 4)) end
+            if Font.width(l) > room then l = Font.cut(l, floor(room / 4)) end
             centred(l, tipBase - 11 - (#lines - n) * 10, k, nil, floor((fl + fr) / 2))
         end
     end
@@ -583,7 +585,7 @@ local function draw()
         local d = D.WEATHER[wb.kind]
         local tw = min(150, S.vw - S.inset.l - S.inset.r - 8)
         local lines = wrapLines(d.blurb, tw - 8)
-        local head = d.name .. (wb.next and " NEXT WAVE" or "")
+        local head = wb.next and trf("%s NEXT WAVE", d.name) or d.name
         local th = 13 + 7 * #lines
         local tx = max(S.inset.l + 4, min(S.vw - S.inset.r - 4 - tw, wb.x + floor(wb.w / 2) - floor(tw / 2)))
         local ty = S.inset.t + TOP + 3
@@ -595,7 +597,7 @@ local function draw()
 
     if S.game.phase == "mutate" then
         local cs = mutationCards()
-        centred("THE NETWORK MUTATES", cs[1].y - 14, "l", "o")
+        centred(tr("THE NETWORK MUTATES"), cs[1].y - 14, "l", "o")
         for k, c in ipairs(cs) do
             -- The seed's own is in its green.
             local own = c.m.seed ~= nil
@@ -603,7 +605,10 @@ local function draw()
             text(c.m.name, c.x + 4, c.y + 4, own and "g" or "l")
             if not S.touch then text(tostring(k), c.x + c.w - 6, c.y + 4, "s") end
             -- Green says the seed's own; the colour-blind mode says it in words too.
-            if own and O.get("colour") then text("SEED", c.x + c.w - 24, c.y + 4, "g") end
+            if own and O.get("colour") then
+                local seed = tr("SEED")
+                text(seed, c.x + c.w - 8 - Font.width(seed), c.y + 4, "g")
+            end
             -- The blurb, broken into lines that fit the card.
             local line, y = "", c.y + 14
             for word in c.m.blurb:gmatch("%S+") do
@@ -620,8 +625,9 @@ local function draw()
     end
 
     if S.game.phase == "won" then
-        centred(S.level.name .. (S.game.challenge and " (CHALLENGE)" or "") .. ": THE SPROUT LIVES", floor(S.vh / 2) - 24, "g")
-        centred("KILLS " .. S.game.stats.kills .. "   BOSSES " .. S.game.stats.bosses .. "   DRUNK " .. floor(S.game.stats.drunk) .. "   CUTS " .. S.game.stats.cuts, floor(S.vh / 2) - 12, "w")
+        centred(trf(S.game.challenge and "%s (CHALLENGE): THE SPROUT LIVES" or "%s: THE SPROUT LIVES", S.level.name), floor(S.vh / 2) - 24, "g")
+        centred(trf("KILLS %s   BOSSES %s   DRUNK %s   CUTS %s", S.game.stats.kills, S.game.stats.bosses, floor(S.game.stats.drunk),
+            S.game.stats.cuts), floor(S.vh / 2) - 12, "w")
         local buttons = wonButtons()
         for _, b in ipairs(buttons) do
             local on = S.hover.won == b.id
@@ -630,25 +636,25 @@ local function draw()
             text(b.text, b.x + 5, b.y + 5, endless and "r" or "w")
         end
         local y = buttons.bottom + 1
-        if Profile.records[S.level.id] then centred("ENDLESS BEST: " .. Profile.records[S.level.id] .. " WAVES", y, "t"); y = y + 10 end
-        centred("+" .. S.game.spores .. " SPORES   " .. Profile.spores .. " IN THE BANK", y, "t"); y = y + 10
+        if Profile.records[S.level.id] then centred(trf("ENDLESS BEST: %s WAVES", Profile.records[S.level.id]), y, "t"); y = y + 10 end
+        centred(trf("+%s SPORES   %s IN THE BANK", S.game.spores, Profile.spores), y, "t"); y = y + 10
         -- A first win opens more of the network: what, by name.
-        for _, row in ipairs(S.game.opened or {}) do centred("NEW ON THE NETWORK: " .. row.name, y, "g"); y = y + 10 end
+        for _, row in ipairs(S.game.opened or {}) do centred(trf("NEW ON THE NETWORK: %s", row.name), y, "g"); y = y + 10 end
         for _, c in ipairs(D.CHALLENGES) do
-            if c.won == S.level.id and not S.game.challenge then centred("CHALLENGE MODE IS OPEN: THE " .. c.name, y, "r"); y = y + 10 end
+            if c.won == S.level.id and not S.game.challenge then centred(trf("CHALLENGE MODE IS OPEN: THE %s", c.name), y, "r"); y = y + 10 end
         end
-        if (S.game.opened or {})[1] then centred("GROW IT ON THE NETWORK, FROM THE HOME SCREEN", y, "s") end
+        if (S.game.opened or {})[1] then centred(tr("GROW IT ON THE NETWORK, FROM THE HOME SCREEN"), y, "s") end
     elseif S.game.phase == "lost" then
-        centred("THE SPROUT HAS WILTED", floor(S.vh / 2) - 24, "r")
+        centred(tr("THE SPROUT HAS WILTED"), floor(S.vh / 2) - 24, "r")
         if S.game.endless then
-            centred("ENDLESS: YOU HELD " .. S.game.cleared .. " WAVES", floor(S.vh / 2) - 12, "w")
-            centred(S.game.record and "A NEW RECORD!" or ("BEST " .. S.game.best), floor(S.vh / 2) + 12, S.game.record and "g" or "t")
+            centred(trf("ENDLESS: YOU HELD %s WAVES", S.game.cleared), floor(S.vh / 2) - 12, "w")
+            centred(S.game.record and tr("A NEW RECORD!") or trf("BEST %s", S.game.best), floor(S.vh / 2) + 12, S.game.record and "g" or "t")
         else
-            centred("YOU HELD " .. (S.game.wave - 1) .. " WAVES OF " .. #S.game.waves, floor(S.vh / 2) - 12, "w")
+            centred(trf("YOU HELD %s WAVES OF %s", S.game.wave - 1, #S.game.waves), floor(S.vh / 2) - 12, "w")
         end
-        centred(say("R: TRY AGAIN   M: LEVELS", "TAP FOR THE LEVELS"), floor(S.vh / 2), "l")
-        centred("+" .. S.game.spores .. " SPORES   " .. Profile.spores .. " IN THE BANK", floor(S.vh / 2) + 24, "t")
-        centred("SPORES GROW THE NETWORK, FROM THE HOME SCREEN", floor(S.vh / 2) + 34, "s")
+        centred(tr(say("R: TRY AGAIN   M: LEVELS", "TAP FOR THE LEVELS")), floor(S.vh / 2), "l")
+        centred(trf("+%s SPORES   %s IN THE BANK", S.game.spores, Profile.spores), floor(S.vh / 2) + 24, "t")
+        centred(tr("SPORES GROW THE NETWORK, FROM THE HOME SCREEN"), floor(S.vh / 2) + 34, "s")
     end
     Guide.draw("run")
     if Pause.shown() then Pause.draw() end

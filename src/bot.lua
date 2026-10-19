@@ -15,6 +15,7 @@ local D = require "src.defs"
 local N = require "src.network"
 local World = require "src.world"
 local Game = require "src.game"
+local Lang = require "src.lang"
 
 local B = {}
 
@@ -399,7 +400,7 @@ local function run(seed, lv, generic, challenge, endless, sprout, extra)
             else
                 local ok, why = g:canLay(s[2], s[3][1], s[3][2])
                 if ok then done = g:lay(s[2], s[3][1], s[3][2]) and true
-                elseif why == "TILE TAKEN" then done = true end
+                elseif why == Lang.t("TILE TAKEN") then done = true end
             end
         elseif s[1] == "up" then
             local n = node(s[2])

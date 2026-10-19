@@ -14,6 +14,8 @@ local Panel = require "src.ui.panel"
 local flair = require "src.ui.flair"
 local Run = require "src.ui.run"
 local Network = require "src.ui.network"
+local Lang = require "src.lang"
+local tr, trf = Lang.t, Lang.f
 
 local floor, ceil, max, min = math.floor, math.ceil, math.max, math.min
 local color, box, text, centred, wrap, say, inside, wide =
@@ -195,18 +197,18 @@ local function drawPanelButton(P)
     local b = P.button
     local id = P.seed or P.kind
     if b and not (P.seed and Profile.ownsSeed(id) or (not P.seed and Profile.owns(id))) then
-        local s = "GROW IT ON THE NETWORK"
+        local s = tr("GROW IT ON THE NETWORK")
         box(b.x, b.y, b.w, b.h, S.hover.bring and "n" or "u", "t")
         text(s, b.x + floor((b.w - Font.width(s)) / 2), b.y + 4, "t")
     elseif b and P.seed then
         local on = S.pick.seed == id
-        local s = on and "PLANTED" or "PLANT IT"
+        local s = tr(on and "PLANTED" or "PLANT IT")
         box(b.x, b.y, b.w, b.h, S.hover.bring and "n" or (on and "u" or "d"), on and "t" or "g")
         text(s, b.x + floor((b.w - Font.width(s)) / 2), b.y + 4, on and "w" or "g")
     elseif b then
         local inn = S.pick.set[P.kind]
         local full = not inn and #picked() >= room()
-        local s = inn and "LEAVE IT AT HOME" or (full and (WORDS[room()] .. " ALREADY: DROP ONE") or "BRING IT")
+        local s = inn and tr("LEAVE IT AT HOME") or (full and trf("%s ALREADY: DROP ONE", tr(WORDS[room()])) or tr("BRING IT"))
         box(b.x, b.y, b.w, b.h, S.hover.bring and "n" or (inn and "u" or "d"), full and "k" or (inn and "t" or "g"))
         text(s, b.x + floor((b.w - Font.width(s)) / 2), b.y + 4, full and "k" or (inn and "w" or "g"))
     end
@@ -219,13 +221,14 @@ local function draw()
     local L = layout()
     local list = picked()
     local clock = flair.now()
-    centred(lv.name .. (S.challenge and " (CHALLENGE)" or ""), L.top, "g", "o", L.mid)
-    text("SPORES " .. Profile.spores .. say("   N: NETWORK", ""), L.back.x + L.back.w + 6, S.inset.t + 7, "t")
+    centred(S.challenge and trf("%s (CHALLENGE)", lv.name) or lv.name, L.top, "g", "o", L.mid)
+    text(trf("SPORES %s", Profile.spores) .. say(tr("   N: NETWORK"), ""), L.back.x + L.back.w + 6, S.inset.t + 7, "t")
     local count = #list .. "/" .. room()
-    centred("PICK A SEED AND THE SPECIES TO BRING  " .. count, L.top + 11, #list >= room() and "l" or "t", "o", L.mid)
-    text("COMING", floor(L.mid - Font.width("COMING") / 2), L.chipsY - 9, "s")
-    text("SEED", floor(L.mid - Font.width("SEED") / 2), L.seedsY - 7, "s")
-    text("SPECIES", floor(L.mid - Font.width("SPECIES") / 2), L.cardsY - 7, "s")
+    centred(trf("PICK A SEED AND THE SPECIES TO BRING  %s", count), L.top + 11, #list >= room() and "l" or "t", "o", L.mid)
+    for _, h in ipairs({ { "COMING", L.chipsY - 9 }, { "SEED", L.seedsY - 7 }, { "SPECIES", L.cardsY - 7 } }) do
+        local s = tr(h[1])
+        text(s, floor(L.mid - Font.width(s) / 2), h[2], "s")
+    end
 
     -- The seeds: the planted one lit green, one grown in white, one the
     -- network could grow tan, one still waiting on a win dark.
@@ -268,7 +271,7 @@ local function draw()
         wrap(known and t.name or "???", c.x + 22, c.y + 3, c.w - 24, inn and "w" or (own and "s" or "k"))
         -- Not grown yet: on the network, or locked behind a win.
         if not own then
-            text(known and "NETWORK" or "LOCKED", c.x + 22, c.y + c.h - 7, known and "t" or "k")
+            text(tr(known and "NETWORK" or "LOCKED"), c.x + 22, c.y + c.h - 7, known and "t" or "k")
         else
             local cost = floor(N.value(Profile.grown(), t.id, "cost", t.cost) + 0.5)
             text(tostring(cost), c.x + 22, c.y + c.h - 7, inn and "l" or "k")
@@ -276,7 +279,7 @@ local function draw()
         -- The wave it comes in, given what else is brought.
         local at = D.unlockAt(lv, t.id, S.pick.set)
         if own and at > 0 then
-            local s = "W" .. at
+            local s = trf("W%s", at)
             text(s, c.x + c.w - Font.width(s) - 2, c.y + c.h - 7, "k")
         end
         if not S.touch then text(t.key, c.x + 1, c.y + 1, "s") end
@@ -285,23 +288,23 @@ local function draw()
 
     local b, g = L.back, L.go
     box(b.x, b.y, b.w, b.h, S.hover.back and "n" or "u", S.hover.back and "t" or "k")
-    text("BACK", b.x + floor((b.w - Font.width("BACK")) / 2), b.y + 4, "w")
+    text(tr("BACK"), b.x + floor((b.w - Font.width(tr("BACK"))) / 2), b.y + 4, "w")
     local ready = #list > 0
     box(g.x, g.y, g.w, g.h, ready and (S.hover.go and "m" or "d") or "u", ready and "g" or "k")
-    text("GROW", g.x + floor((g.w - Font.width("GROW")) / 2), g.y + (g.h > 12 and 5 or 4), ready and "g" or "k")
+    text(tr("GROW"), g.x + floor((g.w - Font.width(tr("GROW"))) / 2), g.y + (g.h > 12 and 5 or 4), ready and "g" or "k")
 
     local P = info()
     if P then
         Panel.draw(P)
         drawPanelButton(P)
-        if S.pick.full > 0 then centred("ONLY " .. room() .. " COME. DROP ONE FIRST", L.tipY, "r", "o", L.mid) end
+        if S.pick.full > 0 then centred(trf("ONLY %s COME. DROP ONE FIRST", room()), L.tipY, "r", "o", L.mid) end
         return
     end
 
     -- One line under it all: what is pointed at, or how it works.
     local tip, k
     if S.pick.full > 0 then
-        tip, k = "ONLY " .. room() .. " COME. DROP ONE FIRST", "r"
+        tip, k = trf("ONLY %s COME. DROP ONE FIRST", room()), "r"
     elseif S.hover.seed then
         local sd = D.SEED[S.hover.seed]
         if Profile.ownsSeed(sd.id) then tip, k = sd.name .. ": " .. sd.blurb, "w"
@@ -313,16 +316,16 @@ local function draw()
         local t = D.TOWER[S.hover.species]
         tip, k = t.name .. ": " .. t.blurb, "w"
     elseif enemy and not met then
-        tip, k = "???: NOT MET YET. FACE IT TO LEARN WHAT ANSWERS IT", "k"
+        tip, k = tr("???: NOT MET YET. FACE IT TO LEARN WHAT ANSWERS IT"), "k"
     elseif enemy then
         local names = {}
         for _, id in ipairs(D.COUNTERS[enemy] or {}) do names[#names + 1] = D.TOWER[id].name end
-        tip, k = D.ENEMIES[enemy].name .. ": " .. D.ENEMIES[enemy].blurb:gsub("%.?$", ".") .. " ANSWER: " .. table.concat(names, ", "), "t"
+        tip, k = D.ENEMIES[enemy].name .. ": " .. D.ENEMIES[enemy].blurb:gsub("%.?$", ".") .. tr(" ANSWER: ") .. table.concat(names, ", "), "t"
     elseif not ready then
-        tip, k = "BRING AT LEAST ONE", "r"
+        tip, k = tr("BRING AT LEAST ONE"), "r"
     else
-        tip, k = say("CLICK A SEED TO PLANT IT. CLICK A SPECIES TO READ IT, AGAIN TO BRING OR LEAVE IT. POINT AT AN ENEMY FOR ITS ANSWER",
-            "TAP A SEED TO PLANT IT. TAP A SPECIES TO READ IT, AGAIN TO BRING OR LEAVE IT. TAP AN ENEMY FOR ITS ANSWER"), "s"
+        tip, k = tr(say("CLICK A SEED TO PLANT IT. CLICK A SPECIES TO READ IT, AGAIN TO BRING OR LEAVE IT. POINT AT AN ENEMY FOR ITS ANSWER",
+            "TAP A SEED TO PLANT IT. TAP A SPECIES TO READ IT, AGAIN TO BRING OR LEAVE IT. TAP AN ENEMY FOR ITS ANSWER")), "s"
     end
     local room = S.vw - S.inset.l - S.inset.r - 8
     local y = L.tipY

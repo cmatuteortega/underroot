@@ -12,6 +12,7 @@ local Pixels = require "src.ui.pixels"
 local flair = require "src.ui.flair"
 local Palette = require "src.palette"
 local Profile = require "src.profile"
+local tr = require("src.lang").t
 
 local floor, max, min = math.floor, math.max, math.min
 local color, text, centred, say = Draw.color, Draw.text, Draw.centred, Draw.say
@@ -198,14 +199,14 @@ function title.name(dy)
     color("l")
     Font.print(name, 0, 0)
     love.graphics.pop()
-    local sub = "A TOWER DEFENSE UNDER A SPROUT"
+    local sub = tr("A TOWER DEFENSE UNDER A SPROUT")
     text(sub, floor((S.vw - Font.width(sub)) / 2), y + 6 * s + 6, "t")
 end
 
 function title.draw()
     local age = flair.now() - (title.t0 or 0)
     if age % 1.2 < 0.8 then
-        centred(say("PRESS ANY KEY", "TAP TO BEGIN"), S.vh - S.inset.b - 14, "w", "o")
+        centred(tr(say("PRESS ANY KEY", "TAP TO BEGIN")), S.vh - S.inset.b - 14, "w", "o")
     end
     local v = require("src.version").text
     text(v, S.vw - S.inset.r - Font.width(v) - 3, S.vh - S.inset.b - 8, "k")

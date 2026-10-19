@@ -260,6 +260,7 @@ function S.update(g, dt)
             print(("wave %d  phase %s  sprout %.1f  nutrients %d  kills %d  drunk %d  cuts %d  stolen %d")
                 :format(g.wave, g.phase, g.heartHp, g.nutrients, g.stats.kills, g.stats.drunk, g.stats.cuts, g.stats.stolen))
             print("pictures kept", require("src.models").count())
+            for s in pairs(require("src.lang").missing) do print("not in the language: " .. s) end
             print(("frame: %.2f ms average, %.2f ms worst (update + draw, real time)"):format(S.total / S.frames * 1000, S.worst * 1000))
             love.event.quit()
         end

@@ -14,12 +14,14 @@ local S = require "src.ui.state"
 local Draw = require "src.ui.draw"
 local Pixels = require "src.ui.pixels"
 local flair = require "src.ui.flair"
+local Lang = require "src.lang"
 
 local floor, ceil, max, min = math.floor, math.ceil, math.max, math.min
 local color, box, text, centred, wrapLines, number, inside, wide =
     Draw.color, Draw.box, Draw.text, Draw.centred, Draw.wrapLines, Draw.number, Draw.inside, Draw.wide
 local blit, icon, CUT = Pixels.blit, Pixels.icon, Pixels.CUT
 local sound = flair.sound
+local tr, trf = Lang.t, Lang.f
 
 local codex = {}
 
@@ -36,8 +38,10 @@ codex.tab, codex.scroll, codex.page, codex.pageScroll = 1, { 0, 0, 0, 0 }, nil, 
 codex.FACE = 0.35
 codex.TW, codex.TH = 60, 62
 
--- Its tables, made once at load.
+-- Its tables, made at load and again when the language changes (the
+-- glossary's forms are the language's own words).
 function codex.init()
+    codex.pages, codex.wordLines = {}, nil
     codex.ids = { enemies = D.ENEMY_ORDER, species = {}, seeds = {} }
     for _, t in ipairs(D.TOWERS) do codex.ids.species[#codex.ids.species + 1] = t.id end
     for _, sd in ipairs(D.SEEDS) do codex.ids.seeds[#codex.ids.seeds + 1] = sd.id end
@@ -185,8 +189,9 @@ function codex.footnote(str, notes)
     end
     local function plain(s) return (s:gsub("%p", "%%%0")) end
     for _, s in ipairs(codex.skips) do str = str:gsub(plain(s), hold) end
+    -- A word's edges: an accented letter's bytes are letters too.
     for _, f in ipairs(codex.forms) do
-        str = str:gsub("%f[%w]" .. plain(f[1]) .. "%f[^%w]", function(m) return hold("\3" .. f[2] .. "\4" .. m) end)
+        str = str:gsub("%f[%w\128-\255]" .. plain(f[1]) .. "%f[^%w\128-\255]", function(m) return hold("\3" .. f[2] .. "\4" .. m) end)
     end
     return (str:gsub("\1(%d+)\2", function(k)
         local s = held[tonumber(k)]
@@ -207,17 +212,17 @@ function codex.where(tab, id)
     if t == "enemies" then
         for _, l in ipairs(D.LEVELS) do
             for _, w in ipairs(l.waves) do
-                for _, g in ipairs(w) do if g[1] == id then return "IT COMES ON " .. l.name end end
+                for _, g in ipairs(w) do if g[1] == id then return trf("IT COMES ON %s", l.name) end end
             end
         end
-        if D.ENEMIES[id].from then return "IT HATCHES FROM THE " .. D.ENEMIES[D.ENEMIES[id].from].name end
-        return "IT COMES IN CHALLENGE MODE, ON ANY LEVEL"
+        if D.ENEMIES[id].from then return trf("IT HATCHES FROM THE %s", D.ENEMIES[D.ENEMIES[id].from].name) end
+        return tr("IT COMES IN CHALLENGE MODE, ON ANY LEVEL")
     end
     -- A species or a seed: grown on the network, once what it waits on is done.
     local row = Profile.nodeOf(id)
     local state, level = Profile.nodeState(row.id)
-    if state == "locked" then return "WIN " .. level.name .. ", THEN GROW IT ON THE NETWORK WITH SPORES" end
-    return "GROW IT ON THE NETWORK: " .. (N.price(Profile.ranks(), row.id) or 0) .. " SPORES"
+    if state == "locked" then return trf("WIN %s, THEN GROW IT ON THE NETWORK WITH SPORES", level.name) end
+    return trf("GROW IT ON THE NETWORK: %s SPORES", N.price(Profile.ranks(), row.id) or 0)
 end
 
 -- A page's lines, `w` wide, each { s, k, x, h } as the info panel's, or
@@ -226,7 +231,7 @@ end
 codex.pages = {}
 function codex.lines(tab, id, w)
     local found = codex.found(tab, id)
-    local key = tab .. id .. ":" .. w .. (found and "f" or "") .. Profile.spores
+    local key = tab .. id .. ":" .. w .. (found and "f" or "") .. Profile.spores .. Lang.code
     if codex.pages[key] then return codex.pages[key] end
     local out, notes = {}, { list = {}, at = {} }
     local function add(str, k, x, h)
@@ -235,7 +240,7 @@ function codex.lines(tab, id, w)
     end
     local function note(str, k, x) add(codex.footnote(str, notes), k, x) end
     local function gap(h) out[#out + 1] = { h = h } end
-    local function head(str) gap(4); add(str, "t") end
+    local function head(str) gap(4); add(tr(str), "t") end
     local function names(list, of)
         local s = {}
         for _, n in ipairs(list) do s[#s + 1] = of(n) end
@@ -245,19 +250,19 @@ function codex.lines(tab, id, w)
     local t = codex.TABS[tab].id
     add(found and codex.name(tab, id) or "???", found and "g" or "k", 0, 9)
     if not found then
-        add(t == "enemies" and "NOT MET YET" or (t == "species" and "NOT GROWN YET" or "NOT PLANTED YET"), "r")
+        add(tr(t == "enemies" and "NOT MET YET" or (t == "species" and "NOT GROWN YET" or "NOT PLANTED YET")), "r")
         gap(3)
         add(codex.where(tab, id), "s")
     elseif t == "enemies" then
         local d = D.ENEMIES[id]
-        note(d.boss and "BOSS" or (d.fly and "FLIER" or "WALKER"), d.boss and "r" or "t")
+        note(tr(d.boss and "BOSS" or (d.fly and "FLIER" or "WALKER")), d.boss and "r" or "t")
         gap(3)
         note(d.about, "w")
         head("NUMBERS")
-        local parts = { "HP " .. number(d.hp), "SPEED " .. number(d.speed), "ARMOR " .. number(d.armor) }
-        if d.swarm then parts[#parts + 1] = d.swarm .. " TO A SWARM" end
+        local parts = { trf("HP %s", number(d.hp)), trf("SPEED %s", number(d.speed)), trf("ARMOR %s", number(d.armor)) }
+        if d.swarm then parts[#parts + 1] = trf("%s TO A SWARM", d.swarm) end
         add(table.concat(parts, "  "), "l")
-        add("HITS THE SPROUT FOR " .. number(d.heart) .. "  CORPSE WORTH " .. number(d.corpse), "l")
+        add(trf("HITS THE SPROUT FOR %s  CORPSE WORTH %s", number(d.heart), number(d.corpse)), "l")
         local met = {}
         local kind = d.from or id -- a Dragonfly comes wherever its nymph does
         for _, l in ipairs(D.LEVELS) do
@@ -266,32 +271,32 @@ function codex.lines(tab, id, w)
             if here then met[#met + 1] = l.name end
         end
         for _, c in ipairs(D.CHALLENGES) do
-            for _, g in ipairs(c.wave) do if g[1] == kind then met[#met + 1] = "CHALLENGE MODE (" .. c.name .. ")" end end
+            for _, g in ipairs(c.wave) do if g[1] == kind then met[#met + 1] = trf("CHALLENGE MODE (%s)", c.name) end end
         end
         head("COMES ON")
-        add(#met > 0 and table.concat(met, ", ") or "NOWHERE YET", "w")
+        add(#met > 0 and table.concat(met, ", ") or tr("NOWHERE YET"), "w")
         if D.COUNTERS[id] then
             head("ANSWERED BY")
             add(names(D.COUNTERS[id], function(k) return D.TOWER[k].name end), "w")
         end
     elseif t == "species" then
         local d = D.TOWER[id]
-        local at = (d.unlock or 0) > 0 and ("   FROM WAVE " .. d.unlock) or ""
-        add(d.role .. "   COST " .. d.cost .. at, "t")
-        add("THE NUMBERS FULLY GROWN ON THE NETWORK", "s")
+        local at = (d.unlock or 0) > 0 and trf("   FROM WAVE %s", d.unlock) or ""
+        add(d.role .. trf("   COST %s", d.cost) .. at, "t")
+        add(tr("THE NUMBERS FULLY GROWN ON THE NETWORK"), "s")
         gap(3)
         note(d.blurb, "w")
         gap(3)
         note(d.about, "s")
         head("NUMBERS")
         local parts = {}
-        if d.damage then parts[#parts + 1] = "DAMAGE " .. number(d.damage) end
-        if d.every then parts[#parts + 1] = "EVERY " .. number(d.every) .. "S" end
-        if d.range then parts[#parts + 1] = "RANGE " .. number(d.range) end
-        if d.splash then parts[#parts + 1] = "SPLASH " .. number(d.splash) end
-        if d.slow then parts[#parts + 1] = "SLOW " .. floor((1 - d.slow) * 100 + 0.5) .. "%" end
-        if d.hp then parts[#parts + 1] = "HP " .. d.hp end
-        if d.reserve then parts[#parts + 1] = "RESERVE " .. number(d.reserve) end
+        if d.damage then parts[#parts + 1] = trf("DAMAGE %s", number(d.damage)) end
+        if d.every then parts[#parts + 1] = trf("EVERY %sS", number(d.every)) end
+        if d.range then parts[#parts + 1] = trf("RANGE %s", number(d.range)) end
+        if d.splash then parts[#parts + 1] = trf("SPLASH %s", number(d.splash)) end
+        if d.slow then parts[#parts + 1] = trf("SLOW %s%%", floor((1 - d.slow) * 100 + 0.5)) end
+        if d.hp then parts[#parts + 1] = trf("HP %s", d.hp) end
+        if d.reserve then parts[#parts + 1] = trf("RESERVE %s", number(d.reserve)) end
         add(table.concat(parts, "  "), "l")
         -- What it answers, of the enemies met; the rest only counted.
         local good, unmet = {}, 0
@@ -301,11 +306,11 @@ function codex.lines(tab, id, w)
                 elseif k == id then unmet = unmet + 1 end
             end
         end
-        if unmet > 0 then good[#good + 1] = unmet .. (#good > 0 and " MORE" or "") .. " NOT MET YET" end
+        if unmet > 0 then good[#good + 1] = trf(#good > 0 and "%s MORE NOT MET YET" or "%s NOT MET YET", unmet) end
         if #good > 0 then head("GOOD AGAINST"); add(table.concat(good, ", "), "w") end
         head("UPGRADES")
         for b = 1, 2 do
-            if b == 2 then add("OR", "s") end
+            if b == 2 then add(tr("OR"), "s") end
             for tier = 1, 2 do
                 local row = d.up[b][tier]
                 local from = #out
@@ -319,7 +324,7 @@ function codex.lines(tab, id, w)
         end
     else
         local sd = D.SEED[id]
-        add("SEED   " .. (sd.id == "bean" and "THE FIRST" or "GROWN ON THE NETWORK"), "t")
+        add(tr("SEED") .. "   " .. tr(sd.id == "bean" and "THE FIRST" or "GROWN ON THE NETWORK"), "t")
         gap(3)
         note(sd.blurb, "w")
         gap(3)
@@ -334,7 +339,7 @@ function codex.lines(tab, id, w)
     end
     if #notes.list > 0 then
         gap(6)
-        add("NOTES", "t")
+        add(tr("NOTES"), "t")
         for n, e in ipairs(notes.list) do
             local g = D.GLOSSARY[e]
             gap(1)
@@ -348,8 +353,8 @@ end
 
 -- The glossary tab: every word and what it means.
 function codex.words(w)
-    if codex.wordLines and codex.wordLines.w == w then return codex.wordLines end
-    local out = { w = w }
+    if codex.wordLines and codex.wordLines.w == w and codex.wordLines.lang == Lang.code then return codex.wordLines end
+    local out = { w = w, lang = Lang.code }
     for _, g in ipairs(D.GLOSSARY) do
         out[#out + 1] = { s = g.name, k = "l", x = 0, h = 7 }
         for _, l in ipairs(wrapLines(g.about, w - 8)) do out[#out + 1] = { s = l, k = "s", x = 8, h = 7 } end
@@ -371,7 +376,7 @@ function codex.layout()
     local L = { back = { x = S.inset.l + 4, y = S.inset.t + 4, w = 34, h = 12 }, tabs = {} }
     local gap, total = 3, 0
     for k, tb in ipairs(codex.TABS) do
-        L.tabs[k] = { w = Font.width(tb.name) + 8, h = 11, y = S.inset.t + 21, tab = k }
+        L.tabs[k] = { w = Font.width(tr(tb.name)) + 8, h = 11, y = S.inset.t + 21, tab = k }
         total = total + L.tabs[k].w + (k > 1 and gap or 0)
     end
     local x = floor((S.vw - total) / 2)
@@ -526,6 +531,7 @@ function codex.scrollBy(d) codex.setScroll(codex.getScroll() + d) end
 
 -- A button with its word in the middle.
 function codex.btn(b, s, on, edge, k)
+    s = tr(s)
     box(b.x, b.y, b.w, b.h, on and "n" or "u", edge)
     text(s, b.x + floor((b.w - Font.width(s)) / 2), b.y + floor((b.h - 5) / 2), k or "w")
 end
@@ -552,8 +558,8 @@ function codex.draw()
     love.graphics.rectangle("fill", 0, 0, S.vw, S.vh)
     local clock = flair.now()
     local n, all = codex.count()
-    centred("ENCYCLOPEDIA", S.inset.t + 7, "g", "o")
-    local found = "FOUND " .. n .. "/" .. all
+    centred(tr("ENCYCLOPEDIA"), S.inset.t + 7, "g", "o")
+    local found = trf("FOUND %s/%s", n, all)
     if codex.page then
         local P = codex.pageLayout()
         codex.btn(P.back, "BACK", S.hover.cback, S.hover.cback and "t" or "k")
